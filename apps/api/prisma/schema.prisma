@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl= env("DIRECT_URL")
+}
+
+// Auth & Role
+model User {
+  id          Int        @id @default(autoincrement())
+  username    String     @unique @db.VarChar(50)
+  email       String     @unique @db.VarChar(150)
+  password    String     @db.VarChar(255)
+  fullName    String     @map("full_name") @db.VarChar(150)
+  isActive    Boolean    @default(true) @map("is_active")
+  employeeId  Int?       @unique @map("employee_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  userRoles   UserRole[]
+  @@map("users")
+}
+
+model Role {
+  id          Int              @id @default(autoincrement())
+  code        String           @unique @db.VarChar(50)
+  name        String           @db.VarChar(100)
+  description String?          @db.Text
+  isActive    Boolean          @default(true) @map("is_active")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  userRoles   UserRole[]
+  permissions RolePermission[]
+  @@map("roles")
+}
+
+model Permission {
+  id     Int              @id @default(autoincrement())
+  module String           @db.VarChar(50)
+  action String           @db.VarChar(50)
+  label  String           @db.VarChar(150)
+  roles  RolePermission[]
+  @@unique([module, action])
+  @@map("permissions")
+}
+
+model UserRole {
+  id     Int  @id @default(autoincrement())
+  userId Int  @map("user_id")
+  roleId Int  @map("role_id")
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           Int        @id @default(autoincrement())
+  roleId       Int        @map("role_id")
+  permissionId Int        @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
