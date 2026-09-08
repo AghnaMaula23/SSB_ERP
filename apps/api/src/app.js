@@ -24,7 +24,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Module Routes — uncomment as you build each module
-// app.use('/api/auth',               require('./modules/auth/auth.routes.js'));
+app.use('/api/auth',               require('./modules/auth/auth.routes.js'));
 // app.use('/api/projects',           require('./modules/project/project.routes.js'));
 // app.use('/api/request-alat',       require('./modules/request-alat/request-alat.routes.js'));
 // app.use('/api/request-material',   require('./modules/request-material/request-material.routes.js'));

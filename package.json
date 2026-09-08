@@ -6,14 +6,17 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:api": "npm run dev -w @constructerp/api",
-    "dev:web": "npm run dev -w @constructerp/web",
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm --prefix apps/api run dev",
+    "dev:web": "npm --prefix apps/web run dev",
     "db:migrate": "npm run db:migrate -w @constructerp/api",
     "db:seed": "npm run db:seed -w @constructerp/api",
     "db:studio": "npm run db:studio -w @constructerp/api"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
+  },
+  "dependencies": {
+    "multer": "^2.3.0"
   }
 }
