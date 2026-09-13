@@ -3,23 +3,27 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl= env("DIRECT_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // Auth & Role
 model User {
-  id          Int        @id @default(autoincrement())
-  username    String     @unique @db.VarChar(50)
-  email       String     @unique @db.VarChar(150)
-  password    String     @db.VarChar(255)
-  fullName    String     @map("full_name") @db.VarChar(150)
-  isActive    Boolean    @default(true) @map("is_active")
-  employeeId  Int?       @unique @map("employee_id")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
-  userRoles   UserRole[]
+  id         Int        @id @default(autoincrement())
+  username   String     @unique @db.VarChar(50)
+  email      String     @unique @db.VarChar(150)
+  password   String     @db.VarChar(255)
+  fullName   String     @map("full_name") @db.VarChar(150)
+  isActive   Boolean    @default(true) @map("is_active")
+  employeeId Int?       @unique @map("employee_id")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+  userRoles  UserRole[]
+
+  equipmentStatusLogs   EquipmentStatusLog[]
+  equipmentWorkhourLogs EquipmentWorkhourLog[]
+
   @@map("users")
 }
 
@@ -32,6 +36,7 @@ model Role {
   createdAt   DateTime         @default(now()) @map("created_at")
   userRoles   UserRole[]
   permissions RolePermission[]
+
   @@map("roles")
 }
 
@@ -41,6 +46,7 @@ model Permission {
   action String           @db.VarChar(50)
   label  String           @db.VarChar(150)
   roles  RolePermission[]
+
   @@unique([module, action])
   @@map("permissions")
 }
@@ -51,6 +57,7 @@ model UserRole {
   roleId Int  @map("role_id")
   user   User @relation(fields: [userId], references: [id])
   role   Role @relation(fields: [roleId], references: [id])
+
   @@unique([userId, roleId])
   @@map("user_roles")
 }
@@ -61,6 +68,121 @@ model RolePermission {
   permissionId Int        @map("permission_id")
   role         Role       @relation(fields: [roleId], references: [id])
   permission   Permission @relation(fields: [permissionId], references: [id])
+
   @@unique([roleId, permissionId])
   @@map("role_permissions")
+}
+
+// ============================================================
+// DIVISI ALAT — Batch 1: Master Alat & Workhour
+// ============================================================
+
+enum EquipmentItemStatus {
+  available
+  assigned
+  delivered_to_location
+  received_at_site
+  in_use
+  maintenance
+  damaged
+  retired
+
+  @@map("equipment_item_status")
+}
+
+enum WorkhourSourceType {
+  internal_project
+  external_rental
+  manual_adjustment
+
+  @@map("workhour_source_type")
+}
+
+model EquipmentType {
+  id           Int             @id @default(autoincrement())
+  typeCode     String          @unique @map("type_code") @db.VarChar(50)
+  typeName     String          @map("type_name") @db.VarChar(150)
+  description  String?         @db.Text
+  isActive     Boolean         @default(true) @map("is_active")
+  // Counter asset code per jenis alat. Di-increment atomik saat unit baru
+  // didaftarkan dan tidak pernah mundur, supaya nomor tidak pernah dipakai ulang.
+  lastSequence Int             @default(0) @map("last_sequence")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  items        EquipmentItem[]
+
+  @@map("equipment_types")
+}
+
+model EquipmentItem {
+  id                Int                 @id @default(autoincrement())
+  equipmentTypeId   Int                 @map("equipment_type_id")
+  assetCode         String              @unique @map("asset_code") @db.VarChar(50)
+  plateNumber       String?             @map("plate_number") @db.VarChar(30)
+  brand             String?             @db.VarChar(100)
+  model             String?             @db.VarChar(100)
+  serialNumber      String?             @map("serial_number") @db.VarChar(100)
+  manufactureYear   Int?                @map("manufacture_year")
+  currentStatus     EquipmentItemStatus @default(available) @map("current_status")
+  // Akumulator jam kerja, ditambah oleh service saat workhour log dibuat
+  totalWorkhour     Decimal             @default(0) @map("total_workhour") @db.Decimal(12, 2)
+  // Default rate income alat; modul Income tetap memakai rate_snapshot sendiri
+  defaultHourlyRate Decimal?            @map("default_hourly_rate") @db.Decimal(18, 2)
+  rateNotes         String?             @map("rate_notes") @db.Text
+  rateUpdatedAt     DateTime?           @map("rate_updated_at")
+  notes             String?             @db.Text
+  isActive          Boolean             @default(true) @map("is_active")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  equipmentType EquipmentType          @relation(fields: [equipmentTypeId], references: [id])
+  statusLogs    EquipmentStatusLog[]
+  workhourLogs  EquipmentWorkhourLog[]
+
+  @@index([equipmentTypeId])
+  @@index([currentStatus])
+  @@map("equipment_items")
+}
+
+model EquipmentStatusLog {
+  id              Int                  @id @default(autoincrement())
+  equipmentItemId Int                  @map("equipment_item_id")
+  oldStatus       EquipmentItemStatus? @map("old_status")
+  newStatus       EquipmentItemStatus  @map("new_status")
+  // equipment_request | workhour | maintenance_record | damage_log | manual
+  sourceType      String?              @map("source_type") @db.VarChar(80)
+  sourceId        Int?                 @map("source_id")
+  notes           String?              @db.Text
+  changedBy       Int?                 @map("changed_by")
+  changedAt       DateTime             @default(now()) @map("changed_at")
+
+  equipmentItem EquipmentItem @relation(fields: [equipmentItemId], references: [id])
+  changedByUser User?         @relation(fields: [changedBy], references: [id])
+
+  @@index([equipmentItemId, changedAt])
+  @@map("equipment_status_logs")
+}
+
+model EquipmentWorkhourLog {
+  id              Int                @id @default(autoincrement())
+  equipmentItemId Int                @map("equipment_item_id")
+  // FK ke projects/sub_projects menyusul saat modul Project dibangun
+  projectId       Int?               @map("project_id")
+  subProjectId    Int?               @map("sub_project_id")
+  workDate        DateTime           @map("work_date") @db.Date
+  startedAt       DateTime?          @map("started_at")
+  stoppedAt       DateTime?          @map("stopped_at")
+  totalWorkhour   Decimal            @map("total_workhour") @db.Decimal(10, 2)
+  sourceType      WorkhourSourceType @map("source_type")
+  description     String?            @db.Text
+  createdBy       Int?               @map("created_by")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  equipmentItem EquipmentItem @relation(fields: [equipmentItemId], references: [id])
+  createdByUser User?         @relation(fields: [createdBy], references: [id])
+
+  @@index([equipmentItemId, workDate])
+  @@index([workDate])
+  @@map("equipment_workhour_logs")
 }

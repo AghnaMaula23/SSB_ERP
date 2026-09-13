@@ -68,6 +68,9 @@ const swaggerSpec = {
 
   tags: [
     { name: 'Auth', description: 'Autentikasi dan profil user' },
+    { name: 'Users', description: 'Daftar user dan penugasan role' },
+    { name: 'Roles', description: 'CRUD role dan pemetaan permission' },
+    { name: 'Permissions', description: 'Master permission (module:action)' },
     { name: 'Construction Projects', description: 'CRUD construction project dan sub-project' },
     { name: 'Sub-Projects', description: 'Sub-project (tahapan) dengan kontrak terpisah' },
     { name: 'Daily Progress', description: 'Progress harian per sub-project' },
@@ -158,6 +161,176 @@ const swaggerSpec = {
       get: {
         tags: ['Auth'], summary: 'Profil user yang sedang login',
         responses: { 200: { description: 'User profile + roles + permissions' } }
+      }
+    },
+
+    // ========================================
+    // 1b. ACCESS CONTROL (Users, Roles, Permissions)
+    // ========================================
+    '/users': {
+      get: {
+        tags: ['Users'], summary: 'List user + role-nya', description: 'Permission: user:read',
+        parameters: [
+          { $ref: '#/components/parameters/PageParam' },
+          { $ref: '#/components/parameters/LimitParam' },
+          { $ref: '#/components/parameters/SearchParam' },
+          { in: 'query', name: 'roleCode', schema: { type: 'string', example: 'lapangan' }, description: 'Filter user berdasarkan kode role' },
+          { in: 'query', name: 'isActive', schema: { type: 'boolean' } }
+        ],
+        responses: { 200: { description: 'Paginated list user', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
+      }
+    },
+    '/users/{id}': {
+      get: {
+        tags: ['Users'], summary: 'Detail user + roles + permissions', description: 'Permission: user:read',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Detail user' }, 404: { description: 'User tidak ditemukan' } }
+      }
+    },
+    '/users/{id}/roles': {
+      put: {
+        tags: ['Users'], summary: 'Set ulang seluruh role user', description: 'Permission: user:update. Mengganti semua role user dengan daftar yang dikirim.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['roleIds'],
+          properties: { roleIds: { type: 'array', items: { type: 'integer' }, example: [2, 3] } }
+        }}}},
+        responses: {
+          200: { description: 'Role user diperbarui' },
+          404: { description: 'User / role tidak ditemukan' },
+          409: { description: 'Melepas super_admin aktif terakhir' }
+        }
+      },
+      post: {
+        tags: ['Users'], summary: 'Tambah satu role ke user', description: 'Permission: user:update',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['roleId'], properties: { roleId: { type: 'integer', example: 2 } }
+        }}}},
+        responses: {
+          201: { description: 'Role ditugaskan' },
+          404: { description: 'User / role tidak ditemukan' },
+          409: { description: 'User sudah punya role ini / role nonaktif' }
+        }
+      }
+    },
+    '/users/{id}/roles/{roleId}': {
+      delete: {
+        tags: ['Users'], summary: 'Lepas role dari user', description: 'Permission: user:update',
+        parameters: [
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'roleId', required: true, schema: { type: 'integer' } }
+        ],
+        responses: {
+          200: { description: 'Role dilepas' },
+          404: { description: 'User tidak punya role ini' },
+          409: { description: 'Melepas super_admin aktif terakhir' }
+        }
+      }
+    },
+    '/roles': {
+      get: {
+        tags: ['Roles'], summary: 'List role + permission-nya', description: 'Permission: role:read',
+        parameters: [
+          { $ref: '#/components/parameters/PageParam' },
+          { $ref: '#/components/parameters/LimitParam' },
+          { $ref: '#/components/parameters/SearchParam' },
+          { in: 'query', name: 'isActive', schema: { type: 'boolean' } }
+        ],
+        responses: { 200: { description: 'Paginated list role', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
+      },
+      post: {
+        tags: ['Roles'], summary: 'Buat role baru', description: 'Permission: role:create',
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['code', 'name'],
+          properties: {
+            code: { type: 'string', example: 'gudang', description: 'huruf kecil, angka, underscore' },
+            name: { type: 'string', example: 'Staf Gudang' },
+            description: { type: 'string', example: 'Mengelola stok material' }
+          }
+        }}}},
+        responses: { 201: { description: 'Role dibuat' }, 400: { description: 'Validasi gagal' }, 409: { description: 'Kode role sudah ada' } }
+      }
+    },
+    '/roles/{id}': {
+      get: {
+        tags: ['Roles'], summary: 'Detail role + permission + jumlah user', description: 'Permission: role:read',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Detail role' }, 404: { description: 'Role tidak ditemukan' } }
+      },
+      put: {
+        tags: ['Roles'], summary: 'Ubah role', description: 'Permission: role:update. Field `code` bersifat immutable.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' }, description: { type: 'string' }, isActive: { type: 'boolean' }
+          }
+        }}}},
+        responses: { 200: { description: 'Role diperbarui' }, 404: { description: 'Role tidak ditemukan' }, 409: { description: 'Role sistem tidak bisa dinonaktifkan' } }
+      },
+      delete: {
+        tags: ['Roles'], summary: 'Hapus role', description: 'Permission: role:delete. Ditolak kalau role masih dipakai user atau role sistem.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Role dihapus' }, 404: { description: 'Role tidak ditemukan' }, 409: { description: 'Role masih dipakai user / role sistem' } }
+      }
+    },
+    '/roles/{id}/permissions': {
+      put: {
+        tags: ['Roles'], summary: 'Set ulang permission role', description: 'Permission: role:update. Mengganti semua permission role dengan daftar yang dikirim (untuk halaman matrix).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['permissionIds'],
+          properties: { permissionIds: { type: 'array', items: { type: 'integer' }, example: [1, 2, 3] } }
+        }}}},
+        responses: { 200: { description: 'Permission role diperbarui' }, 404: { description: 'Role / permission tidak ditemukan' } }
+      },
+      post: {
+        tags: ['Roles'], summary: 'Tambah satu permission ke role', description: 'Permission: role:update',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['permissionId'], properties: { permissionId: { type: 'integer', example: 4 } }
+        }}}},
+        responses: { 201: { description: 'Permission ditambahkan' }, 404: { description: 'Role / permission tidak ditemukan' }, 409: { description: 'Permission sudah dimiliki role' } }
+      }
+    },
+    '/roles/{id}/permissions/{permissionId}': {
+      delete: {
+        tags: ['Roles'], summary: 'Lepas permission dari role', description: 'Permission: role:update',
+        parameters: [
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'permissionId', required: true, schema: { type: 'integer' } }
+        ],
+        responses: { 200: { description: 'Permission dilepas' }, 404: { description: 'Role tidak punya permission ini' } }
+      }
+    },
+    '/permissions': {
+      get: {
+        tags: ['Permissions'], summary: 'List semua permission', description: 'Permission: permission:read atau role:read. Tidak dipaginate karena dipakai untuk matrix role.',
+        parameters: [
+          { in: 'query', name: 'module', schema: { type: 'string', example: 'role' }, description: 'Filter per module' },
+          { in: 'query', name: 'grouped', schema: { type: 'boolean' }, description: 'true = dikelompokkan per module' }
+        ],
+        responses: { 200: { description: 'Array permission (key = module:action)' } }
+      },
+      post: {
+        tags: ['Permissions'], summary: 'Daftarkan permission baru', description: 'Permission: permission:create. Dipakai saat modul baru dibangun.',
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['module', 'action', 'label'],
+          properties: {
+            module: { type: 'string', example: 'project' },
+            action: { type: 'string', example: 'create' },
+            label: { type: 'string', example: 'Buat construction project' }
+          }
+        }}}},
+        responses: { 201: { description: 'Permission dibuat' }, 409: { description: 'Permission sudah ada' } }
+      }
+    },
+    '/permissions/{id}': {
+      delete: {
+        tags: ['Permissions'], summary: 'Hapus permission', description: 'Permission: permission:delete. Otomatis dilepas dari semua role.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Permission dihapus' }, 404: { description: 'Permission tidak ditemukan' } }
       }
     },
 
@@ -368,79 +541,163 @@ const swaggerSpec = {
     // 3. DIVISI ALAT
     // ========================================
     '/equipment/types': {
-      get: { tags: ['Equipment Types'], summary: 'List jenis alat', responses: { 200: { description: 'Array' } } },
-      post: {
-        tags: ['Equipment Types'], summary: 'Tambah jenis alat', description: 'Role: divisi_alat',
-        requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['typeCode', 'typeName'],
-          properties: { typeCode: { type: 'string', example: 'EXC' }, typeName: { type: 'string', example: 'Excavator' }, description: { type: 'string' } }
-        }}}},
-        responses: { 201: { description: 'Created' } }
-      }
-    },
-    '/equipment/types/{id}': {
-      put: { tags: ['Equipment Types'], summary: 'Update jenis alat', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object' } } } }, responses: { 200: { description: 'Updated' } } },
-      delete: { tags: ['Equipment Types'], summary: 'Hapus jenis alat', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Deleted' } } }
-    },
-    '/equipment/items': {
       get: {
-        tags: ['Equipment Items'], summary: 'List unit alat',
+        tags: ['Equipment Types'], summary: 'List jenis alat', description: 'Permission: equipment:read',
         parameters: [
           { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
-          { in: 'query', name: 'typeId', schema: { type: 'integer' } },
-          { in: 'query', name: 'status', schema: { type: 'string', enum: ['available','assigned','in_use','maintenance','damaged','retired'] } },
-          { $ref: '#/components/parameters/SearchParam' }
+          { $ref: '#/components/parameters/SearchParam' },
+          { in: 'query', name: 'isActive', schema: { type: 'boolean' } }
         ],
-        responses: { 200: { description: 'Paginated list' } }
+        responses: { 200: { description: 'Paginated list jenis alat + itemCount + nextAssetCode (preview kode unit berikutnya)', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
       },
       post: {
-        tags: ['Equipment Items'], summary: 'Tambah unit alat', description: 'Role: divisi_alat',
+        tags: ['Equipment Types'], summary: 'Tambah jenis alat', description: 'Role: divisi_alat. Permission: equipment:create',
         requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['equipmentTypeId', 'assetCode'],
+          type: 'object', required: ['typeCode', 'typeName'],
           properties: {
-            equipmentTypeId: { type: 'integer' }, assetCode: { type: 'string', example: 'EXC-001' },
-            plateNumber: { type: 'string' }, serialNumber: { type: 'string' },
-            brand: { type: 'string' }, model: { type: 'string' },
-            manufactureYear: { type: 'integer' }, defaultHourlyRate: { type: 'number', example: 500000 },
-            notes: { type: 'string' }
-          }
-        }}}},
-        responses: { 201: { description: 'Created' } }
-      }
-    },
-    '/equipment/items/{id}': {
-      get: { tags: ['Equipment Items'], summary: 'Detail unit alat + status + maintenance summary', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
-      put: { tags: ['Equipment Items'], summary: 'Update unit alat', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object' } } } }, responses: { 200: { description: 'Updated' } } },
-      delete: { tags: ['Equipment Items'], summary: 'Soft delete unit alat', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Deleted' } } }
-    },
-    '/equipment/workhour-logs': {
-      post: {
-        tags: ['Workhour Logs'], summary: 'Catat jam kerja alat', description: 'Role: lapangan',
-        requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['equipmentItemId', 'workDate', 'startedAt', 'totalWorkhour', 'sourceType'],
-          properties: {
-            equipmentItemId: { type: 'integer' }, subProjectEquipmentAllocationId: { type: 'integer' },
-            equipmentPoolItemId: { type: 'integer' },
-            workDate: { type: 'string', format: 'date' },
-            startedAt: { type: 'string', format: 'date-time' }, stoppedAt: { type: 'string', format: 'date-time' },
-            pausedDurationMinutes: { type: 'integer', default: 0 },
-            totalWorkhour: { type: 'number', example: 8 },
-            sourceType: { type: 'string', enum: ['internal_project', 'external_rental'] },
+            typeCode: { type: 'string', example: 'EXC', description: 'Huruf, angka, underscore, strip. Unik & immutable.' },
+            typeName: { type: 'string', example: 'Excavator' },
             description: { type: 'string' }
           }
         }}}},
-        responses: { 201: { description: 'Created' } }
+        responses: { 201: { description: 'Created' }, 400: { description: 'Validasi gagal' }, 409: { description: 'typeCode sudah ada' } }
+      }
+    },
+    '/equipment/types/{id}': {
+      get: {
+        tags: ['Equipment Types'], summary: 'Detail jenis alat', description: 'Permission: equipment:read',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } }
+      },
+      put: {
+        tags: ['Equipment Types'], summary: 'Update jenis alat', description: 'Permission: equipment:update. Field `typeCode` immutable.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: {
+          type: 'object', properties: { typeName: { type: 'string' }, description: { type: 'string' }, isActive: { type: 'boolean' } }
+        }}}},
+        responses: { 200: { description: 'Updated' }, 404: { description: 'Tidak ditemukan' } }
+      },
+      delete: {
+        tags: ['Equipment Types'], summary: 'Hapus jenis alat', description: 'Permission: equipment:delete. Ditolak kalau masih dipakai unit alat — nonaktifkan saja.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Deleted' }, 409: { description: 'Masih dipakai unit alat' } }
+      }
+    },
+    '/equipment/items': {
+      get: {
+        tags: ['Equipment Items'], summary: 'List unit alat', description: 'Permission: equipment:read',
+        parameters: [
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'typeId', schema: { type: 'integer' } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['available','assigned','delivered_to_location','received_at_site','in_use','maintenance','damaged','retired'] } },
+          { in: 'query', name: 'isActive', schema: { type: 'boolean' } },
+          { $ref: '#/components/parameters/SearchParam' }
+        ],
+        responses: { 200: { description: 'Paginated list', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
+      },
+      post: {
+        tags: ['Equipment Items'], summary: 'Tambah unit alat', description: 'Role: divisi_alat. Permission: equipment:create. `assetCode` DIBUAT OTOMATIS oleh sistem dengan format SSB-{typeCode}-{NNN} (mis. SSB-EXC-001) — hanya super_admin yang boleh mengirimnya manual. Status awal `available` dan otomatis tercatat di status log.',
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['equipmentTypeId'],
+          properties: {
+            equipmentTypeId: { type: 'integer' },
+            assetCode: { type: 'string', example: 'SSB-EXC-007', description: 'HANYA super_admin. Kosongkan agar sistem yang membuat. Kalau kodenya mengikuti pola generate, counter jenis alat ikut dimajukan.' },
+            plateNumber: { type: 'string', description: 'Nullable — hanya alat berplat (dump truck dsb) yang mengisinya' }, serialNumber: { type: 'string' },
+            brand: { type: 'string' }, model: { type: 'string' },
+            manufactureYear: { type: 'integer', example: 2019 },
+            defaultHourlyRate: { type: 'number', example: 500000, description: 'Default rate income alat; modul Income tetap pakai rate_snapshot sendiri' },
+            rateNotes: { type: 'string' }, notes: { type: 'string' }
+          }
+        }}}},
+        responses: { 201: { description: 'Created, assetCode terisi otomatis' }, 400: { description: 'Validasi gagal' }, 403: { description: 'assetCode manual dikirim oleh non-super_admin' }, 404: { description: 'Jenis alat tidak ditemukan' }, 409: { description: 'assetCode sudah dipakai / jenis alat nonaktif' } }
+      }
+    },
+    '/equipment/items/{id}': {
+      get: {
+        tags: ['Equipment Items'], summary: 'Detail unit alat + status history + ringkasan workhour', description: 'Permission: equipment:read. statusHistory berisi 10 perubahan status terakhir.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Detail + statusHistory + workhourSummary' }, 404: { description: 'Tidak ditemukan' } }
+      },
+      put: {
+        tags: ['Equipment Items'], summary: 'Update unit alat', description: 'Permission: equipment:update. `assetCode` hanya bisa diubah super_admin. `currentStatus` TIDAK bisa diubah di sini — pakai PUT /equipment/items/{id}/status. `rateUpdatedAt` otomatis terisi saat defaultHourlyRate berubah.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: {
+          type: 'object',
+          properties: {
+            equipmentTypeId: { type: 'integer' }, assetCode: { type: 'string' },
+            plateNumber: { type: 'string' }, serialNumber: { type: 'string' },
+            brand: { type: 'string' }, model: { type: 'string' },
+            manufactureYear: { type: 'integer' }, defaultHourlyRate: { type: 'number' },
+            rateNotes: { type: 'string' }, notes: { type: 'string' }, isActive: { type: 'boolean' }
+          }
+        }}}},
+        responses: { 200: { description: 'Updated' }, 403: { description: 'Ubah assetCode oleh non-super_admin' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'assetCode sudah dipakai' } }
+      },
+      delete: {
+        tags: ['Equipment Items'], summary: 'Soft delete unit alat', description: 'Permission: equipment:delete. Set isActive=false. Ditolak kalau alat sedang assigned/delivered/received/in_use.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Dinonaktifkan' }, 409: { description: 'Alat sedang terpakai / sudah nonaktif' } }
+      }
+    },
+    '/equipment/items/{id}/status': {
+      put: {
+        tags: ['Equipment Items'], summary: 'Ubah status alat', description: 'Permission: equipment:update. Satu-satunya jalur ubah status; setiap perubahan ditulis ke equipment_status_logs.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['status'],
+          properties: {
+            status: { type: 'string', enum: ['available','assigned','delivered_to_location','received_at_site','in_use','maintenance','damaged','retired'] },
+            notes: { type: 'string', example: 'Masuk bengkel untuk servis 500 jam' },
+            sourceType: { type: 'string', example: 'manual', description: 'equipment_request | workhour | maintenance_record | damage_log | manual. Default: manual' },
+            sourceId: { type: 'integer', description: 'ID dokumen sumber kalau perubahan status berasal dari modul lain' }
+          }
+        }}}},
+        responses: { 200: { description: 'Status diubah' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'Status sama dengan sekarang / alat nonaktif' } }
+      }
+    },
+    '/equipment/items/{id}/status-logs': {
+      get: {
+        tags: ['Equipment Items'], summary: 'Riwayat perubahan status alat', description: 'Permission: equipment:read',
+        parameters: [
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } },
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' }
+        ],
+        responses: { 200: { description: 'Paginated status logs', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
+      }
+    },
+    '/equipment/workhour-logs': {
+      post: {
+        tags: ['Workhour Logs'], summary: 'Catat jam kerja alat', description: 'Role: lapangan. Permission: workhour:create. Menambah total_workhour alat dalam satu transaksi.',
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['equipmentItemId', 'workDate', 'totalWorkhour', 'sourceType'],
+          properties: {
+            equipmentItemId: { type: 'integer' },
+            projectId: { type: 'integer', description: 'Diisi untuk sourceType internal_project. FK menyusul saat modul Project dibangun.' },
+            subProjectId: { type: 'integer' },
+            workDate: { type: 'string', format: 'date', example: '2026-09-11' },
+            startedAt: { type: 'string', format: 'date-time' }, stoppedAt: { type: 'string', format: 'date-time' },
+            totalWorkhour: { type: 'number', example: 8, description: 'Lebih dari 0, maksimal 24. Akumulasi per alat per hari juga dibatasi 24 jam.' },
+            sourceType: { type: 'string', enum: ['internal_project', 'external_rental', 'manual_adjustment'] },
+            description: { type: 'string' }
+          }
+        }}}},
+        responses: {
+          201: { description: 'Created' }, 400: { description: 'Validasi gagal / tanggal di masa depan' },
+          404: { description: 'Unit alat tidak ditemukan' }, 409: { description: 'Alat nonaktif / total jam per hari melebihi 24' }
+        }
       }
     },
     '/equipment/items/{itemId}/workhour-logs': {
       get: {
-        tags: ['Workhour Logs'], summary: 'List workhour per alat',
+        tags: ['Workhour Logs'], summary: 'List workhour per alat', description: 'Permission: workhour:read. Response menyertakan `summary.totalWorkhourInRange` untuk seluruh rentang filter, bukan hanya halaman aktif.',
         parameters: [
           { in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } },
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
           { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
-          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } }
+          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'sourceType', schema: { type: 'string', enum: ['internal_project', 'external_rental', 'manual_adjustment'] } }
         ],
-        responses: { 200: { description: 'Array of workhour logs' } }
+        responses: { 200: { description: 'Paginated workhour logs + summary' }, 404: { description: 'Unit alat tidak ditemukan' } }
       }
     },
     '/equipment/maintenance/aspects': {

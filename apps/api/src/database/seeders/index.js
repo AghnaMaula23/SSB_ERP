@@ -10,14 +10,69 @@ const ROLES = [
   { code: 'lapangan',     name: 'Divisi Lapangan' },
 ];
 
+// Permission untuk modul yang sudah jalan (access control).
+// Tambahkan permission modul lain saat modulnya dibangun.
+const PERMISSIONS = [
+  { module: 'user',       action: 'read',   label: 'Lihat daftar user' },
+  { module: 'user',       action: 'update', label: 'Kelola role user' },
+  { module: 'role',       action: 'read',   label: 'Lihat daftar role' },
+  { module: 'role',       action: 'create', label: 'Tambah role' },
+  { module: 'role',       action: 'update', label: 'Ubah role dan permission-nya' },
+  { module: 'role',       action: 'delete', label: 'Hapus role' },
+  { module: 'permission', action: 'read',   label: 'Lihat daftar permission' },
+  { module: 'permission', action: 'create', label: 'Tambah permission' },
+  { module: 'permission', action: 'delete', label: 'Hapus permission' },
+  { module: 'equipment',  action: 'read',   label: 'Lihat master alat' },
+  { module: 'equipment',  action: 'create', label: 'Tambah jenis/unit alat' },
+  { module: 'equipment',  action: 'update', label: 'Ubah data dan status alat' },
+  { module: 'equipment',  action: 'delete', label: 'Hapus jenis alat / nonaktifkan unit alat' },
+  { module: 'workhour',   action: 'read',   label: 'Lihat log jam kerja alat' },
+  { module: 'workhour',   action: 'create', label: 'Catat jam kerja alat' },
+];
+
+// super_admin di-bypass di middleware authorize(), tapi permission-nya tetap
+// diisi supaya GET /auth/me memantulkan hak akses yang sebenarnya ke frontend.
+const ROLE_PERMISSIONS = {
+  super_admin: PERMISSIONS.map((p) => `${p.module}:${p.action}`),
+  admin: ['user:read', 'role:read', 'permission:read', 'equipment:read', 'workhour:read'],
+  // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
+  divisi_alat: [
+    'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
+    'workhour:read', 'workhour:create',
+  ],
+  lapangan: ['equipment:read', 'workhour:read', 'workhour:create'],
+};
+
 async function main() {
   console.log('Seeding roles...');
   for (const role of ROLES) {
-    await prisma.role.upsert({
-      where: { code: role.code },
-      update: {},
-      create: role,
+    await prisma.role.upsert({ where: { code: role.code }, update: {}, create: role });
+  }
+
+  console.log('Seeding permissions...');
+  for (const permission of PERMISSIONS) {
+    await prisma.permission.upsert({
+      where: { module_action: { module: permission.module, action: permission.action } },
+      update: { label: permission.label },
+      create: permission,
     });
+  }
+
+  console.log('Mapping permissions to roles...');
+  const allPermissions = await prisma.permission.findMany();
+  const permissionByKey = new Map(allPermissions.map((p) => [`${p.module}:${p.action}`, p]));
+
+  for (const [roleCode, keys] of Object.entries(ROLE_PERMISSIONS)) {
+    const role = await prisma.role.findUnique({ where: { code: roleCode } });
+    for (const key of keys) {
+      const permission = permissionByKey.get(key);
+      if (!permission) continue;
+      await prisma.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
+        update: {},
+        create: { roleId: role.id, permissionId: permission.id },
+      });
+    }
   }
 
   console.log('Seeding super admin user...');

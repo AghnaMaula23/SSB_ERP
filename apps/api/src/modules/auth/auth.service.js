@@ -1,12 +1,13 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../../config/database.js');
+const { httpError } = require('../../utils/error.js');
 
 const register = async ({ username, email, password, fullName }) => {
   const exists = await prisma.user.findFirst({
     where: { OR: [{ username }, { email }] }
   });
-  if (exists) throw Object.assign(new Error('Username atau email sudah terdaftar'), { statusCode: 409 });
+  if (exists) throw httpError('Username atau email sudah terdaftar', 409);
 
   const hashed = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
@@ -25,10 +26,10 @@ const login = async ({ login: loginField, password }) => {
     }
   });
 
-  if (!user || !user.isActive) throw Object.assign(new Error('Kredensial tidak valid'), { statusCode: 401 });
+  if (!user || !user.isActive) throw httpError('Kredensial tidak valid', 401);
 
   const valid = await bcrypt.compare(password, user.password);
-  if (!valid) throw Object.assign(new Error('Kredensial tidak valid'), { statusCode: 401 });
+  if (!valid) throw httpError('Kredensial tidak valid', 401);
 
   const token = jwt.sign(
     { userId: user.id, username: user.username },
