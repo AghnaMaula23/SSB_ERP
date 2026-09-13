@@ -667,7 +667,7 @@ const swaggerSpec = {
     },
     '/equipment/workhour-logs': {
       post: {
-        tags: ['Workhour Logs'], summary: 'Catat jam kerja alat', description: 'Role: lapangan. Permission: workhour:create. Menambah total_workhour alat dalam satu transaksi.',
+        tags: ['Workhour Logs'], summary: 'Catat jam kerja alat', description: 'Role: lapangan. Permission: workhour:create. Menambah total_workhour alat DAN menggerakkan hitung mundur semua maintenance setting aktif milik alat itu, dalam satu transaksi. Response memuat `maintenanceImpact`.',
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['equipmentItemId', 'workDate', 'totalWorkhour', 'sourceType'],
           properties: {
@@ -682,7 +682,8 @@ const swaggerSpec = {
           }
         }}}},
         responses: {
-          201: { description: 'Created' }, 400: { description: 'Validasi gagal / tanggal di masa depan' },
+          201: { description: 'Created. Response berisi data log + `maintenanceImpact`: array setting yang counternya bergerak, masing-masing dengan settingId, aspectCode, remainingValue, status, dan statusChanged.' },
+          400: { description: 'Validasi gagal / tanggal di masa depan' },
           404: { description: 'Unit alat tidak ditemukan' }, 409: { description: 'Alat nonaktif / total jam per hari melebihi 24' }
         }
       }
@@ -701,42 +702,177 @@ const swaggerSpec = {
       }
     },
     '/equipment/maintenance/aspects': {
-      get: { tags: ['Maintenance'], summary: 'List aspek maintenance', responses: { 200: { description: 'Array' } } },
+      get: {
+        tags: ['Maintenance'], summary: 'List aspek maintenance', description: 'Permission: maintenance:read',
+        parameters: [
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { $ref: '#/components/parameters/SearchParam' },
+          { in: 'query', name: 'isActive', schema: { type: 'boolean' } }
+        ],
+        responses: { 200: { description: 'Paginated list aspek + settingCount', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
+      },
       post: {
-        tags: ['Maintenance'], summary: 'Tambah aspek maintenance', description: 'Role: divisi_alat',
+        tags: ['Maintenance'], summary: 'Tambah aspek maintenance', description: 'Role: divisi_alat. Permission: maintenance:create. SEMUA threshold berbasis JAM KERJA alat — kolom `unit` tidak ada.',
         requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['aspectCode', 'aspectName', 'unit'],
-          properties: { aspectCode: { type: 'string', example: 'OLI-MSN' }, aspectName: { type: 'string', example: 'Oli Mesin' }, unit: { type: 'string', example: 'hour' }, defaultThresholdValue: { type: 'number', example: 250 } }
-        }}}},
-        responses: { 201: { description: 'Created' } }
-      }
-    },
-    '/equipment/items/{itemId}/maintenance-settings': {
-      get: { tags: ['Maintenance'], summary: 'List maintenance settings per alat', parameters: [{ in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Array' } } },
-      post: {
-        tags: ['Maintenance'], summary: 'Tambah maintenance setting', description: 'Role: divisi_alat',
-        parameters: [{ in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } }],
-        requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['maintenanceAspectId', 'thresholdValue'],
-          properties: { maintenanceAspectId: { type: 'integer' }, thresholdValue: { type: 'number' }, warningValue: { type: 'number' } }
-        }}}},
-        responses: { 201: { description: 'Created' } }
-      }
-    },
-    '/equipment/maintenance-records': {
-      post: {
-        tags: ['Maintenance'], summary: 'Catat tindakan maintenance', description: 'Role: divisi_alat',
-        requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['maintenanceDate', 'actionType'],
+          type: 'object', required: ['aspectCode', 'aspectName'],
           properties: {
-            maintenanceSettingId: { type: 'integer', nullable: true }, damageLogId: { type: 'integer', nullable: true },
-            purchaseRequestItemId: { type: 'integer', nullable: true },
-            maintenanceDate: { type: 'string', format: 'date' }, workhourAtMaintenance: { type: 'number' },
-            actionType: { type: 'string', enum: ['inspection','service','replacement','reset','repair'] },
+            aspectCode: { type: 'string', example: 'OLI-MSN', description: 'Unik dan immutable' },
+            aspectName: { type: 'string', example: 'Ganti Oli Mesin' },
+            defaultThresholdValue: { type: 'number', example: 250, description: 'Jam pakai antar servis. Dipakai sebagai nilai awal saat setting dibuat.' },
+            warningLeadValue: { type: 'number', example: 50, default: 50, description: 'Sisa jam saat status berubah jadi warning. Default 50.' },
             description: { type: 'string' }
           }
         }}}},
-        responses: { 201: { description: 'Created + maintenance setting reset' } }
+        responses: { 201: { description: 'Created' }, 400: { description: 'Validasi gagal' }, 409: { description: 'aspectCode sudah ada' } }
+      }
+    },
+    '/equipment/maintenance/aspects/{id}': {
+      get: {
+        tags: ['Maintenance'], summary: 'Detail aspek maintenance', description: 'Permission: maintenance:read',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } }
+      },
+      put: {
+        tags: ['Maintenance'], summary: 'Update aspek maintenance', description: 'Permission: maintenance:update. `aspectCode` immutable. Mengubah `warningLeadValue` otomatis menghitung ulang status SEMUA setting yang memakai aspek ini.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: {
+          type: 'object',
+          properties: {
+            aspectName: { type: 'string' }, defaultThresholdValue: { type: 'number' },
+            warningLeadValue: { type: 'number' }, description: { type: 'string' }, isActive: { type: 'boolean' }
+          }
+        }}}},
+        responses: { 200: { description: 'Updated' }, 400: { description: 'aspectCode dikirim / validasi gagal' }, 404: { description: 'Tidak ditemukan' } }
+      },
+      delete: {
+        tags: ['Maintenance'], summary: 'Hapus aspek maintenance', description: 'Permission: maintenance:delete. Ditolak kalau masih dipakai setting alat.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Deleted' }, 409: { description: 'Masih dipakai setting' } }
+      }
+    },
+    '/equipment/maintenance-settings': {
+      get: {
+        tags: ['Maintenance'], summary: 'Dashboard setting maintenance lintas alat', description: 'Permission: maintenance:read. Dipakai untuk daftar "alat yang perlu servis". Urut dari status paling mendesak.',
+        parameters: [
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'equipmentItemId', schema: { type: 'integer' } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['normal','warning','due','overdue','inactive'] } },
+          { in: 'query', name: 'isActive', schema: { type: 'boolean' } }
+        ],
+        responses: { 200: { description: 'Paginated settings. Tiap item memuat `remainingValue` (hitung mundur jam menuju jatuh tempo, negatif = sudah lewat) dan `progressPercent`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
+      }
+    },
+    '/equipment/maintenance-settings/{id}': {
+      get: {
+        tags: ['Maintenance'], summary: 'Detail setting maintenance', description: 'Permission: maintenance:read',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Detail + remainingValue + status' }, 404: { description: 'Tidak ditemukan' } }
+      },
+      put: {
+        tags: ['Maintenance'], summary: 'Update setting maintenance', description: 'Permission: maintenance:update. Hanya `thresholdValue` dan `isActive`. `currentValueSinceReset` dan `status` dikelola sistem dan ditolak kalau dikirim.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: {
+          type: 'object', properties: { thresholdValue: { type: 'number', example: 300 }, isActive: { type: 'boolean' } }
+        }}}},
+        responses: { 200: { description: 'Updated, status dihitung ulang' }, 400: { description: 'Field terkelola sistem dikirim' }, 404: { description: 'Tidak ditemukan' } }
+      },
+      delete: {
+        tags: ['Maintenance'], summary: 'Hapus setting maintenance', description: 'Permission: maintenance:delete. Ditolak kalau sudah punya riwayat maintenance.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Deleted' }, 409: { description: 'Sudah punya riwayat maintenance' } }
+      }
+    },
+    '/equipment/items/{itemId}/maintenance-settings': {
+      get: {
+        tags: ['Maintenance'], summary: 'List maintenance setting per alat', description: 'Permission: maintenance:read',
+        parameters: [
+          { in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } },
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['normal','warning','due','overdue','inactive'] } },
+          { in: 'query', name: 'isActive', schema: { type: 'boolean' } }
+        ],
+        responses: { 200: { description: 'Paginated settings milik alat ini' }, 404: { description: 'Unit alat tidak ditemukan' } }
+      },
+      post: {
+        tags: ['Maintenance'], summary: 'Tambah maintenance setting ke alat', description: 'Role: divisi_alat. Permission: maintenance:create. Unik per (alat, aspek). `thresholdValue` boleh dikosongkan kalau aspeknya punya defaultThresholdValue.',
+        parameters: [{ in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['maintenanceAspectId'],
+          properties: {
+            maintenanceAspectId: { type: 'integer' },
+            thresholdValue: { type: 'number', example: 250, description: 'Jam pakai antar servis. Default dari aspek kalau dikosongkan.' }
+          }
+        }}}},
+        responses: {
+          201: { description: 'Created, counter mulai dari 0' }, 400: { description: 'Threshold tidak ada dan aspek tidak punya default' },
+          404: { description: 'Alat / aspek tidak ditemukan' }, 409: { description: 'Setting untuk aspek ini sudah ada / alat atau aspek nonaktif' }
+        }
+      }
+    },
+    '/equipment/maintenance-records': {
+      get: {
+        tags: ['Maintenance'], summary: 'List riwayat maintenance', description: 'Permission: maintenance:read',
+        parameters: [
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'equipmentItemId', schema: { type: 'integer' } },
+          { in: 'query', name: 'maintenanceType', schema: { type: 'string', enum: ['routine','repair','replacement','inspection','adjustment'] } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['completed','cancelled'] } },
+          { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } }
+        ],
+        responses: { 200: { description: 'Paginated records', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
+      },
+      post: {
+        tags: ['Maintenance'], summary: 'Catat tindakan maintenance', description: 'Role: divisi_alat. Permission: maintenance:create. Dicatat SETELAH pekerjaan selesai. Kalau `maintenanceSettingId` diisi, counter setting itu direset ke 0 dan hitung mundur mulai lagi dari threshold. `maintenanceCode` dibuat sistem (MTN-000001).',
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['equipmentItemId', 'maintenanceType', 'maintenanceDate', 'actionDescription'],
+          properties: {
+            equipmentItemId: { type: 'integer', description: 'Wajib. Selalu terisi supaya riwayat per alat utuh.' },
+            maintenanceSettingId: { type: 'integer', nullable: true, description: 'Isi kalau tindakan ini mereset jadwal servis. Harus milik alat yang sama.' },
+            damageLogId: { type: 'integer', nullable: true, description: 'FK menyusul di batch Damage Log' },
+            purchaseRequestItemId: { type: 'integer', nullable: true, description: 'FK menyusul di batch Purchase Request' },
+            maintenanceType: { type: 'string', enum: ['routine','repair','replacement','inspection','adjustment'] },
+            maintenanceDate: { type: 'string', format: 'date', example: '2026-09-13' },
+            workhourAtMaintenance: { type: 'number', description: 'Default ke total jam alat saat ini kalau dikosongkan' },
+            actionDescription: { type: 'string', example: 'Ganti oli mesin + filter oli' },
+            performedBy: { type: 'string', example: 'Bengkel Jaya Motor' }
+          }
+        }}}},
+        responses: {
+          201: { description: 'Created + setting terkait direset' }, 400: { description: 'Validasi gagal / tanggal di masa depan' },
+          404: { description: 'Alat / setting tidak ditemukan' }, 409: { description: 'Setting milik alat lain' }
+        }
+      }
+    },
+    '/equipment/maintenance-records/{id}': {
+      get: {
+        tags: ['Maintenance'], summary: 'Detail riwayat maintenance', description: 'Permission: maintenance:read',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } }
+      }
+    },
+    '/equipment/maintenance-records/{id}/cancel': {
+      put: {
+        tags: ['Maintenance'], summary: 'Batalkan riwayat maintenance salah input', description: 'Permission: maintenance:update. CATATAN: counter setting TIDAK dikembalikan otomatis, karena jam kerja sudah berjalan sejak reset. Koreksi lewat thresholdValue atau record baru.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: {
+          type: 'object', properties: { notes: { type: 'string', example: 'Salah pilih unit alat' } }
+        }}}},
+        responses: { 200: { description: 'Dibatalkan' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'Sudah dibatalkan sebelumnya' } }
+      }
+    },
+    '/equipment/items/{itemId}/maintenance-records': {
+      get: {
+        tags: ['Maintenance'], summary: 'Riwayat maintenance per alat', description: 'Permission: maintenance:read. Memakai kolom equipment_item_id sehingga record dari damage log pun tetap ikut terbawa.',
+        parameters: [
+          { in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } },
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'maintenanceType', schema: { type: 'string', enum: ['routine','repair','replacement','inspection','adjustment'] } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['completed','cancelled'] } },
+          { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } }
+        ],
+        responses: { 200: { description: 'Paginated records milik alat ini' }, 404: { description: 'Unit alat tidak ditemukan' } }
       }
     },
     '/equipment/damage-logs': {

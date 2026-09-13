@@ -23,6 +23,7 @@ model User {
 
   equipmentStatusLogs   EquipmentStatusLog[]
   equipmentWorkhourLogs EquipmentWorkhourLog[]
+  maintenanceRecords    MaintenanceRecord[]
 
   @@map("users")
 }
@@ -135,9 +136,11 @@ model EquipmentItem {
   createdAt         DateTime            @default(now()) @map("created_at")
   updatedAt         DateTime            @updatedAt @map("updated_at")
 
-  equipmentType EquipmentType          @relation(fields: [equipmentTypeId], references: [id])
-  statusLogs    EquipmentStatusLog[]
-  workhourLogs  EquipmentWorkhourLog[]
+  equipmentType       EquipmentType                 @relation(fields: [equipmentTypeId], references: [id])
+  statusLogs          EquipmentStatusLog[]
+  workhourLogs        EquipmentWorkhourLog[]
+  maintenanceSettings EquipmentMaintenanceSetting[]
+  maintenanceRecords  MaintenanceRecord[]
 
   @@index([equipmentTypeId])
   @@index([currentStatus])
@@ -185,4 +188,123 @@ model EquipmentWorkhourLog {
   @@index([equipmentItemId, workDate])
   @@index([workDate])
   @@map("equipment_workhour_logs")
+}
+
+// ============================================================
+// DIVISI ALAT — Batch 2: Maintenance
+// ============================================================
+
+enum MaintenanceSettingStatus {
+  normal
+  warning
+  due
+  overdue
+  inactive
+
+  @@map("maintenance_setting_status")
+}
+
+enum MaintenanceType {
+  routine
+  repair
+  replacement
+  inspection
+  adjustment
+
+  @@map("maintenance_type")
+}
+
+enum MaintenanceRecordStatus {
+  completed
+  cancelled
+
+  @@map("maintenance_record_status")
+}
+
+/// Master aspek maintenance: oli mesin, filter udara, ban, servis berkala, dst.
+model MaintenanceAspect {
+  id                    Int      @id @default(autoincrement())
+  aspectCode            String   @unique @map("aspect_code") @db.VarChar(50)
+  aspectName            String   @map("aspect_name") @db.VarChar(150)
+  // Semua threshold maintenance berbasis JAM KERJA alat, digerakkan workhour log.
+  defaultThresholdValue Decimal? @map("default_threshold_value") @db.Decimal(12, 2)
+  // Sisa jam saat peringatan mulai muncul. Default 50 -> warning saat sisa 50 jam.
+  warningLeadValue      Decimal  @default(50) @map("warning_lead_value") @db.Decimal(12, 2)
+  description           String?  @db.Text
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  settings EquipmentMaintenanceSetting[]
+
+  @@map("maintenance_aspects")
+}
+
+/// Setting maintenance per unit alat per aspek, lengkap dengan counter berjalan.
+model EquipmentMaintenanceSetting {
+  id                     Int                      @id @default(autoincrement())
+  equipmentItemId        Int                      @map("equipment_item_id")
+  maintenanceAspectId    Int                      @map("maintenance_aspect_id")
+  thresholdValue         Decimal                  @map("threshold_value") @db.Decimal(12, 2)
+  // Jam terpakai sejak servis terakhir. Ditambah otomatis oleh workhour log.
+  currentValueSinceReset Decimal                  @default(0) @map("current_value_since_reset") @db.Decimal(12, 2)
+  status                 MaintenanceSettingStatus @default(normal)
+  lastMaintenanceDate    DateTime?                @map("last_maintenance_date") @db.Date
+  lastResetWorkhour      Decimal?                 @map("last_reset_workhour") @db.Decimal(12, 2)
+  isActive               Boolean                  @default(true) @map("is_active")
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+
+  equipmentItem      EquipmentItem       @relation(fields: [equipmentItemId], references: [id])
+  maintenanceAspect  MaintenanceAspect   @relation(fields: [maintenanceAspectId], references: [id])
+  maintenanceRecords MaintenanceRecord[]
+
+  @@unique([equipmentItemId, maintenanceAspectId])
+  @@index([status])
+  @@map("equipment_maintenance_settings")
+}
+
+/// Histori tindakan maintenance. Dibuat setelah pekerjaan selesai.
+model MaintenanceRecord {
+  id                    Int                     @id @default(autoincrement())
+  maintenanceCode       String                  @unique @map("maintenance_code") @db.VarChar(50)
+  // Selalu terisi, supaya riwayat per alat tetap utuh walau record lahir dari
+  // damage log atau purchase request yang tidak punya maintenance setting.
+  equipmentItemId       Int                     @map("equipment_item_id")
+  maintenanceSettingId  Int?                    @map("maintenance_setting_id")
+  // FK menyusul saat modul Damage Log dan Purchase Request dibangun
+  damageLogId           Int?                    @map("damage_log_id")
+  purchaseRequestItemId Int?                    @map("purchase_request_item_id")
+  maintenanceType       MaintenanceType         @map("maintenance_type")
+  maintenanceDate       DateTime                @map("maintenance_date") @db.Date
+  workhourAtMaintenance Decimal?                @map("workhour_at_maintenance") @db.Decimal(12, 2)
+  actionDescription     String                  @map("action_description") @db.Text
+  performedBy           String?                 @map("performed_by") @db.VarChar(150)
+  status                MaintenanceRecordStatus @default(completed)
+  createdBy             Int?                    @map("created_by")
+  createdAt             DateTime                @default(now()) @map("created_at")
+  updatedAt             DateTime                @updatedAt @map("updated_at")
+
+  equipmentItem      EquipmentItem                @relation(fields: [equipmentItemId], references: [id])
+  maintenanceSetting EquipmentMaintenanceSetting? @relation(fields: [maintenanceSettingId], references: [id])
+  createdByUser      User?                        @relation(fields: [createdBy], references: [id])
+
+  @@index([equipmentItemId, maintenanceDate])
+  @@index([maintenanceSettingId, maintenanceDate])
+  @@index([maintenanceDate])
+  @@map("maintenance_records")
+}
+
+/// Counter nomor dokumen per jenis dokumen per periode.
+/// MTN memakai period 'ALL' (deret berurutan terus, tanpa reset bulanan).
+/// Kolom period disiapkan untuk dokumen lain yang nanti butuh reset periodik.
+model DocumentSequence {
+  id           Int      @id @default(autoincrement())
+  docType      String   @map("doc_type") @db.VarChar(20)
+  period       String   @db.VarChar(10)
+  lastSequence Int      @default(0) @map("last_sequence")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([docType, period])
+  @@map("document_sequences")
 }

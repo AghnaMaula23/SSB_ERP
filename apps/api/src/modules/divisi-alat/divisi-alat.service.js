@@ -1,5 +1,6 @@
 const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
+const maintenance = require('./maintenance.service.js');
 
 const MAX_WORKHOUR_PER_DAY = 24;
 
@@ -510,10 +511,17 @@ const createWorkhourLog = async (payload, userId) => {
       data: { totalWorkhour: { increment: totalWorkhour } },
     });
 
-    return created;
+    // Jam kerja yang sama ikut menggerakkan hitung mundur maintenance alat ini
+    const affected = await maintenance.applyWorkhourToSettings(tx, equipmentItemId, totalWorkhour);
+
+    return { created, affected };
   });
 
-  return shapeWorkhourLog(log);
+  return {
+    ...shapeWorkhourLog(log.created),
+    // Supaya operator langsung tahu kalau input ini memicu jadwal servis
+    maintenanceImpact: log.affected,
+  };
 };
 
 const listWorkhourLogsByItem = async (itemId, { page = 1, limit = 20, startDate, endDate, sourceType }) => {

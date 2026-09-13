@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { body, param, query } = require('express-validator');
 const controller = require('./divisi-alat.controller.js');
+const maintenance = require('./maintenance.controller.js');
 const validate = require('../../middleware/validate.js');
 const { authenticate, authorize } = require('../../middleware/auth.js');
 
@@ -168,5 +169,164 @@ router.get('/items/:itemId/workhour-logs',
     query('sourceType').optional().isIn(WORKHOUR_SOURCE_TYPES).withMessage(`sourceType harus salah satu dari: ${WORKHOUR_SOURCE_TYPES.join(', ')}`),
   ]),
   controller.listWorkhourLogsByItem);
+
+// ============================================================
+// MAINTENANCE — Batch 2
+// ============================================================
+
+const MAINTENANCE_STATUSES = ['normal', 'warning', 'due', 'overdue', 'inactive'];
+const MAINTENANCE_TYPES = ['routine', 'repair', 'replacement', 'inspection', 'adjustment'];
+const RECORD_STATUSES = ['completed', 'cancelled'];
+
+const itemIdParam = param('itemId').isInt({ min: 1 }).withMessage('ID alat tidak valid').toInt();
+
+// --- Master aspek maintenance ---
+
+router.get('/maintenance/aspects',
+  authorize('maintenance:read'), validate(pageRules), maintenance.listAspects);
+
+router.get('/maintenance/aspects/:id',
+  authorize('maintenance:read'), validate([idParam]), maintenance.detailAspect);
+
+router.post('/maintenance/aspects',
+  authorize('maintenance:create'),
+  validate([
+    body('aspectCode').trim().notEmpty().withMessage('Kode aspek wajib diisi')
+      .isLength({ max: 50 }).withMessage('Kode aspek maksimal 50 karakter')
+      .matches(/^[A-Za-z0-9_-]+$/).withMessage('Kode aspek hanya boleh huruf, angka, underscore, dan strip'),
+    body('aspectName').trim().notEmpty().withMessage('Nama aspek wajib diisi')
+      .isLength({ max: 150 }).withMessage('Nama aspek maksimal 150 karakter'),
+    body('defaultThresholdValue').optional({ nullable: true })
+      .isFloat({ gt: 0 }).withMessage('Threshold default harus lebih dari 0 jam').toFloat(),
+    body('warningLeadValue').optional()
+      .isFloat({ gt: 0 }).withMessage('Ambang peringatan harus lebih dari 0 jam').toFloat(),
+    body('description').optional({ nullable: true }).trim(),
+  ]),
+  maintenance.createAspect);
+
+router.put('/maintenance/aspects/:id',
+  authorize('maintenance:update'),
+  validate([
+    idParam,
+    body('aspectCode').not().exists().withMessage('Kode aspek tidak bisa diubah setelah dibuat'),
+    body('aspectName').optional().trim().notEmpty().withMessage('Nama aspek tidak boleh kosong')
+      .isLength({ max: 150 }).withMessage('Nama aspek maksimal 150 karakter'),
+    body('defaultThresholdValue').optional({ nullable: true })
+      .isFloat({ gt: 0 }).withMessage('Threshold default harus lebih dari 0 jam').toFloat(),
+    body('warningLeadValue').optional()
+      .isFloat({ gt: 0 }).withMessage('Ambang peringatan harus lebih dari 0 jam').toFloat(),
+    body('description').optional({ nullable: true }).trim(),
+    body('isActive').optional().isBoolean().withMessage('isActive harus boolean').toBoolean(),
+  ]),
+  maintenance.updateAspect);
+
+router.delete('/maintenance/aspects/:id',
+  authorize('maintenance:delete'), validate([idParam]), maintenance.removeAspect);
+
+// --- Setting maintenance per alat ---
+
+const settingFilterRules = [
+  ...pageRules,
+  query('status').optional().isIn(MAINTENANCE_STATUSES)
+    .withMessage(`status harus salah satu dari: ${MAINTENANCE_STATUSES.join(', ')}`),
+];
+
+// Dashboard lintas alat: mana saja yang sudah warning/due/overdue
+router.get('/maintenance-settings',
+  authorize('maintenance:read'),
+  validate([
+    ...settingFilterRules,
+    query('equipmentItemId').optional().isInt({ min: 1 }).withMessage('equipmentItemId harus angka'),
+  ]),
+  maintenance.listSettings);
+
+router.get('/maintenance-settings/:id',
+  authorize('maintenance:read'), validate([idParam]), maintenance.detailSetting);
+
+router.put('/maintenance-settings/:id',
+  authorize('maintenance:update'),
+  validate([
+    idParam,
+    body('thresholdValue').optional().isFloat({ gt: 0 }).withMessage('Threshold harus lebih dari 0 jam').toFloat(),
+    body('isActive').optional().isBoolean().withMessage('isActive harus boolean').toBoolean(),
+    body('currentValueSinceReset').not().exists()
+      .withMessage('Counter jam dikelola sistem dari workhour log dan reset maintenance'),
+    body('status').not().exists().withMessage('Status dihitung sistem dari sisa jam, tidak bisa diisi manual'),
+  ]),
+  maintenance.updateSetting);
+
+router.delete('/maintenance-settings/:id',
+  authorize('maintenance:delete'), validate([idParam]), maintenance.removeSetting);
+
+router.get('/items/:itemId/maintenance-settings',
+  authorize('maintenance:read'),
+  validate([itemIdParam, ...settingFilterRules]),
+  maintenance.listSettingsByItem);
+
+router.post('/items/:itemId/maintenance-settings',
+  authorize('maintenance:create'),
+  validate([
+    itemIdParam,
+    body('maintenanceAspectId').isInt({ min: 1 })
+      .withMessage('maintenanceAspectId wajib diisi dan harus angka').toInt(),
+    body('thresholdValue').optional()
+      .isFloat({ gt: 0 }).withMessage('Threshold harus lebih dari 0 jam').toFloat(),
+  ]),
+  maintenance.createSetting);
+
+// --- Riwayat tindakan maintenance ---
+
+const recordFilterRules = [
+  ...pageRules,
+  query('maintenanceType').optional().isIn(MAINTENANCE_TYPES)
+    .withMessage(`maintenanceType harus salah satu dari: ${MAINTENANCE_TYPES.join(', ')}`),
+  query('status').optional().isIn(RECORD_STATUSES)
+    .withMessage(`status harus salah satu dari: ${RECORD_STATUSES.join(', ')}`),
+  query('startDate').optional().isISO8601().withMessage('startDate harus format tanggal YYYY-MM-DD'),
+  query('endDate').optional().isISO8601().withMessage('endDate harus format tanggal YYYY-MM-DD'),
+];
+
+router.get('/maintenance-records',
+  authorize('maintenance:read'),
+  validate([
+    ...recordFilterRules,
+    query('equipmentItemId').optional().isInt({ min: 1 }).withMessage('equipmentItemId harus angka'),
+  ]),
+  maintenance.listRecords);
+
+router.get('/maintenance-records/:id',
+  authorize('maintenance:read'), validate([idParam]), maintenance.detailRecord);
+
+router.post('/maintenance-records',
+  authorize('maintenance:create'),
+  validate([
+    body('equipmentItemId').isInt({ min: 1 }).withMessage('equipmentItemId wajib diisi dan harus angka').toInt(),
+    body('maintenanceSettingId').optional({ nullable: true })
+      .isInt({ min: 1 }).withMessage('maintenanceSettingId harus angka').toInt(),
+    body('damageLogId').optional({ nullable: true }).isInt({ min: 1 }).withMessage('damageLogId harus angka').toInt(),
+    body('purchaseRequestItemId').optional({ nullable: true })
+      .isInt({ min: 1 }).withMessage('purchaseRequestItemId harus angka').toInt(),
+    body('maintenanceType').notEmpty().withMessage('maintenanceType wajib diisi')
+      .isIn(MAINTENANCE_TYPES).withMessage(`maintenanceType harus salah satu dari: ${MAINTENANCE_TYPES.join(', ')}`),
+    body('maintenanceDate').notEmpty().withMessage('Tanggal maintenance wajib diisi')
+      .isISO8601().withMessage('maintenanceDate harus format tanggal YYYY-MM-DD'),
+    body('workhourAtMaintenance').optional({ nullable: true })
+      .isFloat({ min: 0 }).withMessage('workhourAtMaintenance tidak boleh negatif').toFloat(),
+    body('actionDescription').trim().notEmpty().withMessage('Deskripsi tindakan wajib diisi'),
+    body('performedBy').optional({ nullable: true }).trim()
+      .isLength({ max: 150 }).withMessage('Nama pelaksana maksimal 150 karakter'),
+    body('maintenanceCode').not().exists().withMessage('Nomor maintenance dibuat otomatis oleh sistem'),
+  ]),
+  maintenance.createRecord);
+
+router.get('/items/:itemId/maintenance-records',
+  authorize('maintenance:read'),
+  validate([itemIdParam, ...recordFilterRules]),
+  maintenance.listRecordsByItem);
+
+router.put('/maintenance-records/:id/cancel',
+  authorize('maintenance:update'),
+  validate([idParam, body('notes').optional({ nullable: true }).trim()]),
+  maintenance.cancelRecord);
 
 module.exports = router;
