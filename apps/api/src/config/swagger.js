@@ -589,7 +589,7 @@ const swaggerSpec = {
         parameters: [
           { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
           { in: 'query', name: 'typeId', schema: { type: 'integer' } },
-          { in: 'query', name: 'status', schema: { type: 'string', enum: ['available','assigned','delivered_to_location','received_at_site','in_use','maintenance','damaged','retired'] } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['available','assigned_to_location','maintenance','retired'] } },
           { in: 'query', name: 'isActive', schema: { type: 'boolean' } },
           { $ref: '#/components/parameters/SearchParam' }
         ],
@@ -634,19 +634,19 @@ const swaggerSpec = {
         responses: { 200: { description: 'Updated' }, 403: { description: 'Ubah assetCode oleh non-super_admin' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'assetCode sudah dipakai' } }
       },
       delete: {
-        tags: ['Equipment Items'], summary: 'Soft delete unit alat', description: 'Permission: equipment:delete. Set isActive=false. Ditolak kalau alat sedang assigned/delivered/received/in_use.',
+        tags: ['Equipment Items'], summary: 'Soft delete unit alat', description: 'Permission: equipment:delete. Set isActive=false (penghapusan administratif, bukan penanda alat rusak/pensiun). Ditolak kalau alat sedang `assigned_to_location` atau `maintenance`.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         responses: { 200: { description: 'Dinonaktifkan' }, 409: { description: 'Alat sedang terpakai / sudah nonaktif' } }
       }
     },
     '/equipment/items/{id}/status': {
       put: {
-        tags: ['Equipment Items'], summary: 'Ubah status alat', description: 'Permission: equipment:update. Satu-satunya jalur ubah status; setiap perubahan ditulis ke equipment_status_logs.',
+        tags: ['Equipment Items'], summary: 'Ubah status alat', description: 'Permission: equipment:update. Satu-satunya jalur ubah status; setiap perubahan ditulis ke equipment_status_logs. `maintenance` mencakup rusak, perbaikan, dan perawatan — penyebabnya dibedakan lewat `sourceType` (damage_log vs maintenance_record). `assigned_to_location` adalah cermin alokasi proyek; sumber kebenaran penugasan ada di modul Project.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['status'],
           properties: {
-            status: { type: 'string', enum: ['available','assigned','delivered_to_location','received_at_site','in_use','maintenance','damaged','retired'] },
+            status: { type: 'string', enum: ['available','assigned_to_location','maintenance','retired'] },
             notes: { type: 'string', example: 'Masuk bengkel untuk servis 500 jam' },
             sourceType: { type: 'string', example: 'manual', description: 'equipment_request | workhour | maintenance_record | damage_log | manual. Default: manual' },
             sourceId: { type: 'integer', description: 'ID dokumen sumber kalau perubahan status berasal dari modul lain' }
@@ -667,7 +667,7 @@ const swaggerSpec = {
     },
     '/equipment/workhour-logs': {
       post: {
-        tags: ['Workhour Logs'], summary: 'Catat jam kerja alat', description: 'Role: lapangan. Permission: workhour:create. Menambah total_workhour alat DAN menggerakkan hitung mundur semua maintenance setting aktif milik alat itu, dalam satu transaksi. Response memuat `maintenanceImpact`.',
+        tags: ['Workhour Logs'], summary: 'Catat jam kerja alat', description: 'Role: lapangan. Permission: workhour:create. Menambah total_workhour alat DAN menggerakkan hitung mundur semua maintenance setting aktif milik alat itu, dalam satu transaksi. Response memuat `maintenanceImpact`. DITOLAK kalau alat berstatus `maintenance` atau `retired` — alat di bengkel tidak menghasilkan jam operasi.',
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['equipmentItemId', 'workDate', 'totalWorkhour', 'sourceType'],
           properties: {
@@ -684,7 +684,7 @@ const swaggerSpec = {
         responses: {
           201: { description: 'Created. Response berisi data log + `maintenanceImpact`: array setting yang counternya bergerak, masing-masing dengan settingId, aspectCode, remainingValue, status, dan statusChanged.' },
           400: { description: 'Validasi gagal / tanggal di masa depan' },
-          404: { description: 'Unit alat tidak ditemukan' }, 409: { description: 'Alat nonaktif / total jam per hari melebihi 24' }
+          404: { description: 'Unit alat tidak ditemukan' }, 409: { description: 'Alat nonaktif / berstatus maintenance atau retired / total jam per hari melebihi 24' }
         }
       }
     },

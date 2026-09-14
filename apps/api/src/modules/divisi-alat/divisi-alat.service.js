@@ -45,8 +45,11 @@ const syncSequenceWithManualCode = async (tx, type, assetCode) => {
   }
 };
 
-// Status yang berarti alat sedang terpakai — tidak boleh dinonaktifkan
-const BUSY_STATUSES = ['assigned', 'delivered_to_location', 'received_at_site', 'in_use'];
+// Alat yang sedang ditugaskan atau sedang ditangani tidak boleh diarsipkan
+const NON_ARCHIVABLE_STATUSES = ['assigned_to_location', 'maintenance'];
+
+// Alat pada status ini tidak menghasilkan jam operasi
+const NON_OPERATIONAL_STATUSES = ['maintenance', 'retired'];
 
 const toNumber = (value) => (value === null || value === undefined ? null : Number(value));
 const toDateOnly = (value) => (value ? new Date(value).toISOString().slice(0, 10) : null);
@@ -419,7 +422,7 @@ const removeItem = async (id) => {
   const item = await findItemOrFail(id);
 
   if (!item.isActive) throw httpError('Unit alat sudah nonaktif', 409);
-  if (BUSY_STATUSES.includes(item.currentStatus)) {
+  if (NON_ARCHIVABLE_STATUSES.includes(item.currentStatus)) {
     throw httpError(`Alat sedang berstatus "${item.currentStatus}" dan tidak bisa dinonaktifkan`, 409);
   }
 
@@ -464,6 +467,15 @@ const createWorkhourLog = async (payload, userId) => {
   const item = await prisma.equipmentItem.findUnique({ where: { id: equipmentItemId } });
   if (!item) throw httpError(`Unit alat dengan ID ${equipmentItemId} tidak ditemukan`, 404);
   if (!item.isActive) throw httpError(`Alat "${item.assetCode}" nonaktif dan tidak bisa dipakai transaksi baru`, 409);
+  // Alat di bengkel atau sudah pensiun tidak mungkin menghasilkan jam kerja.
+  // Kalau dibiarkan, counter maintenance ikut jalan dan alat yang baru selesai
+  // servis langsung terlihat mendekati jatuh tempo lagi.
+  if (NON_OPERATIONAL_STATUSES.includes(item.currentStatus)) {
+    throw httpError(
+      `Alat "${item.assetCode}" berstatus "${item.currentStatus}" sehingga jam kerjanya tidak bisa dicatat`,
+      409
+    );
+  }
 
   const work = new Date(workDate);
   const today = new Date();

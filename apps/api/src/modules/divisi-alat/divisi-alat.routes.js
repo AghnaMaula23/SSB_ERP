@@ -9,10 +9,7 @@ const router = Router();
 
 router.use(authenticate);
 
-const EQUIPMENT_STATUSES = [
-  'available', 'assigned', 'delivered_to_location', 'received_at_site',
-  'in_use', 'maintenance', 'damaged', 'retired',
-];
+const EQUIPMENT_STATUSES = ['available', 'assigned_to_location', 'maintenance', 'retired'];
 const WORKHOUR_SOURCE_TYPES = ['internal_project', 'external_rental', 'manual_adjustment'];
 
 const idParam = param('id').isInt({ min: 1 }).withMessage('ID tidak valid').toInt();

@@ -78,14 +78,15 @@ model RolePermission {
 // DIVISI ALAT — Batch 1: Master Alat & Workhour
 // ============================================================
 
+/// Kondisi operasional unit alat hari ini.
+/// `assigned_to_location` adalah cermin cepat dari alokasi proyek — sumber
+/// kebenaran penugasan tetap di sub_project_equipment_allocations (modul Project).
+/// `maintenance` mencakup rusak, perbaikan, dan perawatan; penyebabnya dibedakan
+/// lewat equipment_status_logs.source_type (damage_log vs maintenance_record).
 enum EquipmentItemStatus {
   available
-  assigned
-  delivered_to_location
-  received_at_site
-  in_use
+  assigned_to_location
   maintenance
-  damaged
   retired
 
   @@map("equipment_item_status")
