@@ -16,7 +16,7 @@ function EyeIcon({ hidden }) {
   );
 }
 
-export default function Login() {
+export default function Login({ onLoginSuccess }) {
   const [loginField, setLoginField] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -34,7 +34,7 @@ export default function Login() {
       const { token, user } = await login({ login: loginField.trim(), password });
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
-      setSuccess('Login berhasil. Anda siap melanjutkan ke sistem.');
+      onLoginSuccess();
     } catch (requestError) {
       setError(requestError.message);
     } finally {
