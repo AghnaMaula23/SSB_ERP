@@ -24,6 +24,8 @@ model User {
   equipmentStatusLogs   EquipmentStatusLog[]
   equipmentWorkhourLogs EquipmentWorkhourLog[]
   maintenanceRecords    MaintenanceRecord[]
+  damageLogsReported    DamageLog[]            @relation("DamageReportedBy")
+  damageLogsReviewed    DamageLog[]            @relation("DamageReviewedBy")
 
   @@map("users")
 }
@@ -78,14 +80,15 @@ model RolePermission {
 // DIVISI ALAT — Batch 1: Master Alat & Workhour
 // ============================================================
 
-/// Kondisi operasional unit alat hari ini.
-/// `assigned_to_location` adalah cermin cepat dari alokasi proyek — sumber
-/// kebenaran penugasan tetap di sub_project_equipment_allocations (modul Project).
+/// KONDISI unit alat — bukan lokasi atau penugasannya.
+/// Mekanik datang ke alat (tidak ditarik ke bengkel), jadi alat yang diperbaiki
+/// tetap terikat alokasi proyeknya. Pertanyaan "alat ini di mana dan ditugaskan
+/// ke proyek apa" dijawab sub_project_equipment_allocations pada modul Project,
+/// dan disajikan API sebagai field turunan `assignment` — bukan kolom di sini.
 /// `maintenance` mencakup rusak, perbaikan, dan perawatan; penyebabnya dibedakan
 /// lewat equipment_status_logs.source_type (damage_log vs maintenance_record).
 enum EquipmentItemStatus {
-  available
-  assigned_to_location
+  operational
   maintenance
   retired
 
@@ -125,7 +128,7 @@ model EquipmentItem {
   model             String?             @db.VarChar(100)
   serialNumber      String?             @map("serial_number") @db.VarChar(100)
   manufactureYear   Int?                @map("manufacture_year")
-  currentStatus     EquipmentItemStatus @default(available) @map("current_status")
+  currentStatus     EquipmentItemStatus @default(operational) @map("current_status")
   // Akumulator jam kerja, ditambah oleh service saat workhour log dibuat
   totalWorkhour     Decimal             @default(0) @map("total_workhour") @db.Decimal(12, 2)
   // Default rate income alat; modul Income tetap memakai rate_snapshot sendiri
@@ -142,6 +145,7 @@ model EquipmentItem {
   workhourLogs        EquipmentWorkhourLog[]
   maintenanceSettings EquipmentMaintenanceSetting[]
   maintenanceRecords  MaintenanceRecord[]
+  damageLogs          DamageLog[]
 
   @@index([equipmentTypeId])
   @@index([currentStatus])
@@ -273,8 +277,8 @@ model MaintenanceRecord {
   // damage log atau purchase request yang tidak punya maintenance setting.
   equipmentItemId       Int                     @map("equipment_item_id")
   maintenanceSettingId  Int?                    @map("maintenance_setting_id")
-  // FK menyusul saat modul Damage Log dan Purchase Request dibangun
   damageLogId           Int?                    @map("damage_log_id")
+  // FK menyusul saat modul Purchase Request dibangun
   purchaseRequestItemId Int?                    @map("purchase_request_item_id")
   maintenanceType       MaintenanceType         @map("maintenance_type")
   maintenanceDate       DateTime                @map("maintenance_date") @db.Date
@@ -288,6 +292,7 @@ model MaintenanceRecord {
 
   equipmentItem      EquipmentItem                @relation(fields: [equipmentItemId], references: [id])
   maintenanceSetting EquipmentMaintenanceSetting? @relation(fields: [maintenanceSettingId], references: [id])
+  damageLog          DamageLog?                   @relation(fields: [damageLogId], references: [id])
   createdByUser      User?                        @relation(fields: [createdBy], references: [id])
 
   @@index([equipmentItemId, maintenanceDate])
@@ -308,4 +313,89 @@ model DocumentSequence {
 
   @@unique([docType, period])
   @@map("document_sequences")
+}
+
+// ============================================================
+// DIVISI ALAT — Batch 3: Damage Logs
+// ============================================================
+
+/// reported = ada masalah yang belum beres. resolved = sudah selesai ditangani.
+/// Tidak ada status "sedang dikerjakan": Divisi Alat sendiri yang mencatat dan
+/// mengerjakan, jadi tahapan itu tidak mengubah keputusan siapa pun. Kalau nanti
+/// diperlukan, menambah nilai enum di PostgreSQL murah.
+enum DamageStatus {
+  reported
+  resolved
+  cancelled
+
+  @@map("damage_status")
+}
+
+/// Sparepart diambil dari stok gudang sendiri, atau harus dibeli ke supplier
+/// (yang berarti butuh Purchase Request lebih dulu).
+enum SparePartSource {
+  warehouse
+  supplier
+
+  @@map("spare_part_source")
+}
+
+/// Mekanik internal Divisi Alat, atau bengkel/teknisi luar yang dipanggil.
+/// Mekanik selalu didatangkan ke alat, alat tidak ditarik ke bengkel.
+enum MechanicTeam {
+  internal
+  external
+
+  @@map("mechanic_team")
+}
+
+/// Laporan kerusakan alat, dicatat dan dikelola sendiri oleh Divisi Alat.
+/// Tanpa kolom tingkat keparahan — lihat docs/keputusan-desain-divisi-alat.md.
+model DamageLog {
+  id              Int          @id @default(autoincrement())
+  damageCode      String       @unique @map("damage_code") @db.VarChar(50)
+  equipmentItemId Int          @map("equipment_item_id")
+  // Mewarisi utang desain yang sama dengan equipment_workhour_logs:
+  // FK menyusul saat modul Project dibangun.
+  projectId       Int?         @map("project_id")
+  subProjectId    Int?         @map("sub_project_id")
+  // Tanggal KEJADIAN, bukan tanggal input. Dibedakan karena laporan masuk lewat
+  // telepon ke Divisi Alat, sering baru diketik beberapa jam atau hari kemudian.
+  damageDate      DateTime     @map("damage_date") @db.Date
+  status          DamageStatus @default(reported)
+  description     String       @db.Text
+
+  /// Pernyataan laporan ini bahwa alat tidak bisa dioperasikan. Kalau true,
+  /// equipment_items.current_status ikut jadi `maintenance` saat laporan dibuat.
+  /// Dipakai juga untuk memastikan alat tidak dibebaskan saat satu laporan
+  /// selesai sementara laporan lain yang menghentikannya masih terbuka.
+  stopsOperation Boolean @default(false) @map("stops_operation")
+
+  // Keputusan penanganan. Nullable di database supaya saat Lapangan nanti boleh
+  // melapor sendiri (mereka tidak tahu jawabannya) cukup melonggarkan validator,
+  // tanpa migrasi struktur. Hari ini tetap WAJIB lewat validasi API.
+  sparePartSource SparePartSource? @map("spare_part_source")
+  mechanicTeam    MechanicTeam?    @map("mechanic_team")
+
+  // User Divisi Alat yang mengetik laporan. Bukan operator lapangan yang melihat
+  // kejadiannya — jejak itu baru ada saat Lapangan boleh melapor lewat sistem.
+  reportedBy Int? @map("reported_by")
+
+  // Belum dipakai UI mana pun. Disiapkan untuk saat Lapangan boleh melapor
+  // sendiri, sehingga muncul langkah pemeriksaan oleh Divisi Alat.
+  reviewedBy Int?      @map("reviewed_by")
+  reviewedAt DateTime? @map("reviewed_at")
+
+  resolvedAt DateTime? @map("resolved_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  equipmentItem      EquipmentItem       @relation(fields: [equipmentItemId], references: [id])
+  reportedByUser     User?               @relation("DamageReportedBy", fields: [reportedBy], references: [id])
+  reviewedByUser     User?               @relation("DamageReviewedBy", fields: [reviewedBy], references: [id])
+  maintenanceRecords MaintenanceRecord[]
+
+  @@index([equipmentItemId, damageDate])
+  @@index([status])
+  @@map("damage_logs")
 }

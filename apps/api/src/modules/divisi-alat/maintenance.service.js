@@ -539,7 +539,7 @@ const cancelRecord = async (id, { notes }) => {
 };
 
 module.exports = {
-  computeStatus, applyWorkhourToSettings,
+  computeStatus, applyWorkhourToSettings, nextDocumentNumber,
   listAspects, getAspectById, createAspect, updateAspect, removeAspect,
   listSettings, listSettingsByItem, getSettingById, createSetting, updateSetting, removeSetting,
   listRecords, listRecordsByItem, getRecordById, createRecord, cancelRecord,

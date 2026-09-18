@@ -195,19 +195,19 @@ akan terhitung dobel.
 
 ---
 
-## Menunggu konfirmasi PM
+## Sudah dikonfirmasi PM (17 September 2026)
 
-1. **Alur alat rusak.** Asumsi sekarang: unit rusak ditarik fisik ke gudang lalu
-   dioper ke bengkel, dan unit pengganti dikirim ke lokasi supaya progress tidak
-   terhambat. Kalau ada kasus alat diperbaiki di tempat tanpa ditarik, aturan
-   "resolved → available" perlu ditinjau ulang.
-2. **Penggantian unit di pool proyek.** ERD Project tidak menjawab: saat unit
-   rusak diganti, apakah `equipment_pool_items.equipment_item_id` diubah ke unit
-   pengganti (jumlah alat tetap, tapi `total_used_hours` jadi campuran dua unit),
-   atau dibuat pool item baru (jejak bersih, tapi `approved_quantity` terbaca
-   lebih banyak dari alat yang benar-benar ada di lokasi)?
-
----
+1. **Alat rusak TIDAK ditarik ke bengkel.** Mekanik yang didatangkan ke alat,
+   baik di gudang maupun di lokasi proyek. Konsekuensinya: alat yang diperbaiki
+   tetap terikat alokasi proyeknya, dan `equipment_items.current_status` cukup
+   memuat kondisi saja — penugasan sepenuhnya milik
+   `sub_project_equipment_allocations`.
+2. **Tidak ada mekanisme "penggantian unit".** Kalau perbaikan diperkirakan lama,
+   proyek mengajukan alat tambahan lewat **alur normal Request Alat** (lapangan
+   mengajukan, admin review, Divisi Alat assign). Bukan menukar unit di pool.
+   Artinya `equipment_pool_items.equipment_item_id` tidak pernah diubah ke unit
+   lain, dan `total_used_hours` per pool item tidak akan pernah bercampur antar
+   unit. Ambiguitas yang sempat dikhawatirkan tidak ada.
 
 ## Utang desain — dibereskan di awal modul Project
 

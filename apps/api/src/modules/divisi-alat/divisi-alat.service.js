@@ -45,8 +45,10 @@ const syncSequenceWithManualCode = async (tx, type, assetCode) => {
   }
 };
 
-// Alat yang sedang ditugaskan atau sedang ditangani tidak boleh diarsipkan
-const NON_ARCHIVABLE_STATUSES = ['assigned_to_location', 'maintenance'];
+// Alat yang sedang ditangani tidak boleh diarsipkan. Penugasan proyek TIDAK
+// lagi tercermin di sini — saat modul Project ada, pengecekan "sedang bertugas"
+// harus ditambahkan dengan membaca sub_project_equipment_allocations.
+const NON_ARCHIVABLE_STATUSES = ['maintenance'];
 
 // Alat pada status ini tidak menghasilkan jam operasi
 const NON_OPERATIONAL_STATUSES = ['maintenance', 'retired'];

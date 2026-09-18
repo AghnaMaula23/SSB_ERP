@@ -589,14 +589,14 @@ const swaggerSpec = {
         parameters: [
           { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
           { in: 'query', name: 'typeId', schema: { type: 'integer' } },
-          { in: 'query', name: 'status', schema: { type: 'string', enum: ['available','assigned_to_location','maintenance','retired'] } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['operational','maintenance','retired'] } },
           { in: 'query', name: 'isActive', schema: { type: 'boolean' } },
           { $ref: '#/components/parameters/SearchParam' }
         ],
         responses: { 200: { description: 'Paginated list', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
       },
       post: {
-        tags: ['Equipment Items'], summary: 'Tambah unit alat', description: 'Role: divisi_alat. Permission: equipment:create. `assetCode` DIBUAT OTOMATIS oleh sistem dengan format SSB-{typeCode}-{NNN} (mis. SSB-EXC-001) — hanya super_admin yang boleh mengirimnya manual. Status awal `available` dan otomatis tercatat di status log.',
+        tags: ['Equipment Items'], summary: 'Tambah unit alat', description: 'Role: divisi_alat. Permission: equipment:create. `assetCode` DIBUAT OTOMATIS oleh sistem dengan format SSB-{typeCode}-{NNN} (mis. SSB-EXC-001) — hanya super_admin yang boleh mengirimnya manual. Status awal `operational` dan otomatis tercatat di status log.',
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['equipmentTypeId'],
           properties: {
@@ -634,19 +634,19 @@ const swaggerSpec = {
         responses: { 200: { description: 'Updated' }, 403: { description: 'Ubah assetCode oleh non-super_admin' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'assetCode sudah dipakai' } }
       },
       delete: {
-        tags: ['Equipment Items'], summary: 'Soft delete unit alat', description: 'Permission: equipment:delete. Set isActive=false (penghapusan administratif, bukan penanda alat rusak/pensiun). Ditolak kalau alat sedang `assigned_to_location` atau `maintenance`.',
+        tags: ['Equipment Items'], summary: 'Soft delete unit alat', description: 'Permission: equipment:delete. Set isActive=false (penghapusan administratif, bukan penanda alat rusak/pensiun). Ditolak kalau alat sedang `maintenance`.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         responses: { 200: { description: 'Dinonaktifkan' }, 409: { description: 'Alat sedang terpakai / sudah nonaktif' } }
       }
     },
     '/equipment/items/{id}/status': {
       put: {
-        tags: ['Equipment Items'], summary: 'Ubah status alat', description: 'Permission: equipment:update. Satu-satunya jalur ubah status; setiap perubahan ditulis ke equipment_status_logs. `maintenance` mencakup rusak, perbaikan, dan perawatan — penyebabnya dibedakan lewat `sourceType` (damage_log vs maintenance_record). `assigned_to_location` adalah cermin alokasi proyek; sumber kebenaran penugasan ada di modul Project.',
+        tags: ['Equipment Items'], summary: 'Ubah status alat', description: 'Permission: equipment:update. Satu-satunya jalur ubah status; setiap perubahan ditulis ke equipment_status_logs. `maintenance` mencakup rusak, perbaikan, dan perawatan — penyebabnya dibedakan lewat `sourceType` (damage_log vs maintenance_record). Kolom ini memuat KONDISI alat saja. Penugasan proyek tidak ada di sini — sumbernya sub_project_equipment_allocations pada modul Project.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['status'],
           properties: {
-            status: { type: 'string', enum: ['available','assigned_to_location','maintenance','retired'] },
+            status: { type: 'string', enum: ['operational','maintenance','retired'] },
             notes: { type: 'string', example: 'Masuk bengkel untuk servis 500 jam' },
             sourceType: { type: 'string', example: 'manual', description: 'equipment_request | workhour | maintenance_record | damage_log | manual. Default: manual' },
             sourceId: { type: 'integer', description: 'ID dokumen sumber kalau perubahan status berasal dari modul lain' }
@@ -877,34 +877,100 @@ const swaggerSpec = {
     },
     '/equipment/damage-logs': {
       get: {
-        tags: ['Damage Logs'], summary: 'List laporan kerusakan',
+        tags: ['Damage Logs'], summary: 'List laporan kerusakan', description: 'Permission: damage:read',
         parameters: [
           { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
-          { in: 'query', name: 'status', schema: { type: 'string', enum: ['reported','under_review','in_maintenance','resolved','cancelled'] } },
-          { in: 'query', name: 'damageLevel', schema: { type: 'string', enum: ['low','medium','high','critical'] } }
+          { $ref: '#/components/parameters/SearchParam' },
+          { in: 'query', name: 'equipmentItemId', schema: { type: 'integer' } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['reported','resolved','cancelled'] } },
+          { in: 'query', name: 'stopsOperation', schema: { type: 'boolean' }, description: 'true = hanya kerusakan yang menghentikan alat' },
+          { in: 'query', name: 'sparePartSource', schema: { type: 'string', enum: ['warehouse','supplier'] } },
+          { in: 'query', name: 'mechanicTeam', schema: { type: 'string', enum: ['internal','external'] } },
+          { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } }
         ],
-        responses: { 200: { description: 'Paginated list' } }
+        responses: { 200: { description: 'Paginated list. `stopsOperation` adalah sumber badge Crash Level di UI (true = Danger/Berhenti, false = Minor/Masih Jalan).', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
       },
       post: {
-        tags: ['Damage Logs'], summary: 'Laporkan kerusakan', description: 'Role: divisi_alat, lapangan',
-        requestBody: { required: true, content: { 'multipart/form-data': { schema: {
-          type: 'object', required: ['equipmentItemId', 'damageDate', 'damageLevel', 'description'],
+        tags: ['Damage Logs'], summary: 'Catat laporan kerusakan', description: 'Role: divisi_alat. Permission: damage:create. Laporan dari Lapangan masuk di luar sistem (telepon), Divisi Alat yang mengetik. `damageCode` dibuat sistem (DMG-000001). Kalau `stopsOperation` true, status alat otomatis jadi `maintenance` dan jam kerjanya tidak bisa diinput lagi.',
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['equipmentItemId', 'damageDate', 'description', 'sparePartSource', 'mechanicTeam'],
           properties: {
-            equipmentItemId: { type: 'integer' }, projectId: { type: 'integer' }, subProjectId: { type: 'integer' },
-            damageDate: { type: 'string', format: 'date-time' },
-            damageLevel: { type: 'string', enum: ['low','medium','high','critical'] },
-            description: { type: 'string' }, attachments: { type: 'array', items: { type: 'string', format: 'binary' } }
+            equipmentItemId: { type: 'integer' },
+            damageDate: { type: 'string', format: 'date', example: '2026-09-18', description: 'Tanggal KEJADIAN, bukan tanggal input. Tidak boleh di masa depan.' },
+            description: { type: 'string', example: 'Kebocoran oli hidrolik pada seal silinder boom utama' },
+            sparePartSource: { type: 'string', enum: ['warehouse','supplier'], description: 'supplier berarti butuh Purchase Request lebih dulu' },
+            mechanicTeam: { type: 'string', enum: ['internal','external'], description: 'Mekanik didatangkan ke alat, alat tidak ditarik ke bengkel' },
+            stopsOperation: { type: 'boolean', default: false, description: 'Centang "Alat Berhenti Operasi" di form' },
+            projectId: { type: 'integer', nullable: true, description: 'FK menyusul saat modul Project dibangun' },
+            subProjectId: { type: 'integer', nullable: true }
           }
         }}}},
-        responses: { 201: { description: 'Created' } }
+        responses: {
+          201: { description: 'Created' }, 400: { description: 'Validasi gagal / tanggal di masa depan' },
+          404: { description: 'Unit alat tidak ditemukan' }, 409: { description: 'Alat nonaktif atau sudah pensiun' }
+        }
+      }
+    },
+    '/equipment/damage-logs/{id}': {
+      get: {
+        tags: ['Damage Logs'], summary: 'Detail laporan + tindakan yang sudah dikerjakan', description: 'Permission: damage:read',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Detail + array maintenanceRecords yang lahir dari laporan ini' }, 404: { description: 'Tidak ditemukan' } }
+      },
+      put: {
+        tags: ['Damage Logs'], summary: 'Ralat laporan', description: 'Permission: damage:update. HANYA selama status `reported` — setelah selesai, keputusan sparepart dan mekanik sudah dieksekusi di lapangan. Mengubah `stopsOperation` ikut menggerakkan status alat.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: {
+          type: 'object',
+          properties: {
+            description: { type: 'string' }, damageDate: { type: 'string', format: 'date' },
+            sparePartSource: { type: 'string', enum: ['warehouse','supplier'] },
+            mechanicTeam: { type: 'string', enum: ['internal','external'] },
+            stopsOperation: { type: 'boolean' }
+          }
+        }}}},
+        responses: { 200: { description: 'Updated' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'Laporan sudah selesai atau dibatalkan' } }
       }
     },
     '/equipment/damage-logs/{id}/resolve': {
       put: {
-        tags: ['Damage Logs'], summary: 'Tandai kerusakan resolved', description: 'Role: divisi_alat',
+        tags: ['Damage Logs'], summary: 'Selesaikan kerusakan', description: 'Permission: damage:update. WAJIB mengisi tindakan — satu maintenance record otomatis dibuat dengan `damageLogId` terisi, supaya riwayat alat tidak bolong. Kalau laporan ini yang menghentikan alat dan tidak ada laporan lain yang masih menghentikannya, status alat kembali `operational`.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
-        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { resolutionNotes: { type: 'string' } } } } } },
-        responses: { 200: { description: 'Resolved' } }
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['maintenanceType', 'actionDescription'],
+          properties: {
+            maintenanceType: { type: 'string', enum: ['routine','repair','replacement','inspection','adjustment'], description: 'Umumnya `repair`. `inspection` untuk kasus "diperiksa, ternyata tidak ada kerusakan".' },
+            actionDescription: { type: 'string', example: 'Ganti seal silinder boom dan isi ulang oli hidrolik' },
+            performedBy: { type: 'string', example: 'Bengkel Jaya Motor', description: 'Nama mekanik atau bengkel, melengkapi mechanicTeam' },
+            maintenanceDate: { type: 'string', format: 'date', description: 'Default hari ini' },
+            maintenanceSettingId: { type: 'integer', nullable: true, description: 'Isi kalau perbaikan sekalian mereset jadwal servis, mis. olinya ikut diganti' }
+          }
+        }}}},
+        responses: {
+          200: { description: 'Selesai + maintenance record tercipta' }, 400: { description: 'Validasi gagal' },
+          404: { description: 'Laporan / setting tidak ditemukan' }, 409: { description: 'Laporan sudah selesai / setting milik alat lain' }
+        }
+      }
+    },
+    '/equipment/damage-logs/{id}/cancel': {
+      put: {
+        tags: ['Damage Logs'], summary: 'Batalkan laporan salah input', description: 'Permission: damage:update. Hanya dari status `reported`. Kalau laporan ini menghentikan alat, status alat dikembalikan.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string', example: 'Salah pilih unit alat' } } } } } },
+        responses: { 200: { description: 'Dibatalkan' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'Sudah selesai atau sudah dibatalkan' } }
+      }
+    },
+    '/equipment/items/{itemId}/damage-logs': {
+      get: {
+        tags: ['Damage Logs'], summary: 'Riwayat kerusakan per alat', description: 'Permission: damage:read',
+        parameters: [
+          { in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } },
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['reported','resolved','cancelled'] } },
+          { in: 'query', name: 'stopsOperation', schema: { type: 'boolean' } }
+        ],
+        responses: { 200: { description: 'Paginated riwayat kerusakan alat ini' }, 404: { description: 'Unit alat tidak ditemukan' } }
       }
     },
     '/equipment/purchase-requests': {

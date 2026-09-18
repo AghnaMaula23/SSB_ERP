@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { body, param, query } = require('express-validator');
 const controller = require('./divisi-alat.controller.js');
 const maintenance = require('./maintenance.controller.js');
+const damage = require('./damage.controller.js');
 const validate = require('../../middleware/validate.js');
 const { authenticate, authorize } = require('../../middleware/auth.js');
 
@@ -9,7 +10,7 @@ const router = Router();
 
 router.use(authenticate);
 
-const EQUIPMENT_STATUSES = ['available', 'assigned_to_location', 'maintenance', 'retired'];
+const EQUIPMENT_STATUSES = ['operational', 'maintenance', 'retired'];
 const WORKHOUR_SOURCE_TYPES = ['internal_project', 'external_rental', 'manual_adjustment'];
 
 const idParam = param('id').isInt({ min: 1 }).withMessage('ID tidak valid').toInt();
@@ -325,5 +326,100 @@ router.put('/maintenance-records/:id/cancel',
   authorize('maintenance:update'),
   validate([idParam, body('notes').optional({ nullable: true }).trim()]),
   maintenance.cancelRecord);
+
+// ============================================================
+// DAMAGE LOGS — Batch 3
+// Dicatat dan dikelola sendiri oleh Divisi Alat. Laporan dari Lapangan masuk
+// di luar sistem (telepon), jadi belum ada jalur lapor untuk role lapangan.
+// ============================================================
+
+const DAMAGE_STATUSES = ['reported', 'resolved', 'cancelled'];
+const SPARE_PART_SOURCES = ['warehouse', 'supplier'];
+const MECHANIC_TEAMS = ['internal', 'external'];
+
+const damageFilterRules = [
+  ...pageRules,
+  query('status').optional().isIn(DAMAGE_STATUSES)
+    .withMessage(`status harus salah satu dari: ${DAMAGE_STATUSES.join(', ')}`),
+  query('stopsOperation').optional().isBoolean().withMessage('stopsOperation harus boolean'),
+  query('sparePartSource').optional().isIn(SPARE_PART_SOURCES)
+    .withMessage(`sparePartSource harus salah satu dari: ${SPARE_PART_SOURCES.join(', ')}`),
+  query('mechanicTeam').optional().isIn(MECHANIC_TEAMS)
+    .withMessage(`mechanicTeam harus salah satu dari: ${MECHANIC_TEAMS.join(', ')}`),
+  query('startDate').optional().isISO8601().withMessage('startDate harus format tanggal YYYY-MM-DD'),
+  query('endDate').optional().isISO8601().withMessage('endDate harus format tanggal YYYY-MM-DD'),
+];
+
+router.get('/damage-logs',
+  authorize('damage:read'),
+  validate([
+    ...damageFilterRules,
+    query('equipmentItemId').optional().isInt({ min: 1 }).withMessage('equipmentItemId harus angka'),
+  ]),
+  damage.list);
+
+router.get('/damage-logs/:id', authorize('damage:read'), validate([idParam]), damage.detail);
+
+router.get('/items/:itemId/damage-logs',
+  authorize('damage:read'),
+  validate([itemIdParam, ...damageFilterRules]),
+  damage.listByItem);
+
+router.post('/damage-logs',
+  authorize('damage:create'),
+  validate([
+    body('equipmentItemId').isInt({ min: 1 }).withMessage('equipmentItemId wajib diisi dan harus angka').toInt(),
+    body('damageDate').notEmpty().withMessage('Tanggal kerusakan wajib diisi')
+      .isISO8601().withMessage('damageDate harus format tanggal YYYY-MM-DD'),
+    body('description').trim().notEmpty().withMessage('Deskripsi kerusakan wajib diisi'),
+    // Wajib di API meski nullable di database — pelonggarannya nanti saat
+    // Lapangan boleh melapor sendiri dan belum tahu jawabannya.
+    body('sparePartSource').notEmpty().withMessage('Sumber sparepart wajib dipilih')
+      .isIn(SPARE_PART_SOURCES).withMessage(`sparePartSource harus salah satu dari: ${SPARE_PART_SOURCES.join(', ')}`),
+    body('mechanicTeam').notEmpty().withMessage('Tim mekanik wajib dipilih')
+      .isIn(MECHANIC_TEAMS).withMessage(`mechanicTeam harus salah satu dari: ${MECHANIC_TEAMS.join(', ')}`),
+    body('stopsOperation').optional().isBoolean().withMessage('stopsOperation harus boolean').toBoolean(),
+    body('projectId').optional({ nullable: true }).isInt({ min: 1 }).withMessage('projectId harus angka').toInt(),
+    body('subProjectId').optional({ nullable: true }).isInt({ min: 1 }).withMessage('subProjectId harus angka').toInt(),
+    body('damageCode').not().exists().withMessage('Nomor laporan dibuat otomatis oleh sistem'),
+    body('status').not().exists().withMessage('Status laporan dikelola sistem lewat aksi selesai/batal'),
+  ]),
+  damage.create);
+
+router.put('/damage-logs/:id',
+  authorize('damage:update'),
+  validate([
+    idParam,
+    body('description').optional().trim().notEmpty().withMessage('Deskripsi kerusakan tidak boleh kosong'),
+    body('damageDate').optional().isISO8601().withMessage('damageDate harus format tanggal YYYY-MM-DD'),
+    body('sparePartSource').optional().isIn(SPARE_PART_SOURCES)
+      .withMessage(`sparePartSource harus salah satu dari: ${SPARE_PART_SOURCES.join(', ')}`),
+    body('mechanicTeam').optional().isIn(MECHANIC_TEAMS)
+      .withMessage(`mechanicTeam harus salah satu dari: ${MECHANIC_TEAMS.join(', ')}`),
+    body('stopsOperation').optional().isBoolean().withMessage('stopsOperation harus boolean').toBoolean(),
+    body('status').not().exists().withMessage('Status laporan dikelola sistem lewat aksi selesai/batal'),
+  ]),
+  damage.update);
+
+// Menyelesaikan kerusakan WAJIB mengisi tindakan — hasilnya satu maintenance record
+router.put('/damage-logs/:id/resolve',
+  authorize('damage:update'),
+  validate([
+    idParam,
+    body('maintenanceType').notEmpty().withMessage('Jenis tindakan wajib dipilih')
+      .isIn(MAINTENANCE_TYPES).withMessage(`maintenanceType harus salah satu dari: ${MAINTENANCE_TYPES.join(', ')}`),
+    body('actionDescription').trim().notEmpty().withMessage('Deskripsi tindakan wajib diisi'),
+    body('performedBy').optional({ nullable: true }).trim()
+      .isLength({ max: 150 }).withMessage('Nama pelaksana maksimal 150 karakter'),
+    body('maintenanceDate').optional().isISO8601().withMessage('maintenanceDate harus format tanggal YYYY-MM-DD'),
+    body('maintenanceSettingId').optional({ nullable: true })
+      .isInt({ min: 1 }).withMessage('maintenanceSettingId harus angka').toInt(),
+  ]),
+  damage.resolve);
+
+router.put('/damage-logs/:id/cancel',
+  authorize('damage:update'),
+  validate([idParam, body('notes').optional({ nullable: true }).trim()]),
+  damage.cancel);
 
 module.exports = router;

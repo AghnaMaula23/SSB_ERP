@@ -32,21 +32,27 @@ const PERMISSIONS = [
   { module: 'maintenance', action: 'create', label: 'Tambah aspek, setting, dan riwayat maintenance' },
   { module: 'maintenance', action: 'update', label: 'Ubah setting maintenance dan batalkan riwayat' },
   { module: 'maintenance', action: 'delete', label: 'Hapus aspek dan setting maintenance' },
+  { module: 'damage',      action: 'read',   label: 'Lihat laporan kerusakan alat' },
+  { module: 'damage',      action: 'create', label: 'Catat laporan kerusakan alat' },
+  { module: 'damage',      action: 'update', label: 'Ubah, selesaikan, dan batalkan laporan kerusakan' },
 ];
 
 // super_admin di-bypass di middleware authorize(), tapi permission-nya tetap
 // diisi supaya GET /auth/me memantulkan hak akses yang sebenarnya ke frontend.
 const ROLE_PERMISSIONS = {
   super_admin: PERMISSIONS.map((p) => `${p.module}:${p.action}`),
-  admin: ['user:read', 'role:read', 'permission:read', 'equipment:read', 'workhour:read', 'maintenance:read'],
+  admin: ['user:read', 'role:read', 'permission:read', 'equipment:read', 'workhour:read', 'maintenance:read', 'damage:read'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
     'workhour:read', 'workhour:create',
     'maintenance:read', 'maintenance:create', 'maintenance:update', 'maintenance:delete',
+    'damage:read', 'damage:create', 'damage:update',
   ],
   // Lapangan boleh melihat jadwal servis alat yang mereka pakai, tapi tidak mengelolanya
-  lapangan: ['equipment:read', 'workhour:read', 'workhour:create', 'maintenance:read'],
+  // Lapangan belum boleh mencatat kerusakan — laporan masuk lewat telepon ke
+  // Divisi Alat. Membuka aksesnya nanti cukup menambah 'damage:create' di sini.
+  lapangan: ['equipment:read', 'workhour:read', 'workhour:create', 'maintenance:read', 'damage:read'],
 };
 
 async function main() {
