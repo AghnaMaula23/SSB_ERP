@@ -11,6 +11,7 @@ const PAGE_SIZE = 8;
 
 export default function ItemsPage({ onBackToModules, onSignOut, onViewDetails }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [items, setItems] = useState(alatItems);
   const [loadError, setLoadError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -77,8 +78,8 @@ export default function ItemsPage({ onBackToModules, onSignOut, onViewDetails })
 
   return (
     <div className="min-h-screen bg-[#edf2f8] text-[#1e293b]">
-      <AlatSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} onBackToModules={onBackToModules} onSignOut={onSignOut} />
-      <AlatHeader collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
+      <AlatSidebar collapsed={sidebarCollapsed} mobileOpen={mobileSidebarOpen} activeRoute="alat/items" onToggle={() => setSidebarCollapsed((value) => !value)} onClose={() => setMobileSidebarOpen(false)} onBackToModules={onBackToModules} onSignOut={onSignOut} />
+      <AlatHeader collapsed={sidebarCollapsed} onToggle={() => setMobileSidebarOpen((value) => !value)} />
       <main className={`min-h-screen pt-9 transition-[padding] duration-200 ${sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-40'}`}>
         <div className="mx-auto max-w-[1320px] px-4 py-4 sm:px-5 lg:px-4">
           <div className="mb-4 flex items-start justify-between gap-4">

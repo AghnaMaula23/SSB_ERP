@@ -349,7 +349,7 @@ const resolve = async (id, payload, userId) => {
 
 const cancel = async (id, { notes }, userId) => {
   const log = await findDamageOrFail(id);
-  if (log.status !== 'reported') {
+  if (!['reported', 'resolved'].includes(log.status)) {
     throw httpError(`Laporan berstatus "${log.status}" tidak bisa dibatalkan`, 409);
   }
 

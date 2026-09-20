@@ -9,18 +9,27 @@ import { getItemDetail, updateItem, updateItemStatus } from '../services/alatSer
 const emptyItem = { itemCode: '', jenis: '', merk: '', model: '', lokasi: '', status: 'available' };
 
 function normalizeItem(data, itemId) {
+  const statusMap = {
+    Available: 'available',
+    'Not Available': 'assigned_to_location',
+    'Delivery to Palembang': 'assigned_to_location',
+    'Delivery to Subang': 'assigned_to_location',
+    'Maintenance Due': 'maintenance',
+  };
   return {
     itemCode: data.itemCode || data.assetCode || itemId,
     jenis: data.jenis || data.equipmentType?.typeName || '',
     merk: data.merk || data.brand || '',
-    model: data.model || '',
+    model: data.model || data.typeModel || '',
     lokasi: data.lokasi || data.location || '',
-    status: data.status || data.currentStatus || 'available',
+    status: statusMap[data.status] || statusMap[data.currentStatus] || data.status || data.currentStatus || 'available',
+    isDummy: Boolean(data.isDummy),
   };
 }
 
 export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules, onSignOut }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [item, setItem] = useState(emptyItem);
   const [savedStatus, setSavedStatus] = useState(emptyItem.status);
   const [maintenanceMetrics, setMaintenanceMetrics] = useState([]);
@@ -59,6 +68,12 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
     event.preventDefault();
     setSaving(true);
     setFormError('');
+    if (item.isDummy) {
+      setSavedStatus(item.status);
+      setFormError('Perubahan dummy hanya berlaku di tampilan ini.');
+      setSaving(false);
+      return;
+    }
     try {
       const updated = await updateItem(itemId, {
         brand: item.merk,
@@ -83,8 +98,8 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
 
   return (
     <div className="min-h-screen bg-[#edf2f8] text-[#1e293b]">
-      <AlatSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} onBackToModules={onBackToModules} onSignOut={onSignOut} />
-      <AlatHeader collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
+      <AlatSidebar collapsed={sidebarCollapsed} mobileOpen={mobileSidebarOpen} activeRoute="alat/items" onToggle={() => setSidebarCollapsed((value) => !value)} onClose={() => setMobileSidebarOpen(false)} onBackToModules={onBackToModules} onSignOut={onSignOut} />
+      <AlatHeader collapsed={sidebarCollapsed} onToggle={() => setMobileSidebarOpen((value) => !value)} />
       <main className={`min-h-screen pt-9 transition-[padding] duration-200 ${sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-40'}`}>
         <div className="mx-auto max-w-[1320px] space-y-4 px-4 py-4 sm:px-5 lg:px-4">
           <header>
@@ -96,7 +111,7 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
           {!loading && loadError && <div className="border border-red-200 bg-red-50 px-4 py-5 text-xs text-red-700" role="alert">{loadError}</div>}
           {!loading && !loadError && <>
             <ItemInfoForm item={item} form={item} saving={saving} error={formError} onChange={handleFormChange} onSubmit={handleSave} />
-            <MaintenanceStatusGrid metrics={maintenanceMetrics} />
+            <MaintenanceStatusGrid metrics={maintenanceMetrics} status={item.status === 'maintenance' ? 'Maintenance' : 'Running Well'} />
             <ActiveIssuesCard issues={issues} onFixed={handleIssueFixed} />
           </>}
         </div>

@@ -3,6 +3,7 @@ import Login from './pages/Login.jsx';
 import ModuleSelection from './pages/ModuleSelection.jsx';
 import ItemsPage from './modules/alat/pages/ItemsPage.jsx';
 import ItemDetailPage from './modules/alat/pages/ItemDetailPage.jsx';
+import InformationPage from './modules/alat/information/pages/InformationPage.jsx';
 
 function getInitialRoute() {
   const route = window.location.hash.replace('#/', '');
@@ -23,7 +24,7 @@ export default function App() {
     setRoute(nextRoute);
   };
 
-  const isKnownRoute = route === 'login' || route === 'modules' || route === 'alat/items' || route.startsWith('alat/items/');
+  const isKnownRoute = route === 'login' || route === 'modules' || route === 'alat/items' || route.startsWith('alat/items/') || route === 'alat/information';
 
   const signOut = () => {
     localStorage.removeItem('token');
@@ -41,5 +42,6 @@ export default function App() {
   if (route === 'modules') return <ModuleSelection onSelectModule={navigate} onSignOut={signOut} />;
   if (route === 'alat/items') return <ItemsPage onBackToModules={() => navigate('modules')} onSignOut={signOut} onViewDetails={(itemId) => navigate(`alat/items/${itemId}`)} />;
   if (route.startsWith('alat/items/')) return <ItemDetailPage key={route} itemId={route.split('/')[2]} onBackToItems={() => navigate('alat/items')} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (route === 'alat/information') return <InformationPage onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   return null;
 }
