@@ -1,0 +1,61 @@
+export const dummyMaintenanceRows = [
+  {
+    id: 'maintenance-1',
+    itemCode: 'EXCA-001',
+    itemName: 'Excavator PC200',
+    status: 'normal',
+    metrics: {
+      'Oli Mesin': { current: 120, threshold: 250 },
+      'Filter Udara': { current: 200, threshold: 300 },
+      'Filter Solar': { current: 200, threshold: 400 },
+      'Filter Oli Mesin': { current: 150, threshold: 300 },
+      'Filter Hidrolik': { current: 300, threshold: 450 },
+      'Oli Hidrolik': { current: 450, threshold: 1450 },
+      'Oli Transmisi': { current: 1200, threshold: 1500 },
+      'Oli Gardan': { current: 800, threshold: 1200 },
+    },
+  },
+  {
+    id: 'maintenance-2',
+    itemCode: 'DOZR-005',
+    itemName: 'Bulldozer D6R',
+    status: 'overdue',
+    metrics: {
+      'Oli Mesin': { current: 285, threshold: 250, status: 'overdue' },
+      'Filter Udara': { current: 150, threshold: 300 },
+      'Filter Solar': { current: 180, threshold: 400 },
+      'Filter Oli Mesin': { current: 260, threshold: 300, status: 'warning' },
+      'Filter Hidrolik': { current: 400, threshold: 450 },
+      'Oli Hidrolik': { current: 920, threshold: 1450 },
+      'Oli Transmisi': { current: 1050, threshold: 1500 },
+      'Oli Gardan': { current: 950, threshold: 1200 },
+    },
+  },
+  {
+    id: 'maintenance-3',
+    itemCode: 'GRAD-012',
+    itemName: 'Motor Grader 140K',
+    status: 'warning',
+    metrics: {
+      'Oli Mesin': { current: 210, threshold: 250 },
+      'Filter Udara': { current: 320, threshold: 300, status: 'overdue' },
+      'Filter Solar': { current: 210, threshold: 400 },
+      'Filter Oli Mesin': { current: 190, threshold: 300 },
+      'Filter Hidrolik': { current: 525, threshold: 450, status: 'overdue' },
+      'Oli Hidrolik': { current: 1025, threshold: 1450, status: 'warning' },
+      'Oli Transmisi': { current: 800, threshold: 1500 },
+      'Oli Gardan': { current: 750, threshold: 1200 },
+    },
+  },
+];
+
+export const maintenanceMetricNames = [
+  'Oli Mesin',
+  'Filter Udara',
+  'Filter Solar',
+  'Filter Oli Mesin',
+  'Filter Hidrolik',
+  'Oli Hidrolik',
+  'Oli Transmisi',
+  'Oli Gardan',
+];

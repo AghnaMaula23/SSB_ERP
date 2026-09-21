@@ -1,7 +1,7 @@
 const navigationItems = [
   { label: 'Items', icon: '▣', route: 'alat/items' },
   { label: 'Information', icon: 'ⓘ', route: 'alat/information' },
-  { label: 'Maintenance', icon: '◌' },
+  { label: 'Maintenance', icon: '◌', route: 'alat/maintenance' },
   { label: 'Purchase Order', icon: '🛒' },
   { label: 'Kas', icon: '▤' },
 ];
