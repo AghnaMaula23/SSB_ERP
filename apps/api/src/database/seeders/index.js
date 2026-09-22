@@ -1,6 +1,11 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
+const { seedDivisiAlatDemo } = require('./divisi-alat.seed.js');
+// divisi-alat.seed.js jalan lewat service module, yang memakai singleton
+// Prisma di src/config/database.js — koneksi terpisah dari `prisma` di atas,
+// jadi ikut ditutup manual saat proses seed selesai (lihat main().finally di bawah).
+const appPrisma = require('../../config/database.js');
 
 const ROLES = [
   { code: 'super_admin',  name: 'Super Admin' },
@@ -107,9 +112,15 @@ async function main() {
     create: { userId: admin.id, roleId: superRole.id },
   });
 
+  console.log('Seeding demo data Divisi Alat...');
+  await seedDivisiAlatDemo(admin.id);
+
   console.log('Seed complete.');
 }
 
 main()
   .catch(e => { console.error(e); process.exit(1); })
-  .finally(() => prisma.$disconnect());
+  .finally(async () => {
+    await prisma.$disconnect();
+    await appPrisma.$disconnect();
+  });
