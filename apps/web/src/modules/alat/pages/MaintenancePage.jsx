@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import AlatHeader from '../components/AlatHeader.jsx';
 import AlatSidebar from '../components/AlatSidebar.jsx';
-import ResetMaintenanceModal from '../components/ResetMaintenanceModal.jsx';
 import StatCard from '../components/StatCard.jsx';
 import { getMaintenanceOverview, maintenanceMetricNames } from '../services/maintenanceService.js';
 
@@ -24,25 +23,21 @@ function MetricCell({ metric }) {
   );
 }
 
-export default function MaintenancePage({ onBackToModules, onSignOut }) {
+export default function MaintenancePage({ onNavigateToReset, onBackToModules, onSignOut, initialNotice = '' }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('alat-sidebar-collapsed') === 'true');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [loading, setLoading] = useState(true);
-  const [usingDummyData, setUsingDummyData] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [resetRowTarget, setResetRowTarget] = useState(null);
-  const [selectedResetNames, setSelectedResetNames] = useState([]);
+  const [notice, setNotice] = useState(initialNotice);
 
   useEffect(() => {
     let cancelled = false;
     getMaintenanceOverview().then((result) => {
       if (cancelled) return;
       setRows(result.data);
-      setUsingDummyData(result.isDummy);
     }).catch((requestError) => {
       if (!cancelled) setError(requestError.message);
     }).finally(() => {
@@ -60,32 +55,12 @@ export default function MaintenancePage({ onBackToModules, onSignOut }) {
   const alertCount = rows.filter((row) => row.status === 'overdue' || row.status === 'due').length;
   const scheduledCount = rows.filter((row) => row.status === 'warning').length;
 
-  const openResetModal = (row) => {
-    setResetRowTarget(row);
-    setSelectedResetNames([]);
-    setNotice('');
-  };
-
-  const closeResetModal = () => {
-    setResetRowTarget(null);
-    setSelectedResetNames([]);
-  };
-
-  const submitResets = () => {
-    if (!resetRowTarget || !selectedResetNames.length) return;
-    setRows((current) => current.map((item) => {
-      if (item.id !== resetRowTarget.id) return item;
-      const metrics = Object.fromEntries(Object.entries(item.metrics).map(([name, metric]) => selectedResetNames.includes(name)
-        ? [name, { ...metric, current: 0, status: 'normal' }]
-        : [name, metric]));
-      const nextStatus = Object.values(metrics).reduce((highest, metric) => {
-        const priority = { overdue: 4, due: 3, warning: 2, normal: 1, inactive: 0 };
-        return (priority[metric.status] || 0) > (priority[highest] || 0) ? metric.status : highest;
-      }, 'normal');
-      return { ...item, metrics, status: nextStatus };
-    }));
-    setNotice(`${resetRowTarget.itemCode}: ${selectedResetNames.length} parameters reset successfully.`);
-    closeResetModal();
+  const handleResetClick = (row) => {
+    if (onNavigateToReset) {
+      onNavigateToReset(row.id);
+    } else {
+      window.location.hash = `/#/alat/maintenance/reset/${row.id}`;
+    }
   };
 
   return (
@@ -116,7 +91,6 @@ export default function MaintenancePage({ onBackToModules, onSignOut }) {
             <StatCard label="Scheduled Service" value={scheduledCount} tone="green" />
           </div>
 
-          {usingDummyData && <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700">Displaying demo maintenance parameters.</div>}
           {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{notice}</div>}
           {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
 
@@ -185,7 +159,7 @@ export default function MaintenancePage({ onBackToModules, onSignOut }) {
                           </span>
                         </td>
                         <td className="text-center">
-                          <button type="button" onClick={() => openResetModal(row)} className="btn btn-secondary px-2.5 py-1 text-xs">
+                          <button type="button" onClick={() => handleResetClick(row)} className="btn btn-secondary px-2.5 py-1 text-xs">
                             Reset
                           </button>
                         </td>
@@ -207,15 +181,6 @@ export default function MaintenancePage({ onBackToModules, onSignOut }) {
           )}
         </div>
       </main>
-
-      <ResetMaintenanceModal
-        row={resetRowTarget}
-        metricNames={maintenanceMetricNames}
-        selectedNames={selectedResetNames}
-        onToggle={(name) => setSelectedResetNames((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name])}
-        onSubmit={submitResets}
-        onClose={closeResetModal}
-      />
     </div>
   );
 }

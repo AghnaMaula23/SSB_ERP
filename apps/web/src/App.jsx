@@ -5,6 +5,7 @@ import ItemsPage from './modules/alat/pages/ItemsPage.jsx';
 import ItemDetailPage from './modules/alat/pages/ItemDetailPage.jsx';
 import InformationPage from './modules/alat/information/pages/InformationPage.jsx';
 import MaintenancePage from './modules/alat/pages/MaintenancePage.jsx';
+import ResetMaintenancePage from './modules/alat/pages/ResetMaintenancePage.jsx';
 
 function getInitialRoute() {
   const route = window.location.hash.replace('#/', '');
@@ -13,6 +14,7 @@ function getInitialRoute() {
 
 export default function App() {
   const [route, setRoute] = useState(getInitialRoute);
+  const [maintenanceNotice, setMaintenanceNotice] = useState('');
 
   useEffect(() => {
     const handleHashChange = () => setRoute(getInitialRoute());
@@ -25,7 +27,14 @@ export default function App() {
     setRoute(nextRoute);
   };
 
-  const isKnownRoute = route === 'login' || route === 'modules' || route === 'alat/items' || route.startsWith('alat/items/') || route === 'alat/information' || route === 'alat/maintenance';
+  const isKnownRoute =
+    route === 'login' ||
+    route === 'modules' ||
+    route === 'alat/items' ||
+    route.startsWith('alat/items/') ||
+    route === 'alat/information' ||
+    route === 'alat/maintenance' ||
+    route.startsWith('alat/maintenance/reset/');
 
   const signOut = () => {
     localStorage.removeItem('token');
@@ -44,6 +53,30 @@ export default function App() {
   if (route === 'alat/items') return <ItemsPage onBackToModules={() => navigate('modules')} onSignOut={signOut} onViewDetails={(itemId) => navigate(`alat/items/${itemId}`)} />;
   if (route.startsWith('alat/items/')) return <ItemDetailPage key={route} itemId={route.split('/')[2]} onBackToItems={() => navigate('alat/items')} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (route === 'alat/information') return <InformationPage onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
-  if (route === 'alat/maintenance') return <MaintenancePage onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (route === 'alat/maintenance')
+    return (
+      <MaintenancePage
+        key={route}
+        initialNotice={maintenanceNotice}
+        onNavigateToReset={(unitId) => navigate(`alat/maintenance/reset/${unitId}`)}
+        onBackToModules={() => navigate('modules')}
+        onSignOut={signOut}
+      />
+    );
+  if (route.startsWith('alat/maintenance/reset/')) {
+    const unitId = route.split('/')[3];
+    return (
+      <ResetMaintenancePage
+        key={route}
+        unitId={unitId}
+        onBack={(noticeMessage) => {
+          if (noticeMessage) setMaintenanceNotice(noticeMessage);
+          navigate('alat/maintenance');
+        }}
+        onBackToModules={() => navigate('modules')}
+        onSignOut={signOut}
+      />
+    );
+  }
   return null;
 }

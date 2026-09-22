@@ -23,7 +23,6 @@ export default function InformationPage({ onBackToModules, onSignOut }) {
   const [notice, setNotice] = useState('');
   const [actionLog, setActionLog] = useState(null);
   const [actionType, setActionType] = useState(null);
-  const [usingDummyData, setUsingDummyData] = useState(false);
 
   const loadLogs = useCallback(async () => {
     setLoading(true); setError('');
@@ -31,7 +30,6 @@ export default function InformationPage({ onBackToModules, onSignOut }) {
       const result = await getDamageLogs({ ...filters, page, limit: PAGE_SIZE });
       setLogs(result.data || []);
       setTotal(result.total || 0);
-      setUsingDummyData(Boolean(result.isDummy));
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -59,11 +57,6 @@ export default function InformationPage({ onBackToModules, onSignOut }) {
 
   const openEdit = (log) => { setEditingLog(log); setModalOpen(true); };
   const openAction = (log, action) => {
-    if (usingDummyData) {
-      setLogs((current) => current.map((item) => item.id === log.id ? { ...item, status: action === 'resolve' ? 'resolved' : 'cancelled' } : item));
-      setNotice(`${log.damageCode} ${action === 'resolve' ? 'resolved' : 'cancelled'} (demo mode).`);
-      return;
-    }
     setActionLog(log); setActionType(action);
   };
 

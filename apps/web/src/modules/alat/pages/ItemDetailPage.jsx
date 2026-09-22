@@ -23,7 +23,6 @@ function normalizeItem(data, itemId) {
     model: data.model || data.typeModel || '',
     lokasi: data.lokasi || data.location || '',
     status: statusMap[data.status] || statusMap[data.currentStatus] || data.status || data.currentStatus || 'available',
-    isDummy: Boolean(data.isDummy),
   };
 }
 
@@ -68,12 +67,6 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
     event.preventDefault();
     setSaving(true);
     setFormError('');
-    if (item.isDummy) {
-      setSavedStatus(item.status);
-      setFormError('Dummy item edits apply in view mode only.');
-      setSaving(false);
-      return;
-    }
     try {
       const updated = await updateItem(itemId, {
         brand: item.merk,

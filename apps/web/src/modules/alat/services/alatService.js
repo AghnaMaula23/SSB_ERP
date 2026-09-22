@@ -1,5 +1,4 @@
 import { apiRequest } from '../../../services/api.js';
-import { alatItems } from '../data/dummyAlat.js';
 
 const ALAT_API_PREFIX = import.meta.env.VITE_ALAT_API_PREFIX || '/api/equipment';
 
@@ -10,25 +9,6 @@ const statusLabels = {
   maintenance: 'Maintenance Due',
   retired: 'Retired',
 };
-
-const dummyStatusValues = {
-  Available: 'available',
-  'Not Available': 'assigned_to_location',
-  'Delivery to Palembang': 'assigned_to_location',
-  'Delivery to Subang': 'assigned_to_location',
-  'Maintenance Due': 'maintenance',
-};
-
-const dummyMaintenanceMetrics = [
-  ['Oli Mesin', '120 Jam', 'Next service in 30 hrs'],
-  ['Filter Udara', '200 Jam', 'Condition: Optimal'],
-  ['Filter Solar', '150 Jam', 'Last check: 2023-11-01'],
-  ['Oli Transmisi', '450 Jam', 'Critical threshold at 500'],
-  ['Filter Oli Mesin', '250 Jam', 'Replacement scheduled'],
-  ['Filter Hidrolik', '300 Jam', 'Stable performance'],
-  ['Oli Hidrolik', '450 Jam', 'Critical threshold at 500'],
-  ['Oli Gardan', '450 Jam', 'Critical threshold at 500'],
-];
 
 export function normalizeItem(item) {
   return {
@@ -62,35 +42,18 @@ export function registerItem(payload) {
 }
 
 export async function getItemDetail(itemId) {
-  try {
-    const [item, maintenance, workhours] = await Promise.all([
-      apiRequest(`${ALAT_API_PREFIX}/items/${itemId}`),
-      apiRequest(`${ALAT_API_PREFIX}/items/${itemId}/maintenance-settings?limit=100`),
-      apiRequest(`${ALAT_API_PREFIX}/items/${itemId}/workhour-logs?limit=100`),
-    ]);
-    return { ...item, maintenanceMetrics: maintenance.data || [], workhourLogs: workhours.data || [] };
-  } catch (error) {
-    const dummyItem = alatItems.find((item) => item.id === itemId);
-    if (!dummyItem) throw error;
-    return {
-      ...dummyItem,
-      assetCode: dummyItem.itemCode,
-      brand: dummyItem.merk,
-      model: dummyItem.typeModel,
-      currentStatus: dummyStatusValues[dummyItem.status] || 'operational',
-      maintenanceMetrics: dummyMaintenanceMetrics,
-      workhourLogs: [],
-      activeIssues: [{
-        id: `dummy-damage-${itemId}`,
-        title: 'Hydraulic Leakage (Arm Boom)',
-        description: 'Hydraulic Leakage (Arm Boom)',
-        reportedAt: '2023-10-24 09:15',
-        sparePartSource: 'Warehouse',
-        assignedTeam: 'Internal',
-      }],
-      isDummy: true,
-    };
-  }
+  const [item, maintenance, workhours, damageLogs] = await Promise.all([
+    apiRequest(`${ALAT_API_PREFIX}/items/${itemId}`),
+    apiRequest(`${ALAT_API_PREFIX}/items/${itemId}/maintenance-settings?limit=100`),
+    apiRequest(`${ALAT_API_PREFIX}/items/${itemId}/workhour-logs?limit=100`),
+    apiRequest(`${ALAT_API_PREFIX}/items/${itemId}/damage-logs?status=reported&limit=100`).catch(() => ({ data: [] })),
+  ]);
+  return {
+    ...item,
+    maintenanceMetrics: maintenance.data || [],
+    workhourLogs: workhours.data || [],
+    activeIssues: damageLogs.data || [],
+  };
 }
 
 export function updateItem(itemId, payload) {
@@ -106,6 +69,11 @@ export function archiveItem(itemId) {
   return apiRequest(`${ALAT_API_PREFIX}/items/${itemId}`, { method: 'DELETE' });
 }
 
-export function fixIssue(issueId) {
-  return apiRequest(`${ALAT_API_PREFIX}/damage-logs/${issueId}/resolve`, { method: 'PUT', body: JSON.stringify({}) });
+export function fixIssue(issueId, payload = {}) {
+  const bodyData = {
+    maintenanceType: payload.maintenanceType || 'repair',
+    actionDescription: payload.actionDescription || 'Damage log issue resolved',
+    performedBy: payload.performedBy || 'Internal Mechanic',
+  };
+  return apiRequest(`${ALAT_API_PREFIX}/damage-logs/${issueId}/resolve`, { method: 'PUT', body: JSON.stringify(bodyData) });
 }

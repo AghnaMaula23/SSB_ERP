@@ -2,18 +2,11 @@ import { useEffect, useState } from 'react';
 import { getEquipmentTypes, normalizeItem, registerItem } from '../services/alatService.js';
 
 const initialForm = { equipmentTypeId: '', brand: '', model: '', plateNumber: '' };
-const dummyEquipmentTypes = [
-  { id: 1, typeName: 'Truck Tronton' },
-  { id: 2, typeName: 'Dump Truck' },
-  { id: 3, typeName: 'Excavator' },
-  { id: 4, typeName: 'Bulldozer' },
-  { id: 5, typeName: 'Crane' },
-];
 const isTruckType = (typeName) => /truck|truk/i.test(typeName);
 
-export default function RegisterItemModal({ isOpen, onClose, onSaved, useDummyData = false }) {
+export default function RegisterItemModal({ isOpen, onClose, onSaved }) {
   const [form, setForm] = useState(initialForm);
-  const [equipmentTypes, setEquipmentTypes] = useState(useDummyData ? dummyEquipmentTypes : []);
+  const [equipmentTypes, setEquipmentTypes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,7 +15,7 @@ export default function RegisterItemModal({ isOpen, onClose, onSaved, useDummyDa
   const loadingTypes = isOpen && equipmentTypes.length === 0 && !error;
 
   useEffect(() => {
-    if (!isOpen || useDummyData) return undefined;
+    if (!isOpen) return undefined;
 
     const loadEquipmentTypes = async () => {
       try {
@@ -35,7 +28,7 @@ export default function RegisterItemModal({ isOpen, onClose, onSaved, useDummyDa
 
     loadEquipmentTypes();
     return undefined;
-  }, [isOpen, useDummyData]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -68,21 +61,6 @@ export default function RegisterItemModal({ isOpen, onClose, onSaved, useDummyDa
     };
 
     try {
-      if (useDummyData) {
-        const typeName = selectedType?.typeName || 'Equipment';
-        onSaved(normalizeItem({
-          id: `dummy-${Date.now()}`,
-          assetCode: `DUM-${String(Date.now()).slice(-6)}`,
-          equipmentType: { id: selectedType.id, typeName },
-          brand: form.brand.trim() || '-',
-          model: form.model.trim() || '-',
-          plateNumber: showPlateNumber ? form.plateNumber.trim() || null : null,
-          currentStatus: 'available',
-        }));
-        setForm(initialForm);
-        onClose();
-        return;
-      }
       const savedItem = await registerItem(payload);
       onSaved(normalizeItem(savedItem));
       setForm(initialForm);

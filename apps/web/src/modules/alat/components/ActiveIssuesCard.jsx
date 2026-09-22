@@ -39,11 +39,15 @@ export default function ActiveIssuesCard({ issues = [], onFixed }) {
             {issues.map((issue) => (
               <div key={issue.id} className="flex flex-col gap-4 rounded-xl border border-amber-200 bg-amber-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">{issue.title || issue.description}</h3>
-                  <p className="mt-1 text-xs text-slate-500">Reported: {issue.reportedAt || issue.createdAt || '-'}</p>
-                  <div className="mt-2 flex gap-4 text-xs text-slate-600">
-                    <span>Source: <strong>{issue.sparePartSource || 'Warehouse'}</strong></span>
-                    <span>Team: <strong>{issue.assignedTeam || 'Internal'}</strong></span>
+                  <div className="flex items-center gap-2">
+                    {issue.damageCode && <span className="font-mono text-xs font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded">{issue.damageCode}</span>}
+                    <h3 className="text-sm font-bold text-slate-900">{issue.description || issue.title}</h3>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">Reported: {issue.damageDate || issue.reportedAt || (issue.createdAt ? String(issue.createdAt).slice(0, 10) : '-')}</p>
+                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-600">
+                    <span>Spare Part: <strong className="capitalize">{issue.sparePartSource || 'Warehouse'}</strong></span>
+                    <span>Mechanic: <strong className="capitalize">{issue.mechanicTeam || 'Internal'}</strong></span>
+                    {issue.stopsOperation && <span className="font-semibold text-red-600">⛔ Halts Operation</span>}
                   </div>
                 </div>
                 <button

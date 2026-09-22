@@ -1,7 +1,17 @@
 import { apiRequest } from '../../../services/api.js';
-import { dummyMaintenanceRows, maintenanceMetricNames } from '../data/dummyMaintenance.js';
 
 const API_PREFIX = import.meta.env.VITE_ALAT_API_PREFIX || '/api/equipment';
+
+export const maintenanceMetricNames = [
+  'Oli Mesin',
+  'Filter Udara',
+  'Filter Solar',
+  'Oli Transmisi',
+  'Filter Oli Mesin',
+  'Filter Hidrolik',
+  'Oli Hidrolik',
+  'Oli Gardan',
+];
 
 const statusOrder = { overdue: 4, due: 3, warning: 2, normal: 1, inactive: 0 };
 
@@ -35,17 +45,19 @@ function groupSettings(settings) {
 }
 
 export async function getMaintenanceOverview() {
-  try {
-    const result = await apiRequest(`${API_PREFIX}/maintenance-settings?page=1&limit=100&isActive=true`);
-    const rows = groupSettings(result.data || []);
-    return rows.length ? { data: rows, isDummy: false } : { data: dummyMaintenanceRows, isDummy: true };
-  } catch {
-    return { data: dummyMaintenanceRows, isDummy: true };
-  }
+  const result = await apiRequest(`${API_PREFIX}/maintenance-settings?page=1&limit=100&isActive=true`);
+  const rows = groupSettings(result.data || []);
+  return { data: rows };
 }
 
-export function resetDummyMaintenance(rowId) {
-  return dummyMaintenanceRows.find((row) => row.id === rowId);
+export async function getItemMaintenanceSettings(itemId) {
+  const result = await apiRequest(`${API_PREFIX}/items/${itemId}/maintenance-settings?limit=100`);
+  return result.data || [];
 }
 
-export { maintenanceMetricNames };
+export function createMaintenanceRecord(payload) {
+  return apiRequest(`${API_PREFIX}/maintenance-records`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
