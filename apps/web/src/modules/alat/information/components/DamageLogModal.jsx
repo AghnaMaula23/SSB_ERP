@@ -6,14 +6,178 @@ const formFromLog = (log) => ({ equipmentItemId: String(log?.equipmentItemId || 
 
 export default function DamageLogModal({ isOpen, onClose, onSaved, log = null }) {
   const isEdit = Boolean(log);
-  const [form, setForm] = useState(emptyForm); const [items, setItems] = useState([]); const [error, setError] = useState(''); const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [items, setItems] = useState([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
   useEffect(() => {
     if (!isOpen) return undefined;
-    const request = window.setTimeout(() => { setForm(isEdit ? formFromLog(log) : emptyForm); setError(''); getInformationItems().then(setItems).catch((requestError) => setError(requestError.message)); }, 0);
+    const request = window.setTimeout(() => {
+      setForm(isEdit ? formFromLog(log) : emptyForm);
+      setError('');
+      getInformationItems().then(setItems).catch((requestError) => setError(requestError.message));
+    }, 0);
     return () => window.clearTimeout(request);
   }, [isOpen, isEdit, log]);
+
   if (!isOpen) return null;
-  const update = (event) => { const { name, value, type, checked } = event.target; setForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value })); setError(''); };
-  const submit = async (event) => { event.preventDefault(); setError(''); if (!form.equipmentItemId || !form.description.trim()) { setError('Pilih unit alat dan isi deskripsi kerusakan.'); return; } setLoading(true); try { const payload = { description: form.description.trim(), sparePartSource: form.sparePartSource, mechanicTeam: form.mechanicTeam, stopsOperation: form.stopsOperation }; const saved = isEdit ? await updateDamageLog(log.id, payload) : await createDamageLog({ ...payload, equipmentItemId: Number(form.equipmentItemId), damageDate: new Date().toISOString().slice(0, 10) }); onSaved(saved); setForm(emptyForm); onClose(); } catch (requestError) { setError(requestError.message); } finally { setLoading(false); } };
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !loading && onClose()}><section className="max-h-[95vh] w-full max-w-3xl overflow-y-auto border border-[#b7c3d0] bg-[#f3f7fd] shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="damage-log-title"><header className="flex items-start justify-between border-b border-[#c4ced9] px-5 py-5 sm:px-8"><div><h2 id="damage-log-title" className="text-xl font-bold text-[#1e293b] sm:text-2xl">{isEdit ? 'Edit Log Kerusakan' : 'Input Log Kerusakan Baru'}</h2><p className="mt-1 text-sm text-[#475569] sm:text-base">{isEdit ? 'Perbarui detail laporan kerusakan unit' : 'Masukkan detail laporan kerusakan unit untuk pemantauan operasional'}</p></div><button type="button" onClick={onClose} disabled={loading} className="text-3xl leading-none text-[#475569] hover:text-[#08729a]" aria-label="Close modal">×</button></header><form onSubmit={submit} className="space-y-6 px-5 py-6 sm:px-8 sm:py-8">{error && <div className="border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">{error}</div>}<label className="block text-xs font-bold uppercase tracking-wide text-[#475569]">Item Code / Unit ID<select name="equipmentItemId" value={form.equipmentItemId} onChange={update} disabled={loading || isEdit} required className="mt-2 h-12 w-full border border-[#b8c5d2] bg-[#f8fbff] px-4 text-sm font-normal normal-case text-[#1e293b] outline-none focus:border-[#08729a] focus:ring-2 focus:ring-[#08729a]/15"><option value="">Pilih Kode Alat...</option>{items.map((item) => <option key={item.id} value={item.id}>{item.assetCode}{item.brand ? ` · ${item.brand}` : ''}</option>)}</select></label><label className="block text-xs font-bold uppercase tracking-wide text-[#475569]">Jenis & Deskripsi Kerusakan<textarea name="description" value={form.description} onChange={update} disabled={loading} required rows="4" maxLength="1000" className="mt-2 block w-full resize-y border border-[#b8c5d2] bg-[#f8fbff] px-4 py-4 text-sm font-normal normal-case text-[#1e293b] outline-none placeholder:text-[#7b8797] focus:border-[#08729a] focus:ring-2 focus:ring-[#08729a]/15" placeholder="Contoh: Kebocoran oli hidrolik pada seal silinder boom utama..." /></label><div className="grid gap-5 sm:grid-cols-2"><fieldset><legend className="mb-2 text-xs font-bold uppercase tracking-wide text-[#475569]">Spare Part Source</legend><div className="grid grid-cols-2 border border-[#b8c5d2] bg-[#f8fbff] p-1"><label className={`flex cursor-pointer items-center justify-center px-2 py-3 text-xs font-bold ${form.sparePartSource === 'warehouse' ? 'border border-[#08729a] bg-[#d9eef8] text-[#00688f]' : 'text-[#94a3b8]'}`}><input className="sr-only" type="radio" name="sparePartSource" value="warehouse" checked={form.sparePartSource === 'warehouse'} onChange={update} />WAREHOUSE</label><label className={`flex cursor-pointer items-center justify-center px-2 py-3 text-xs font-bold ${form.sparePartSource === 'supplier' ? 'border border-[#08729a] bg-[#d9eef8] text-[#00688f]' : 'text-[#94a3b8]'}`}><input className="sr-only" type="radio" name="sparePartSource" value="supplier" checked={form.sparePartSource === 'supplier'} onChange={update} />SUPPLIER</label></div></fieldset><fieldset><legend className="mb-2 text-xs font-bold uppercase tracking-wide text-[#475569]">Mekanik Team</legend><div className="grid grid-cols-2 border border-[#b8c5d2] bg-[#f8fbff] p-1"><label className={`flex cursor-pointer items-center justify-center px-2 py-3 text-xs font-bold ${form.mechanicTeam === 'internal' ? 'border border-[#08729a] bg-[#d9eef8] text-[#00688f]' : 'text-[#94a3b8]'}`}><input className="sr-only" type="radio" name="mechanicTeam" value="internal" checked={form.mechanicTeam === 'internal'} onChange={update} />INTERNAL</label><label className={`flex cursor-pointer items-center justify-center px-2 py-3 text-xs font-bold ${form.mechanicTeam === 'external' ? 'border border-[#08729a] bg-[#d9eef8] text-[#00688f]' : 'text-[#94a3b8]'}`}><input className="sr-only" type="radio" name="mechanicTeam" value="external" checked={form.mechanicTeam === 'external'} onChange={update} />EKSTERNAL</label></div></fieldset></div><label className="flex cursor-pointer items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#475569]"><input type="checkbox" name="stopsOperation" checked={form.stopsOperation} onChange={update} disabled={loading} className="h-5 w-5 accent-[#08729a]" /> Alat berhenti operasi</label><footer className="flex flex-col-reverse justify-end gap-3 border-t border-[#c4ced9] pt-5 sm:flex-row"><button type="button" onClick={onClose} disabled={loading} className="px-5 py-3 text-sm font-bold text-[#475569] hover:bg-white">Batal</button><button type="submit" disabled={loading} className="bg-[#08729a] px-6 py-3 text-sm font-bold text-white shadow-sm hover:bg-[#075a7b] disabled:opacity-60">{loading ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Simpan Log Kerusakan'}</button></footer></form></section></div>;
+
+  const update = (event) => {
+    const { name, value, type, checked } = event.target;
+    setForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }));
+    setError('');
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError('');
+    if (!form.equipmentItemId || !form.description.trim()) {
+      setError('Please select an equipment unit and enter a description.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const payload = {
+        description: form.description.trim(),
+        sparePartSource: form.sparePartSource,
+        mechanicTeam: form.mechanicTeam,
+        stopsOperation: form.stopsOperation,
+      };
+      const saved = isEdit
+        ? await updateDamageLog(log.id, payload)
+        : await createDamageLog({ ...payload, equipmentItemId: Number(form.equipmentItemId), damageDate: new Date().toISOString().slice(0, 10) });
+      onSaved(saved);
+      setForm(emptyForm);
+      onClose();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && !loading && onClose()}
+    >
+      <div className="modal-content max-w-lg" role="dialog" aria-modal="true" aria-labelledby="damage-log-title">
+        <header className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700 font-bold">
+              📋
+            </div>
+            <div>
+              <h2 id="damage-log-title" className="text-base font-bold text-slate-900">
+                {isEdit ? 'Edit Damage Log' : 'Create Damage Log'}
+              </h2>
+              <p className="text-xs text-slate-500">Record equipment damage issue details.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="btn btn-ghost px-2 py-1 text-slate-400 hover:text-slate-600"
+            aria-label="Close dialog"
+          >
+            ✕
+          </button>
+        </header>
+
+        <form onSubmit={submit} className="p-6 space-y-4">
+          {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">{error}</div>}
+
+          <div>
+            <label htmlFor="equipmentItemId" className="block text-xs font-semibold text-slate-600">Equipment Unit</label>
+            <select
+              id="equipmentItemId"
+              name="equipmentItemId"
+              value={form.equipmentItemId}
+              onChange={update}
+              disabled={loading || isEdit}
+              required
+              className="input-control mt-1 text-xs"
+            >
+              <option value="">Select Equipment Code...</option>
+              {items.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.assetCode} {item.brand ? `· ${item.brand}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="description" className="block text-xs font-semibold text-slate-600">Damage Description</label>
+            <textarea
+              id="description"
+              name="description"
+              value={form.description}
+              onChange={update}
+              disabled={loading}
+              required
+              rows="3"
+              maxLength="1000"
+              className="input-control mt-1 text-xs py-2 h-auto"
+              placeholder="e.g. Hydraulic oil leakage on main boom cylinder seal..."
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <span className="block text-xs font-semibold text-slate-600 mb-1">Spare Part Source</span>
+              <div className="grid grid-cols-2 gap-2">
+                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.sparePartSource === 'warehouse' ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>
+                  <input type="radio" name="sparePartSource" value="warehouse" checked={form.sparePartSource === 'warehouse'} onChange={update} className="sr-only" />
+                  Warehouse
+                </label>
+                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.sparePartSource === 'supplier' ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>
+                  <input type="radio" name="sparePartSource" value="supplier" checked={form.sparePartSource === 'supplier'} onChange={update} className="sr-only" />
+                  Supplier
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <span className="block text-xs font-semibold text-slate-600 mb-1">Mechanic Team</span>
+              <div className="grid grid-cols-2 gap-2">
+                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.mechanicTeam === 'internal' ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>
+                  <input type="radio" name="mechanicTeam" value="internal" checked={form.mechanicTeam === 'internal'} onChange={update} className="sr-only" />
+                  Internal
+                </label>
+                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.mechanicTeam === 'external' ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>
+                  <input type="radio" name="mechanicTeam" value="external" checked={form.mechanicTeam === 'external'} onChange={update} className="sr-only" />
+                  External
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-2 pt-2 text-xs font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              name="stopsOperation"
+              checked={form.stopsOperation}
+              onChange={update}
+              disabled={loading}
+              className="rounded border-slate-300 accent-teal-700"
+            />
+            <span>Critical issue: Machine operation halted</span>
+          </label>
+
+          <footer className="flex justify-end gap-3 border-t border-slate-200 pt-4">
+            <button type="button" onClick={onClose} disabled={loading} className="btn btn-secondary text-xs">
+              Cancel
+            </button>
+            <button type="submit" disabled={loading} className="btn btn-primary text-xs">
+              {loading ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Damage Log'}
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  );
 }

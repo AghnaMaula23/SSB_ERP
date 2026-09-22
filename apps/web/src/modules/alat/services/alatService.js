@@ -4,6 +4,7 @@ import { alatItems } from '../data/dummyAlat.js';
 const ALAT_API_PREFIX = import.meta.env.VITE_ALAT_API_PREFIX || '/api/equipment';
 
 const statusLabels = {
+  operational: 'Available',
   available: 'Available',
   assigned_to_location: 'Assigned to Location',
   maintenance: 'Maintenance Due',
@@ -106,5 +107,5 @@ export function archiveItem(itemId) {
 }
 
 export function fixIssue(issueId) {
-  return apiRequest(`${ALAT_API_PREFIX}/issues/${issueId}/fix`, { method: 'POST', body: JSON.stringify({}) });
+  return apiRequest(`${ALAT_API_PREFIX}/damage-logs/${issueId}/resolve`, { method: 'PUT', body: JSON.stringify({}) });
 }

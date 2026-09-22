@@ -23,6 +23,7 @@ export async function apiRequest(path, options = {}) {
     throw new Error(payload.message || 'Permintaan ke server gagal.');
   }
 
+  if (payload.meta) return { data: payload.data || [], ...payload.meta };
   return payload.data ?? payload;
 }
 

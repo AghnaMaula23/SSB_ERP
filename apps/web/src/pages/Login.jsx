@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { login } from '../services/auth.js';
 
-const inputClassName = 'mt-2 block w-full rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-cyan-700 focus:ring-4 focus:ring-cyan-700/10 disabled:bg-slate-50';
-
 function EyeIcon({ hidden }) {
   return hidden ? (
     <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
@@ -43,49 +41,53 @@ export default function Login({ onLoginSuccess }) {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between bg-[#edf5fc] px-4 py-10 font-sans text-slate-700 sm:py-14">
-      <div className="my-auto flex w-full max-w-[420px] flex-col items-center">
-        <header className="mb-7 text-center">
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-800">ERP System Login</p>
-          <h1 className="text-[25px] font-extrabold tracking-[0.08em] text-[#075d82] sm:text-[28px]">SINAR SELATAN BANTEN</h1>
-          <div className="mx-auto mt-4 h-px w-10 bg-cyan-700/30" />
-          <p className="mt-3 text-sm text-slate-500">Masuk dengan akun divisi Anda.</p>
+    <main className="page-enter flex min-h-screen flex-col items-center justify-between bg-slate-50 px-4 py-12 text-slate-800">
+      <div className="my-auto flex w-full max-w-md flex-col items-center">
+        <header className="mb-8 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-teal-700 text-2xl font-bold text-white shadow-md">
+            ⚒
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">SINAR SELATAN BANTEN</h1>
+          <p className="mt-2 text-sm text-slate-500">Enterprise Resource Planning Portal</p>
         </header>
 
-        <section className="w-full rounded-xl border border-white/80 bg-white p-7 shadow-[0_12px_35px_rgba(31,78,121,0.10)] sm:p-8" aria-labelledby="login-heading">
-          <h2 id="login-heading" className="sr-only">Login ke sistem ERP</h2>
-          {error && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-center text-xs text-red-700" role="alert">{error}</div>}
-          {success && <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-center text-xs text-emerald-700" role="status">{success}</div>}
+        <section className="w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm" aria-labelledby="login-heading">
+          <h2 id="login-heading" className="text-lg font-semibold text-slate-900">Sign in to your account</h2>
+          <p className="mt-1 text-xs text-slate-500">Enter your credentials to access your workspace.</p>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">{error}</div>}
+          {success && <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700" role="status">{success}</div>}
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
-              <label htmlFor="login" className="block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Username atau email</label>
-              <input id="login" name="login" type="text" value={loginField} onChange={(event) => setLoginField(event.target.value)} placeholder="email@ssb.co.id atau username" required autoComplete="username" disabled={loading} className={inputClassName} />
+              <label htmlFor="login" className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Username or Email</label>
+              <input id="login" name="login" type="text" value={loginField} onChange={(event) => setLoginField(event.target.value)} placeholder="name@ssb.co.id" required autoComplete="username" disabled={loading} className="input-control mt-1.5" />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Password</label>
-              <div className="relative">
-                <input id="password" name="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Masukkan password" required autoComplete="current-password" disabled={loading} className={`${inputClassName} pr-11`} />
-                <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition hover:text-cyan-800 focus:outline-none focus:ring-2 focus:ring-cyan-700/20" aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}>
+              <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Password</label>
+              <div className="relative mt-1.5">
+                <input id="password" name="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" required autoComplete="current-password" disabled={loading} className="input-control pr-10" />
+                <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label={showPassword ? 'Hide password' : 'Show password'}>
                   <EyeIcon hidden={showPassword} />
                 </button>
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="mt-1 flex w-full items-center justify-center rounded-lg bg-[#076b92] px-4 py-3 text-xs font-bold uppercase tracking-[0.16em] text-white shadow-sm transition hover:bg-[#075a7b] focus:outline-none focus:ring-4 focus:ring-cyan-700/20 disabled:cursor-not-allowed disabled:opacity-60">
-              {loading ? 'Memproses...' : 'Login'}
+            <button type="submit" disabled={loading} className="btn btn-primary w-full py-2.5 text-sm font-semibold">
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
         </section>
 
-        <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/90 bg-white/70 px-3.5 py-2 text-[11px] font-medium text-slate-600 shadow-sm">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" aria-hidden="true" />
-          <span>System online: HQ-DB-SERVER-04</span>
+        <div className="mt-6 flex items-center gap-2 text-xs text-slate-500">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+          <span>System operational · HQ-DB-SERVER-04</span>
         </div>
       </div>
 
-      <footer className="mt-8 text-center text-[10px] tracking-wide text-slate-400">© 2026 CONSTRUCT_ERP Technical Infrastructure. Restricted access.</footer>
+      <footer className="mt-8 text-center text-xs text-slate-400">© 2026 ConstructERP Technical Infrastructure. Restricted access.</footer>
     </main>
   );
 }
+

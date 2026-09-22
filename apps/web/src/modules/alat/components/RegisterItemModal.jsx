@@ -11,11 +11,7 @@ const dummyEquipmentTypes = [
 ];
 const isTruckType = (typeName) => /truck|truk/i.test(typeName);
 
-function CloseIcon() {
-  return <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" /></svg>;
-}
-
-export default function RegisterItemModal({ isOpen, onClose, onSaved, useDummyData = true }) {
+export default function RegisterItemModal({ isOpen, onClose, onSaved, useDummyData = false }) {
   const [form, setForm] = useState(initialForm);
   const [equipmentTypes, setEquipmentTypes] = useState(useDummyData ? dummyEquipmentTypes : []);
   const [loading, setLoading] = useState(false);
@@ -59,7 +55,7 @@ export default function RegisterItemModal({ isOpen, onClose, onSaved, useDummyDa
     setError('');
 
     if (!form.equipmentTypeId) {
-      setError('Jenis alat belum tersedia dari server. Muat ulang dan coba lagi.');
+      setError('Equipment type is required.');
       return;
     }
 
@@ -99,39 +95,109 @@ export default function RegisterItemModal({ isOpen, onClose, onSaved, useDummyDa
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[2px]" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !loading && onClose()}>
-      <section className="w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="register-item-title">
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-700">Equipment Inventory</p><h2 id="register-item-title" className="mt-1 text-lg font-bold text-slate-800">Register New Item</h2></div>
-          <button type="button" onClick={onClose} disabled={loading} className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50" aria-label="Close register item modal"><CloseIcon /></button>
+    <div
+      className="modal-overlay"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && !loading && onClose()}
+    >
+      <div className="modal-content max-w-md" role="dialog" aria-modal="true" aria-labelledby="register-item-title">
+        <header className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-teal-700 font-bold">
+              📦
+            </div>
+            <div>
+              <h2 id="register-item-title" className="text-base font-bold text-slate-900">Register New Equipment</h2>
+              <p className="text-xs text-slate-500">Add a new unit to the fleet inventory.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="btn btn-ghost px-2 py-1 text-slate-400 hover:text-slate-600"
+            aria-label="Close modal"
+          >
+            ✕
+          </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="space-y-4 px-5 py-5">
-          {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700" role="alert">{error}</div>}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 sm:col-span-2">Jenis Item
-              <select name="equipmentTypeId" value={form.equipmentTypeId} onChange={updateField} disabled={loading || loadingTypes} required className="mt-1.5 block h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal normal-case tracking-normal text-slate-700 outline-none transition focus:border-[#005580] focus:ring-4 focus:ring-[#005580]/10 disabled:bg-slate-50">
-                <option value="">{loadingTypes ? 'Memuat jenis alat...' : 'Pilih jenis item'}</option>
-                {equipmentTypes.map((type) => <option key={`${type.id}-${type.typeName}`} value={type.id}>{type.typeName}</option>)}
-              </select>
-            </label>
-            <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Merek
-              <input name="brand" value={form.brand} onChange={updateField} disabled={loading} maxLength="100" className="mt-1.5 block h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal normal-case tracking-normal text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-[#005580] focus:ring-4 focus:ring-[#005580]/10" placeholder="Contoh: Komatsu" />
-            </label>
-            <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Model
-              <input name="model" value={form.model} onChange={updateField} disabled={loading} maxLength="100" className="mt-1.5 block h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal normal-case tracking-normal text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-[#005580] focus:ring-4 focus:ring-[#005580]/10" placeholder="Contoh: D65PX" />
-            </label>
-            {showPlateNumber && <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 sm:col-span-2">Nomor Polisi
-              <input name="plateNumber" value={form.plateNumber} onChange={updateField} disabled={loading} maxLength="30" className="mt-1.5 block h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-normal uppercase tracking-wide text-slate-700 outline-none transition placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-300 focus:border-[#005580] focus:ring-4 focus:ring-[#005580]/10" placeholder="Contoh: B 1234 XYZ" />
-            </label>}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">{error}</div>}
+          
+          <div>
+            <label htmlFor="equipmentTypeId" className="block text-xs font-semibold text-slate-600">Equipment Type</label>
+            <select
+              id="equipmentTypeId"
+              name="equipmentTypeId"
+              value={form.equipmentTypeId}
+              onChange={updateField}
+              disabled={loading || loadingTypes}
+              required
+              className="input-control mt-1 text-xs"
+            >
+              <option value="">{loadingTypes ? 'Loading types...' : 'Select equipment category'}</option>
+              {equipmentTypes.map((type) => <option key={`${type.id}-${type.typeName}`} value={type.id}>{type.typeName}</option>)}
+            </select>
           </div>
 
-          <footer className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <button type="button" onClick={onClose} disabled={loading} className="rounded-lg border border-slate-300 px-5 py-2.5 text-xs font-bold tracking-wide text-slate-600 transition hover:bg-slate-50 disabled:opacity-50">BATAL</button>
-            <button type="submit" disabled={loading || loadingTypes} className="rounded-lg bg-[#005580] px-5 py-2.5 text-xs font-bold tracking-wide text-white shadow-sm transition hover:bg-[#004266] disabled:cursor-not-allowed disabled:opacity-60">{loading ? 'MENYIMPAN...' : 'SIMPAN'}</button>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="brand" className="block text-xs font-semibold text-slate-600">Brand / Merek</label>
+              <input
+                id="brand"
+                name="brand"
+                value={form.brand}
+                onChange={updateField}
+                disabled={loading}
+                maxLength="100"
+                className="input-control mt-1 text-xs"
+                placeholder="e.g. Komatsu"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="model" className="block text-xs font-semibold text-slate-600">Model / Type</label>
+              <input
+                id="model"
+                name="model"
+                value={form.model}
+                onChange={updateField}
+                disabled={loading}
+                maxLength="100"
+                className="input-control mt-1 text-xs"
+                placeholder="e.g. D65PX"
+              />
+            </div>
+          </div>
+
+          {showPlateNumber && (
+            <div>
+              <label htmlFor="plateNumber" className="block text-xs font-semibold text-slate-600">License Plate Number</label>
+              <input
+                id="plateNumber"
+                name="plateNumber"
+                value={form.plateNumber}
+                onChange={updateField}
+                disabled={loading}
+                maxLength="30"
+                className="input-control mt-1 text-xs uppercase"
+                placeholder="e.g. B 1234 XYZ"
+              />
+            </div>
+          )}
+
+          <footer className="flex justify-end gap-3 border-t border-slate-200 pt-4">
+            <button type="button" onClick={onClose} disabled={loading} className="btn btn-secondary text-xs">
+              Cancel
+            </button>
+            <button type="submit" disabled={loading || loadingTypes} className="btn btn-primary text-xs">
+              {loading ? 'Saving...' : 'Register Item'}
+            </button>
           </footer>
         </form>
-      </section>
+      </div>
     </div>
   );
 }
+

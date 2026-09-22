@@ -28,7 +28,7 @@ function normalizeItem(data, itemId) {
 }
 
 export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules, onSignOut }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('alat-sidebar-collapsed') === 'true');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [item, setItem] = useState(emptyItem);
   const [savedStatus, setSavedStatus] = useState(emptyItem.status);
@@ -70,7 +70,7 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
     setFormError('');
     if (item.isDummy) {
       setSavedStatus(item.status);
-      setFormError('Perubahan dummy hanya berlaku di tampilan ini.');
+      setFormError('Dummy item edits apply in view mode only.');
       setSaving(false);
       return;
     }
@@ -97,25 +97,46 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
   };
 
   return (
-    <div className="min-h-screen bg-[#edf2f8] text-[#1e293b]">
-      <AlatSidebar collapsed={sidebarCollapsed} mobileOpen={mobileSidebarOpen} activeRoute="alat/items" onToggle={() => setSidebarCollapsed((value) => !value)} onClose={() => setMobileSidebarOpen(false)} onBackToModules={onBackToModules} onSignOut={onSignOut} />
+    <div className="page-enter min-h-screen bg-slate-50 text-slate-800">
+      <AlatSidebar
+        collapsed={sidebarCollapsed}
+        mobileOpen={mobileSidebarOpen}
+        activeRoute="alat/items"
+        onToggle={() => setSidebarCollapsed((value) => { const nextValue = !value; localStorage.setItem('alat-sidebar-collapsed', String(nextValue)); return nextValue; })}
+        onClose={() => setMobileSidebarOpen(false)}
+        onBackToModules={onBackToModules}
+        onSignOut={onSignOut}
+      />
       <AlatHeader collapsed={sidebarCollapsed} onToggle={() => setMobileSidebarOpen((value) => !value)} />
-      <main className={`min-h-screen pt-9 transition-[padding] duration-200 ${sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-40'}`}>
-        <div className="mx-auto max-w-[1320px] space-y-4 px-4 py-4 sm:px-5 lg:px-4">
-          <header>
-            <button type="button" onClick={onBackToItems} className="text-[9px] font-semibold uppercase text-[#475569] hover:text-[#08729a]">Inventory <span className="px-1 text-[#94a3b8]">/</span> <span className="text-[#08729a]">Detail</span></button>
-            <h1 className="mt-1 text-[19px] font-bold tracking-tight text-[#1e293b]">Summary - {item.itemCode || itemId}</h1>
+      
+      <main className={`min-h-screen pt-16 transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'}`}>
+        <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+          <header className="flex items-center justify-between">
+            <div>
+              <nav className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                <button type="button" onClick={onBackToItems} className="hover:text-slate-800">Items Inventory</button>
+                <span>/</span>
+                <span className="text-slate-900 font-semibold">{item.itemCode || itemId}</span>
+              </nav>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Equipment Summary — {item.itemCode || itemId}</h1>
+            </div>
+            <button type="button" onClick={onBackToItems} className="btn btn-secondary text-xs">
+              ← Back to Inventory
+            </button>
           </header>
 
-          {loading && <div className="border border-[#cbd5e1] bg-white px-4 py-8 text-center text-xs text-[#64748b]">Memuat detail item...</div>}
-          {!loading && loadError && <div className="border border-red-200 bg-red-50 px-4 py-5 text-xs text-red-700" role="alert">{loadError}</div>}
-          {!loading && !loadError && <>
-            <ItemInfoForm item={item} form={item} saving={saving} error={formError} onChange={handleFormChange} onSubmit={handleSave} />
-            <MaintenanceStatusGrid metrics={maintenanceMetrics} status={item.status === 'maintenance' ? 'Maintenance' : 'Running Well'} />
-            <ActiveIssuesCard issues={issues} onFixed={handleIssueFixed} />
-          </>}
+          {loading && <div className="card-panel p-12 text-center text-sm text-slate-500">Loading item specifications...</div>}
+          {!loading && loadError && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700" role="alert">{loadError}</div>}
+          {!loading && !loadError && (
+            <>
+              <ItemInfoForm item={item} form={item} saving={saving} error={formError} onChange={handleFormChange} onSubmit={handleSave} />
+              <MaintenanceStatusGrid metrics={maintenanceMetrics} status={item.status === 'maintenance' ? 'Maintenance' : 'Running Well'} />
+              <ActiveIssuesCard issues={issues} onFixed={handleIssueFixed} />
+            </>
+          )}
         </div>
       </main>
     </div>
   );
 }
+
