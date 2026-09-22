@@ -339,7 +339,6 @@ const updateItem = async (id, payload, user) => {
   }
 
   if (assetCode !== undefined && assetCode !== item.assetCode) {
-    // Kode aset sudah distensil fisik di alat — hanya super_admin yang boleh mengoreksi
     if (!user.roles.includes('super_admin')) {
       throw httpError('Kode aset dibuat otomatis oleh sistem dan tidak bisa diubah', 403);
     }
