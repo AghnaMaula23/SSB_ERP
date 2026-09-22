@@ -4,9 +4,9 @@ import AlatSidebar from '../components/AlatSidebar.jsx';
 import ActiveIssuesCard from '../components/ActiveIssuesCard.jsx';
 import ItemInfoForm from '../components/ItemInfoForm.jsx';
 import MaintenanceStatusGrid from '../components/MaintenanceStatusGrid.jsx';
-import { getItemDetail, updateItem, updateItemStatus } from '../services/alatService.js';
+import { getEquipmentTypes, getItemDetail, updateItem, updateItemStatus } from '../services/alatService.js';
 
-const emptyItem = { itemCode: '', jenis: '', merk: '', model: '', lokasi: '', status: 'available' };
+const emptyItem = { itemCode: '', equipmentTypeId: '', jenis: '', merk: '', model: '', status: 'available' };
 
 function normalizeItem(data, itemId) {
   const statusMap = {
@@ -18,10 +18,10 @@ function normalizeItem(data, itemId) {
   };
   return {
     itemCode: data.itemCode || data.assetCode || itemId,
+    equipmentTypeId: data.equipmentTypeId || data.equipmentType?.id || '',
     jenis: data.jenis || data.equipmentType?.typeName || '',
     merk: data.merk || data.brand || '',
     model: data.model || data.typeModel || '',
-    lokasi: data.lokasi || data.location || '',
     status: statusMap[data.status] || statusMap[data.currentStatus] || data.status || data.currentStatus || 'available',
   };
 }
@@ -30,6 +30,7 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('alat-sidebar-collapsed') === 'true');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [item, setItem] = useState(emptyItem);
+  const [equipmentTypes, setEquipmentTypes] = useState([]);
   const [savedStatus, setSavedStatus] = useState(emptyItem.status);
   const [maintenanceMetrics, setMaintenanceMetrics] = useState([]);
   const [issues, setIssues] = useState([]);
@@ -40,9 +41,10 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
 
   useEffect(() => {
     let cancelled = false;
-    getItemDetail(itemId)
-      .then((data) => {
+    Promise.all([getItemDetail(itemId), getEquipmentTypes()])
+      .then(([data, types]) => {
         if (cancelled) return;
+        setEquipmentTypes(types || []);
         setItem(normalizeItem(data, itemId));
         setSavedStatus(data.currentStatus || data.status || 'available');
         setMaintenanceMetrics(data.maintenanceMetrics || data.maintenance || []);
@@ -68,10 +70,14 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
     setSaving(true);
     setFormError('');
     try {
-      const updated = await updateItem(itemId, {
+      const payload = {
         brand: item.merk,
         model: item.model,
-      });
+      };
+      if (item.equipmentTypeId) {
+        payload.equipmentTypeId = Number(item.equipmentTypeId);
+      }
+      const updated = await updateItem(itemId, payload);
       let statusUpdated = {};
       if (item.status !== savedStatus) {
         statusUpdated = await updateItemStatus(itemId, item.status);
@@ -122,7 +128,7 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
           {!loading && loadError && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700" role="alert">{loadError}</div>}
           {!loading && !loadError && (
             <>
-              <ItemInfoForm item={item} form={item} saving={saving} error={formError} onChange={handleFormChange} onSubmit={handleSave} />
+              <ItemInfoForm item={item} form={item} equipmentTypes={equipmentTypes} saving={saving} error={formError} onChange={handleFormChange} onSubmit={handleSave} />
               <MaintenanceStatusGrid metrics={maintenanceMetrics} status={item.status === 'maintenance' ? 'Maintenance' : 'Running Well'} />
               <ActiveIssuesCard issues={issues} onFixed={handleIssueFixed} />
             </>

@@ -4,7 +4,7 @@ const statusOptions = [
   { value: 'maintenance', label: 'Dalam Maintenance' },
 ];
 
-export default function ItemInfoForm({ item, form, saving, error, onChange, onSubmit }) {
+export default function ItemInfoForm({ item, form, equipmentTypes = [], saving, error, onChange, onSubmit }) {
   return (
     <section className="card-panel" aria-labelledby="item-information-title">
       <div className="flex items-center gap-3 border-b border-slate-200 px-6 py-4">
@@ -19,10 +19,27 @@ export default function ItemInfoForm({ item, form, saving, error, onChange, onSu
         
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Item Code" name="itemCode" value={item.itemCode} disabled />
-          <Field label="Jenis / Category" name="jenis" value={form.jenis} onChange={onChange} />
+          
+          <div>
+            <label htmlFor="equipmentTypeId" className="block text-xs font-semibold text-slate-600">Jenis / Category</label>
+            <select
+              id="equipmentTypeId"
+              name="equipmentTypeId"
+              value={form.equipmentTypeId || ''}
+              onChange={onChange}
+              className="input-control mt-1 text-xs"
+            >
+              <option value="">Select Jenis / Category</option>
+              {equipmentTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.typeName}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <Field label="Merk / Brand" name="merk" value={form.merk} onChange={onChange} />
           <Field label="Model / Type" name="model" value={form.model} onChange={onChange} />
-          <Field label="Lokasi / Site" name="lokasi" value={form.lokasi} onChange={onChange} />
           
           <div>
             <label htmlFor="status" className="block text-xs font-semibold text-slate-600">Status</label>

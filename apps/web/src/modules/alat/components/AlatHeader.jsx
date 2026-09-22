@@ -30,10 +30,10 @@ export default function AlatHeader({ collapsed, onToggle }) {
         <span className="hidden text-xl font-bold tracking-tight text-slate-900 lg:block">ConstructERP</span>
       </div>
 
-      <div className="relative mx-auto min-w-0 flex-1 max-w-md lg:mx-0 lg:flex-none">
+      <div className="relative mx-3 min-w-0 flex-1">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">🔍</span>
         <input
-          className="input-control pl-9 text-sm"
+          className="input-control w-full pl-9 text-sm"
           placeholder="Search items, maintenance, logs..."
           aria-label="Search items or records"
         />
