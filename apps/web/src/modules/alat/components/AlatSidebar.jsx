@@ -2,8 +2,8 @@ const navigationItems = [
   { label: 'Items', icon: '📦', route: 'alat/items' },
   { label: 'Information', icon: '📋', route: 'alat/information' },
   { label: 'Maintenance', icon: '🛠️', route: 'alat/maintenance' },
-  { label: 'Purchase Order', icon: '🛒' },
-  { label: 'Kas', icon: '💳' },
+  { label: 'Purchase Order', icon: '🛒', route: 'alat/purchase-orders' },
+  { label: 'Kas', icon: '💳', route: 'alat/kas' },
 ];
 
 function BrandMark() {

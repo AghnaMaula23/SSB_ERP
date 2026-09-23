@@ -6,6 +6,11 @@ import ItemDetailPage from './modules/alat/pages/ItemDetailPage.jsx';
 import InformationPage from './modules/alat/information/pages/InformationPage.jsx';
 import MaintenancePage from './modules/alat/pages/MaintenancePage.jsx';
 import ResetMaintenancePage from './modules/alat/pages/ResetMaintenancePage.jsx';
+import PurchaseOrderPage from './modules/alat/pages/PurchaseOrderPage.jsx';
+import PurchaseOrderCreatePage from './modules/alat/pages/PurchaseOrderCreatePage.jsx';
+import PurchaseOrderEditPage from './modules/alat/pages/PurchaseOrderEditPage.jsx';
+import KasPage from './modules/alat/pages/KasPage.jsx';
+import KasRequestPendapatanPage from './modules/alat/pages/KasRequestPendapatanPage.jsx';
 
 function getInitialRoute() {
   const route = window.location.hash.replace('#/', '');
@@ -34,7 +39,12 @@ export default function App() {
     route.startsWith('alat/items/') ||
     route === 'alat/information' ||
     route === 'alat/maintenance' ||
-    route.startsWith('alat/maintenance/reset/');
+    route.startsWith('alat/maintenance/reset/') ||
+    route === 'alat/purchase-orders' ||
+    route === 'alat/purchase-orders/create' ||
+    route.startsWith('alat/purchase-orders/') ||
+    route === 'alat/kas' ||
+    route === 'alat/kas/request-pendapatan';
 
   const signOut = () => {
     localStorage.removeItem('token');
@@ -78,5 +88,19 @@ export default function App() {
       />
     );
   }
+  if (route === 'alat/purchase-orders')
+    return <PurchaseOrderPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (route === 'alat/purchase-orders/create')
+    return <PurchaseOrderCreatePage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (route.startsWith('alat/purchase-orders/') && route.endsWith('/edit')) {
+    const poId = route.split('/')[2];
+    return <PurchaseOrderEditPage key={route} poId={poId} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  }
+  if (route === 'alat/kas')
+    return <KasPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (route === 'alat/kas/request-pendapatan')
+    return <KasRequestPendapatanPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+
   return null;
 }
+
