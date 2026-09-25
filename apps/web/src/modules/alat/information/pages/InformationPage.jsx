@@ -5,6 +5,7 @@ import DamageLogTable from '../components/DamageLogTable.jsx';
 import DamageLogModal from '../components/DamageLogModal.jsx';
 import DamageLogActionModal from '../components/DamageLogActionModal.jsx';
 import { getDamageLogs } from '../services/informationService.js';
+import { hasPermission } from '../../../../services/permissions.js';
 
 const PAGE_SIZE = 10;
 const initialFilters = { search: '', sparePartSource: 'all', mechanicTeam: 'all', status: 'all' };
@@ -23,6 +24,8 @@ export default function InformationPage({ onBackToModules, onSignOut }) {
   const [notice, setNotice] = useState('');
   const [actionLog, setActionLog] = useState(null);
   const [actionType, setActionType] = useState(null);
+  const canCreate = hasPermission('damage:create');
+  const canUpdate = hasPermission('damage:update');
 
   const loadLogs = useCallback(async () => {
     setLoading(true); setError('');
@@ -80,6 +83,8 @@ export default function InformationPage({ onBackToModules, onSignOut }) {
             <button
               type="button"
               onClick={() => { setNotice(''); setModalOpen(true); }}
+               disabled={!canCreate}
+               title={canCreate ? 'Create damage log' : 'Anda tidak memiliki izin membuat damage log'}
               className="btn btn-primary text-xs"
             >
               + Create Damage Log
@@ -148,6 +153,9 @@ export default function InformationPage({ onBackToModules, onSignOut }) {
               onEdit={openEdit}
               onResolve={(log) => openAction(log, 'resolve')}
               onCancel={(log) => openAction(log, 'cancel')}
+               canEdit={canUpdate}
+               canResolve={canUpdate}
+               canCancel={canUpdate}
             />
           )}
 
@@ -156,6 +164,7 @@ export default function InformationPage({ onBackToModules, onSignOut }) {
 
       <DamageLogModal isOpen={modalOpen} log={editingLog} onClose={() => { setModalOpen(false); setEditingLog(null); }} onSaved={handleSaved} />
       <DamageLogActionModal
+        key={`${actionLog?.id || 'none'}-${actionType || 'none'}`}
         log={actionLog}
         action={actionType}
         onClose={() => { setActionLog(null); setActionType(null); }}

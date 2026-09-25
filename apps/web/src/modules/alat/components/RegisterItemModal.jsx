@@ -8,21 +8,26 @@ export default function RegisterItemModal({ isOpen, onClose, onSaved }) {
   const [form, setForm] = useState(initialForm);
   const [equipmentTypes, setEquipmentTypes] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [typesLoading, setTypesLoading] = useState(false);
   const [error, setError] = useState('');
 
   const selectedType = equipmentTypes.find((type) => String(type.id) === form.equipmentTypeId);
   const showPlateNumber = selectedType ? isTruckType(selectedType.typeName) : false;
-  const loadingTypes = isOpen && equipmentTypes.length === 0 && !error;
+  const loadingTypes = isOpen && typesLoading;
 
   useEffect(() => {
     if (!isOpen) return undefined;
 
     const loadEquipmentTypes = async () => {
+      setTypesLoading(true);
+      setError('');
       try {
         const types = await getEquipmentTypes();
         setEquipmentTypes(types.map((type) => ({ id: type.id, typeName: type.typeName })));
       } catch (requestError) {
         setError(requestError.message);
+      } finally {
+        setTypesLoading(false);
       }
     };
 

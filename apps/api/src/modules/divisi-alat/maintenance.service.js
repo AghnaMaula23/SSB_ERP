@@ -167,7 +167,15 @@ const removeAspect = async (id) => {
 
 const settingInclude = {
   maintenanceAspect: true,
-  equipmentItem: { select: { id: true, assetCode: true, totalWorkhour: true, currentStatus: true } },
+  equipmentItem: {
+    select: {
+      id: true,
+      assetCode: true,
+      totalWorkhour: true,
+      currentStatus: true,
+      equipmentType: { select: { typeName: true } },
+    },
+  },
 };
 
 const shapeSetting = (setting) => {
@@ -179,7 +187,13 @@ const shapeSetting = (setting) => {
     id: setting.id,
     equipmentItemId: setting.equipmentItemId,
     equipmentItem: setting.equipmentItem
-      ? { id: setting.equipmentItem.id, assetCode: setting.equipmentItem.assetCode }
+      ? {
+          id: setting.equipmentItem.id,
+          assetCode: setting.equipmentItem.assetCode,
+          equipmentType: setting.equipmentItem.equipmentType
+            ? { typeName: setting.equipmentItem.equipmentType.typeName }
+            : undefined,
+        }
       : undefined,
     maintenanceAspectId: setting.maintenanceAspectId,
     maintenanceAspect: setting.maintenanceAspect

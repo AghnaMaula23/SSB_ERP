@@ -12,8 +12,9 @@ const moduleTone = {
   amber: 'bg-amber-50 text-amber-700 border-amber-200',
 };
 
-export default function ModuleSelection({ onSelectModule, onSignOut }) {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+export default function ModuleSelection({ user = {}, onSelectModule, onSignOut }) {
+  const currentUser = user || {};
+  const canAccessEquipment = currentUser.roles?.includes('super_admin') || currentUser.permissions?.includes('equipment:read') || false;
 
   return (
     <main className="page-enter min-h-screen bg-slate-50 px-4 py-8 text-slate-800 sm:px-8 sm:py-12">
@@ -30,8 +31,8 @@ export default function ModuleSelection({ onSelectModule, onSignOut }) {
           </div>
           <div className="flex items-center gap-4 text-right">
             <div className="hidden sm:block">
-              <p className="text-sm font-semibold text-slate-900">{user.fullName || user.username || 'ERP Admin'}</p>
-              <p className="text-xs text-slate-500">Authorized Personnel</p>
+              <p className="text-sm font-semibold text-slate-900">{currentUser.fullName || currentUser.username || 'ERP User'}</p>
+              <p className="text-xs text-slate-500">{currentUser.roles?.[0] || 'Authorized Personnel'}</p>
             </div>
             <button type="button" onClick={onSignOut} className="btn btn-secondary py-1.5 px-3 text-xs">Sign Out</button>
           </div>
@@ -45,7 +46,8 @@ export default function ModuleSelection({ onSelectModule, onSignOut }) {
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             {modules.map((module) => {
-              const isActive = module.id === 'alat/items';
+              const isModuleAvailable = module.id === 'alat/items' ? canAccessEquipment : false;
+              const isActive = isModuleAvailable;
               return (
                 <button
                   key={module.id}
@@ -83,4 +85,4 @@ export default function ModuleSelection({ onSelectModule, onSignOut }) {
       </div>
     </main>
   );
-}
+}

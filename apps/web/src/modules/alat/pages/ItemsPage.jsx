@@ -5,7 +5,8 @@ import ItemTable from '../components/ItemTable.jsx';
 import FilterItemModal from '../components/FilterItemModal.jsx';
 import RegisterItemModal from '../components/RegisterItemModal.jsx';
 import StatCard from '../components/StatCard.jsx';
-import { archiveItem, getItems } from '../services/alatService.js';
+import { archiveItem, equipmentStatusLabel, getAllItems } from '../services/alatService.js';
+import { hasPermission } from '../../../services/permissions.js';
 
 const PAGE_SIZE = 8;
 
@@ -18,13 +19,26 @@ export default function ItemsPage({ onBackToModules, onSignOut, onViewDetails })
   const [successMessage, setSuccessMessage] = useState('');
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => sessionStorage.getItem('equipment-search') || '');
   const [advancedFilters, setAdvancedFilters] = useState({ statuses: [], jenis: [], manufacturers: [], capacity: '' });
   const [page, setPage] = useState(1);
+  const canCreate = hasPermission('equipment:create');
+  const canDelete = hasPermission('equipment:delete');
+
+  useEffect(() => {
+    const handleGlobalSearch = (event) => {
+      const value = event.detail || sessionStorage.getItem('equipment-search') || '';
+      setSearchTerm(value);
+      setPage(1);
+    };
+    sessionStorage.removeItem('equipment-search');
+    window.addEventListener('equipment-search-submit', handleGlobalSearch);
+    return () => window.removeEventListener('equipment-search-submit', handleGlobalSearch);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    getItems({ page: 1, limit: 100 })
+    getAllItems()
       .then((result) => {
         if (!cancelled) setItems(result.data || []);
       })
@@ -130,6 +144,8 @@ export default function ItemsPage({ onBackToModules, onSignOut, onViewDetails })
               <button
                 type="button"
                 onClick={() => { setSuccessMessage(''); setIsRegisterModalOpen(true); }}
+                 disabled={!canCreate}
+                 title={canCreate ? 'Register new equipment' : 'Anda tidak memiliki izin membuat equipment'}
                 className="btn btn-primary text-xs"
               >
                 + Register New Item
@@ -140,8 +156,8 @@ export default function ItemsPage({ onBackToModules, onSignOut, onViewDetails })
           {/* Stats section */}
           <div className="mb-6 grid gap-4 sm:grid-cols-3">
             <StatCard label="Total Equipment Units" value={items.length} tone="blue" />
-            <StatCard label="Maintenance Due" value={items.filter((item) => item.status === 'Maintenance Due').length} tone="amber" />
-            <StatCard label="Available for Dispatch" value={items.filter((item) => item.status === 'Available').length} tone="green" />
+            <StatCard label="Maintenance Due" value={items.filter((item) => item.status === 'maintenance').length} tone="amber" />
+            <StatCard label="Available for Dispatch" value={items.filter((item) => item.status === 'operational').length} tone="green" />
           </div>
 
           {successMessage && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{successMessage}</div>}
@@ -174,7 +190,7 @@ export default function ItemsPage({ onBackToModules, onSignOut, onViewDetails })
                 <label htmlFor="status-select" className="block text-xs font-semibold text-slate-600">Status</label>
                 <select id="status-select" value={advancedFilters.statuses[0] || 'All'} onChange={updateFilter('statuses')} className="input-control mt-1 text-xs">
                   <option value="All">All Statuses</option>
-                  {statusOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  {statusOptions.map((option) => <option key={option} value={option}>{equipmentStatusLabel(option)}</option>)}
                 </select>
               </div>
               <button type="button" onClick={resetFilters} className="btn btn-secondary py-2 text-xs">
@@ -195,6 +211,7 @@ export default function ItemsPage({ onBackToModules, onSignOut, onViewDetails })
               onPageChange={(nextPage) => setPage(Math.max(1, Math.min(nextPage, Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE)))))}
               onViewDetails={onViewDetails}
               onDelete={handleArchive}
+               canDelete={canDelete}
             />
           )}
 

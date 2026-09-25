@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import AlatHeader from '../components/AlatHeader.jsx';
 import AlatSidebar from '../components/AlatSidebar.jsx';
 import StatCard from '../components/StatCard.jsx';
-import { getMaintenanceOverview, maintenanceMetricNames } from '../services/maintenanceService.js';
+import { getMaintenanceOverview } from '../services/maintenanceService.js';
+import { downloadCsv } from '../../../utils/csv.js';
+import { hasPermission } from '../../../services/permissions.js';
 
 const statusLabels = { normal: 'Normal', warning: 'Scheduled', due: 'Due Soon', overdue: 'Alert', inactive: 'Inactive' };
 const statusStyles = {
@@ -27,17 +29,20 @@ export default function MaintenancePage({ onNavigateToReset, onBackToModules, on
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('alat-sidebar-collapsed') === 'true');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [rows, setRows] = useState([]);
+  const [metricNames, setMetricNames] = useState([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState(initialNotice);
+  const canCreate = hasPermission('maintenance:create');
 
   useEffect(() => {
     let cancelled = false;
     getMaintenanceOverview().then((result) => {
       if (cancelled) return;
       setRows(result.data);
+      setMetricNames(result.metricNames || []);
     }).catch((requestError) => {
       if (!cancelled) setError(requestError.message);
     }).finally(() => {
@@ -55,12 +60,24 @@ export default function MaintenancePage({ onNavigateToReset, onBackToModules, on
   const alertCount = rows.filter((row) => row.status === 'overdue' || row.status === 'due').length;
   const scheduledCount = rows.filter((row) => row.status === 'warning').length;
 
+  const handleExport = () => {
+    downloadCsv('maintenance-overview.csv', filteredRows, [
+      { label: 'Item Code', value: (row) => row.itemCode },
+      { label: 'Equipment', value: (row) => row.itemName },
+      { label: 'Status', value: (row) => row.status },
+      ...metricNames.map((name) => ({
+        label: name,
+        value: (row) => {
+          const metric = row.metrics[name];
+          return metric ? `${metric.current} / ${metric.threshold} hrs (${metric.status})` : '';
+        },
+      })),
+    ]);
+    setNotice('Maintenance data exported to CSV.');
+  };
+
   const handleResetClick = (row) => {
-    if (onNavigateToReset) {
-      onNavigateToReset(row.id);
-    } else {
-      window.location.hash = `/#/alat/maintenance/reset/${row.id}`;
-    }
+    if (onNavigateToReset) onNavigateToReset(row.id);
   };
 
   return (
@@ -80,7 +97,7 @@ export default function MaintenancePage({ onNavigateToReset, onBackToModules, on
               </nav>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Maintenance Overview</h1>
             </div>
-            <button type="button" onClick={() => setNotice('Maintenance data exported to CSV.')} className="btn btn-secondary text-xs">
+            <button type="button" onClick={handleExport} className="btn btn-secondary text-xs">
               ↓ Export Data
             </button>
           </div>
@@ -130,7 +147,7 @@ export default function MaintenancePage({ onNavigateToReset, onBackToModules, on
                   <tr>
                     <th className="w-12 text-center">No</th>
                     <th>Equipment Unit</th>
-                    {maintenanceMetricNames.map((name) => (
+                    {metricNames.map((name) => (
                       <th key={name}>{name}</th>
                     ))}
                     <th className="text-center">Status</th>
@@ -148,7 +165,7 @@ export default function MaintenancePage({ onNavigateToReset, onBackToModules, on
                           <p className="font-mono text-xs font-semibold text-slate-900">{row.itemCode}</p>
                           <p className="text-xs text-slate-500">{row.itemName}</p>
                         </td>
-                        {maintenanceMetricNames.map((name) => (
+                        {metricNames.map((name) => (
                           <td key={name}>
                             <MetricCell metric={row.metrics[name]} />
                           </td>
@@ -159,7 +176,9 @@ export default function MaintenancePage({ onNavigateToReset, onBackToModules, on
                           </span>
                         </td>
                         <td className="text-center">
-                          <button type="button" onClick={() => handleResetClick(row)} className="btn btn-secondary px-2.5 py-1 text-xs">
+                          <button type="button" onClick={() => handleResetClick(row)}
+                             disabled={!canCreate}
+                             title={canCreate ? 'Reset maintenance' : 'Anda tidak memiliki izin membuat maintenance record'} className="btn btn-secondary px-2.5 py-1 text-xs">
                             Reset
                           </button>
                         </td>
@@ -167,7 +186,7 @@ export default function MaintenancePage({ onNavigateToReset, onBackToModules, on
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={10} className="py-12 text-center text-sm text-slate-500">
+                      <td colSpan={metricNames.length + 4} className="py-12 text-center text-sm text-slate-500">
                         No equipment units match the selected maintenance filters.
                       </td>
                     </tr>

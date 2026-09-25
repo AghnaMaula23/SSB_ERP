@@ -71,6 +71,23 @@ const hasOtherStoppingDamage = async (tx, equipmentItemId, exceptDamageId) => {
   return count > 0;
 };
 
+const canReleaseFromDamage = async (tx, equipmentItemId, damageLogId) => {
+  const item = await tx.equipmentItem.findUnique({
+    where: { id: equipmentItemId },
+    select: { currentStatus: true, isActive: true },
+  });
+  if (!item || !item.isActive || item.currentStatus !== 'maintenance') return false;
+
+  const latestStatus = await tx.equipmentStatusLog.findFirst({
+    where: { equipmentItemId },
+    orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+    select: { sourceType: true, sourceId: true, newStatus: true },
+  });
+  return latestStatus?.sourceType === 'damage_log' &&
+    latestStatus.sourceId === damageLogId &&
+    latestStatus.newStatus === 'maintenance';
+};
+
 /** Ubah status alat sekaligus menulis audit trail-nya. Selalu dalam satu transaksi. */
 const moveEquipmentStatus = async (tx, item, newStatus, { notes, damageLogId, userId }) => {
   if (item.currentStatus === newStatus) return;
@@ -244,7 +261,7 @@ const update = async (id, payload, userId) => {
           damageLogId: id,
           userId,
         });
-      } else if (!(await hasOtherStoppingDamage(tx, log.equipmentItemId, id))) {
+      } else if (await canReleaseFromDamage(tx, log.equipmentItemId, id) && !(await hasOtherStoppingDamage(tx, log.equipmentItemId, id))) {
         await moveEquipmentStatus(tx, item, 'operational', {
           notes: `Kerusakan ${log.damageCode} ditandai tidak menghentikan alat`,
           damageLogId: id,
@@ -333,7 +350,7 @@ const resolve = async (id, payload, userId) => {
       include: damageInclude,
     });
 
-    if (log.stopsOperation && !(await hasOtherStoppingDamage(tx, log.equipmentItemId, id))) {
+    if (log.stopsOperation && await canReleaseFromDamage(tx, log.equipmentItemId, id) && !(await hasOtherStoppingDamage(tx, log.equipmentItemId, id))) {
       await moveEquipmentStatus(tx, item, 'operational', {
         notes: `Kerusakan ${log.damageCode} selesai diperbaiki`,
         damageLogId: id,
@@ -349,7 +366,7 @@ const resolve = async (id, payload, userId) => {
 
 const cancel = async (id, { notes }, userId) => {
   const log = await findDamageOrFail(id);
-  if (!['reported', 'resolved'].includes(log.status)) {
+  if (log.status !== 'reported') {
     throw httpError(`Laporan berstatus "${log.status}" tidak bisa dibatalkan`, 409);
   }
 
@@ -365,7 +382,7 @@ const cancel = async (id, { notes }, userId) => {
       include: damageInclude,
     });
 
-    if (log.stopsOperation && !(await hasOtherStoppingDamage(tx, log.equipmentItemId, id))) {
+    if (log.stopsOperation && await canReleaseFromDamage(tx, log.equipmentItemId, id) && !(await hasOtherStoppingDamage(tx, log.equipmentItemId, id))) {
       await moveEquipmentStatus(tx, item, 'operational', {
         notes: `Laporan ${log.damageCode} dibatalkan`,
         damageLogId: id,

@@ -12,8 +12,16 @@ export async function getDamageLogs({ page = 1, limit = 10, search, status, spar
 }
 
 export async function getInformationItems() {
-  const result = await apiRequest(`${API_PREFIX}/items?page=1&limit=100&isActive=true`);
-  return result.data || [];
+  const items = [];
+  let page = 1;
+  let total;
+  do {
+    const result = await apiRequest(`${API_PREFIX}/items?page=${page}&limit=100&isActive=true`);
+    items.push(...(result.data || []));
+    total = Number(result.total || 0);
+    page += 1;
+  } while (items.length < total && page <= 100);
+  return items.filter((item) => item.currentStatus !== 'retired');
 }
 
 export function createDamageLog(payload) {

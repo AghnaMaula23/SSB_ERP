@@ -18,7 +18,7 @@ function Badge({ children, tone = 'blue' }) {
 
 const formatDate = (value) => value ? new Intl.DateTimeFormat('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value)) : '-';
 
-export default function DamageLogTable({ logs, page, pageSize, total, onPageChange, onEdit, onResolve, onCancel }) {
+export default function DamageLogTable({ logs, page, pageSize, total, onPageChange, onEdit, onResolve, onCancel, canEdit = true, canResolve = true, canCancel = true }) {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -61,21 +61,23 @@ export default function DamageLogTable({ logs, page, pageSize, total, onPageChan
                   <td><Badge tone={log.mechanicTeam === 'internal' ? 'blue' : 'red'}>{mechanicLabels[log.mechanicTeam] || '-'}</Badge></td>
                   <td className="text-center">
                     <Badge tone={log.status === 'resolved' ? 'green' : log.status === 'cancelled' ? 'red' : 'amber'}>
-                      {log.status.toUpperCase()}
+                      {(log.status || 'unknown').toUpperCase()}
                     </Badge>
                   </td>
                   <td className="text-center">
                     <div className="flex items-center justify-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => onEdit(log)}
-                        className="btn btn-ghost px-2 py-1 text-xs"
-                        aria-label={`Edit ${log.damageCode}`}
-                        title="Edit Log"
-                      >
-                        ↗
-                      </button>
-                      {log.status === 'reported' && (
+                      {canEdit && log.status === 'reported' && (
+                        <button
+                          type="button"
+                          onClick={() => onEdit(log)}
+                          className="btn btn-ghost px-2 py-1 text-xs"
+                          aria-label={`Edit ${log.damageCode}`}
+                          title="Edit Log"
+                        >
+                          ↗
+                        </button>
+                      )}
+                      {canResolve && log.status === 'reported' && (
                         <button
                           type="button"
                           onClick={() => onResolve(log)}
@@ -86,7 +88,7 @@ export default function DamageLogTable({ logs, page, pageSize, total, onPageChan
                           ✓
                         </button>
                       )}
-                      {(log.status === 'reported' || log.status === 'resolved') && (
+                      {canCancel && log.status === 'reported' && (
                         <button
                           type="button"
                           onClick={() => onCancel(log)}
@@ -136,4 +138,3 @@ export default function DamageLogTable({ logs, page, pageSize, total, onPageChan
     </div>
   );
 }
-

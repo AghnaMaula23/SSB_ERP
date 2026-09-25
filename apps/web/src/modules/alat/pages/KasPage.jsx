@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AlatHeader from '../components/AlatHeader.jsx';
 import AlatSidebar from '../components/AlatSidebar.jsx';
+import { downloadCsv } from '../../../utils/csv.js';
 import {
+  getEquipmentUnitOptions,
   getKasSummary,
   getKasTransactions,
   createKasTransaction,
@@ -9,8 +11,8 @@ import {
   TYPE_OPTIONS,
   CATEGORY_OPTIONS,
   UNIT_OPTIONS,
-  typeLabel,
   categoryLabel,
+  sourceLabel,
   formatRupiah,
 } from '../services/kasService.js';
 
@@ -27,18 +29,19 @@ export default function KasPage({ onBackToModules, onSignOut }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [summary, setSummary] = useState({ saldo: 0, monthlyIncome: 0, monthlyExpense: 0 });
   const [rows, setRows] = useState([]);
+  const [unitOptions, setUnitOptions] = useState(UNIT_OPTIONS);
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [searchJournal, setSearchJournal] = useState('');
   const [page, setPage] = useState(1);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(() => sessionStorage.getItem('kas-notice') || '');
   const [error, setError] = useState('');
 
   // Inline form state
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     type: 'masuk',
-    category: 'rental_unit',
+    category: 'other',
     unitAlat: '',
     nominal: '',
     description: '',
@@ -46,7 +49,7 @@ export default function KasPage({ onBackToModules, onSignOut }) {
 
   const navigate = (route) => { window.location.hash = `/${route}`; };
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     try {
       setSummary(getKasSummary());
       setRows(getKasTransactions({ search: searchJournal, type: filterType, category: filterCategory }));
@@ -54,9 +57,20 @@ export default function KasPage({ onBackToModules, onSignOut }) {
     } catch (err) {
       setError(err.message);
     }
-  };
+  }, [filterCategory, filterType, searchJournal]);
 
-  useEffect(() => { loadData(); }, [searchJournal, filterType, filterCategory]);
+  useEffect(() => {
+    const timeout = window.setTimeout(loadData, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadData]);
+
+  useEffect(() => {
+    sessionStorage.removeItem('kas-notice');
+  }, []);
+
+  useEffect(() => {
+    getEquipmentUnitOptions().then(setUnitOptions);
+  }, []);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const visibleRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -72,7 +86,7 @@ export default function KasPage({ onBackToModules, onSignOut }) {
     try {
       createKasTransaction(form);
       setNotice('Transaksi kas berhasil disimpan.');
-      setForm({ date: new Date().toISOString().slice(0, 10), type: 'masuk', category: 'rental_unit', unitAlat: '', nominal: '', description: '' });
+      setForm({ date: new Date().toISOString().slice(0, 10), type: 'masuk', category: 'other', unitAlat: '', nominal: '', description: '' });
       loadData();
       setPage(1);
     } catch (err) {
@@ -90,6 +104,21 @@ export default function KasPage({ onBackToModules, onSignOut }) {
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const handleExport = () => {
+    downloadCsv('kas-journal-demo.csv', rows, [
+      { label: 'Transaction Code', value: (row) => row.transactionCode },
+      { label: 'Date', value: (row) => row.date },
+      { label: 'Type', value: (row) => row.type },
+      { label: 'Category', value: (row) => categoryLabel(row.category) },
+      { label: 'Source', value: (row) => sourceLabel(row.source) },
+      { label: 'Source ID', value: (row) => row.sourceId },
+      { label: 'Unit', value: (row) => row.unitAlat },
+      { label: 'Description', value: (row) => row.description },
+      { label: 'Amount', value: (row) => row.nominal },
+    ]);
+    setNotice('Data jurnal berhasil di-export.');
   };
 
   return (
@@ -116,6 +145,8 @@ export default function KasPage({ onBackToModules, onSignOut }) {
               <span className="text-slate-900 font-semibold">Kas</span>
             </nav>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Kas Alat</h1>
+             <p className="mt-1 text-xs text-amber-700">Mode demo: modul cash backend belum tersedia, sehingga jurnal ini belum tersimpan di database.</p>
+             <p className="mt-1 text-xs text-slate-500">Cash-in otomatis berasal dari claim pendapatan; cash-out otomatis berasal dari purchase request. Input manual hanya untuk category Other.</p>
           </div>
 
           {/* Summary cards */}
@@ -157,8 +188,8 @@ export default function KasPage({ onBackToModules, onSignOut }) {
           <section className="card-panel mb-6 p-5" aria-label="Input Kas Operasional">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-bold text-slate-900">Kelola Kas Operasional</h2>
-              <button type="button" onClick={() => navigate('alat/kas/request-pendapatan')} className="btn btn-primary text-xs">
-                Request Pedapatan ⊕
+              <button type="button" onClick={() => navigate('alat/kas/claim-pendapatan')} className="btn btn-primary text-xs">
+                Claim Pendapatan ⊕
               </button>
             </div>
 
@@ -176,8 +207,8 @@ export default function KasPage({ onBackToModules, onSignOut }) {
                 </div>
                 <div>
                   <label htmlFor="kas-category" className="block text-xs font-semibold text-slate-600">Kategori</label>
-                  <select id="kas-category" value={form.category} onChange={updateForm('category')} className="input-control mt-1 text-xs">
-                    {CATEGORY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  <select id="kas-category" value="other" disabled className="input-control mt-1 text-xs bg-slate-100">
+                    <option value="other">Other (input manual)</option>
                   </select>
                 </div>
                 <div>
@@ -185,7 +216,7 @@ export default function KasPage({ onBackToModules, onSignOut }) {
                   <select id="kas-unit" value={form.unitAlat} onChange={updateForm('unitAlat')} className="input-control mt-1 text-xs">
                     <option value="">— Pilih unit —</option>
                     <option value="-">Tidak ada</option>
-                    {UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+                    {unitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
                 <div>
@@ -237,7 +268,7 @@ export default function KasPage({ onBackToModules, onSignOut }) {
                   <option value="all">All Categories</option>
                   {CATEGORY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
-                <button type="button" onClick={() => setNotice('Data jurnal berhasil di-export.')} className="btn btn-ghost px-2 py-1 text-xs" title="Export">↓</button>
+                <button type="button" onClick={handleExport} className="btn btn-ghost px-2 py-1 text-xs" title="Export">↓</button>
               </div>
             </div>
 
@@ -247,6 +278,7 @@ export default function KasPage({ onBackToModules, onSignOut }) {
                   <tr>
                     <th className="w-12 text-center">No</th>
                     <th>Tanggal</th>
+                    <th>Sumber</th>
                     <th>Unit Alat</th>
                     <th className="text-center">Jenis</th>
                     <th>Kategori</th>
@@ -263,6 +295,10 @@ export default function KasPage({ onBackToModules, onSignOut }) {
                           {String((page - 1) * PAGE_SIZE + idx + 1).padStart(2, '0')}
                         </td>
                         <td className="text-xs whitespace-nowrap">{formatDate(row.date)}</td>
+                        <td className="text-xs">
+                          <span className="font-medium">{sourceLabel(row.source)}</span>
+                          {row.sourceId && <span className="block font-mono text-[10px] text-slate-400">{row.sourceId}</span>}
+                        </td>
                         <td className="text-xs font-medium">{row.unitAlat}</td>
                         <td className="text-center">
                           <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
@@ -283,7 +319,9 @@ export default function KasPage({ onBackToModules, onSignOut }) {
                             <button
                               type="button"
                               onClick={() => handleDelete(row)}
-                              title="Delete"
+                               disabled={row.source === 'income_claim' || row.source === 'purchase_request'}
+                               title={row.source === 'manual' ? 'Delete manual transaction' : 'Transaksi otomatis tidak dapat dihapus'}
+                              title={row.source === 'income_claim' || row.source === 'purchase_request' ? 'Transaksi otomatis tidak dapat dihapus' : 'Delete transaksi manual'}
                               className="flex h-7 w-7 items-center justify-center rounded-md text-red-400 hover:bg-red-50 hover:text-red-600"
                             >🗑️</button>
                           </div>
@@ -292,7 +330,7 @@ export default function KasPage({ onBackToModules, onSignOut }) {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-sm text-slate-500">
+                      <td colSpan={9} className="py-12 text-center text-sm text-slate-500">
                         Tidak ada transaksi kas yang cocok dengan filter.
                       </td>
                     </tr>

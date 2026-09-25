@@ -61,9 +61,10 @@ npm install
 
 ```bash
 cp .env.example .env
+cp apps/web/.env.example apps/web/.env
 ```
 
-Edit `.env` dengan credential yang diberikan oleh tim lead (jangan commit file ini):
+Edit `.env` dengan credential yang diberikan oleh tim lead (jangan commit file ini). Untuk konfigurasi Front End, salin `apps/web/.env.example` menjadi `apps/web/.env` dan sesuaikan `VITE_API_URL` bila API tidak berjalan di `http://localhost:3000`:
 
 ```properties
 DATABASE_URL="postgresql://..."     # Dari Supabase → Connect → ORMs (port 6543)
@@ -72,6 +73,13 @@ JWT_SECRET=your-secret-key          # Bebas, tapi harus sama untuk semua develop
 JWT_EXPIRES_IN=7d
 API_PORT=3000
 WEB_PORT=5173
+```
+
+Frontend:
+
+```properties
+VITE_API_URL=http://localhost:3000
+VITE_ALAT_API_PREFIX=/api/equipment
 ```
 
 > **Catatan:** Minta credential ke tim lead via chat pribadi. JANGAN taruh credential asli di repo.
@@ -169,7 +177,10 @@ npm run dev                  # Vite dev server dengan HMR
 | --- | --- | --- |
 | Auth | ✅ Boilerplate ready | `/api/auth` |
 | Project | 🔲 Belum | `/api/projects` |
-| Divisi Alat | 🔲 Belum | `/api/equipment` |
+| Divisi Alat | ✅ Equipment, workhour, maintenance, damage log | `/api/equipment` |
+| Purchase Order | 🟡 Demo frontend; approval/rejection oleh modul lain | `/api/equipment/purchase-requests` (belum mounted) |
+| Kas | 🟡 Demo frontend; input manual hanya Other | `/api/equipment/cash` (belum mounted) |
+| Income Claim | 🟡 Demo frontend; cash-in setelah approval | `/api/income/claims` (belum mounted) |
 | Request Alat | 🔲 Belum | `/api/request-alat` |
 | Request Material | 🔲 Belum | `/api/request-material` |
 | Approval Center | 🔲 Belum | `/api/approvals` |
@@ -185,5 +196,5 @@ npm run dev                  # Vite dev server dengan HMR
 | `super_admin` | Semua — bypass permission check |
 | `admin` | Project, request, verification, employee management |
 | `finance` | Payment, approval keuangan, payroll, jurnal, COA |
-| `divisi_alat` | Equipment master, maintenance, purchase request, income claim |
+| `divisi_alat` | Equipment master, maintenance, purchase request (submit/edit), income claim (submit); approval/rejection dilakukan modul lain |
 | `lapangan` | Daily progress, workhour, damage report, material/alat request |

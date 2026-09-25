@@ -1,6 +1,9 @@
 /**
- * Purchase Order — localStorage-backed mock service.
- * Swap these functions with real apiRequest() calls once the backend is ready.
+ * Purchase Order — localStorage-backed demo service.
+ * The purchase-request API is documented but not mounted yet, so these records
+ * are intentionally kept separate from database-backed equipment data. Divisi
+ * Alat may submit/edit pending requests only; approval and rejection belong to
+ * another module.
  */
 
 const STORAGE_KEY = 'po_data';
@@ -68,7 +71,13 @@ function readAll() {
     localStorage.setItem(SEQ_KEY, '4');
     return [...SEED_DATA];
   }
-  return JSON.parse(raw);
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [...SEED_DATA];
+  } catch {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_DATA));
+    return [...SEED_DATA];
+  }
 }
 
 function writeAll(data) {
@@ -148,9 +157,15 @@ export function createPurchaseOrder(data) {
 }
 
 export function updatePurchaseOrder(id, data) {
+  if (Object.prototype.hasOwnProperty.call(data, 'status')) {
+    throw new Error('Status purchase request hanya dapat diubah oleh modul approval lain.');
+  }
   const rows = readAll();
   const idx = rows.findIndex((r) => r.id === Number(id));
   if (idx === -1) throw new Error('Purchase order tidak ditemukan');
+  if (rows[idx].status !== 'pending') {
+    throw new Error('Purchase order yang sudah diproses modul lain tidak dapat diubah dari Divisi Alat.');
+  }
   const updated = { ...rows[idx], ...data };
   updated.totalPrice = (Number(updated.quantity) || 0) * (Number(updated.unitPrice) || 0);
   rows[idx] = updated;
@@ -158,14 +173,14 @@ export function updatePurchaseOrder(id, data) {
   return updated;
 }
 
-export function updatePurchaseOrderStatus(id, status) {
-  return updatePurchaseOrder(id, { status });
-}
-
 export function deletePurchaseOrder(id) {
   const rows = readAll();
-  const filtered = rows.filter((r) => r.id !== Number(id));
-  writeAll(filtered);
+  const target = rows.find((row) => row.id === Number(id));
+  if (!target) throw new Error('Purchase order tidak ditemukan');
+  if (target.status !== 'pending') {
+    throw new Error('Purchase order yang sudah diproses modul lain tidak dapat dihapus dari Divisi Alat.');
+  }
+  writeAll(rows.filter((row) => row.id !== Number(id)));
 }
 
 export const CATEGORY_OPTIONS = [
@@ -174,9 +189,9 @@ export const CATEGORY_OPTIONS = [
 ];
 
 export const STATUS_OPTIONS = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
+  { value: 'pending', label: 'Pending Approval' },
+  { value: 'approved', label: 'Approved (Other Module)' },
+  { value: 'rejected', label: 'Rejected (Other Module)' },
 ];
 
 export const categoryLabel = (val) => CATEGORY_OPTIONS.find((o) => o.value === val)?.label || val;

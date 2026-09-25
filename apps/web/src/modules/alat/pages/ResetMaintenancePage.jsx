@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import AlatHeader from '../components/AlatHeader.jsx';
 import AlatSidebar from '../components/AlatSidebar.jsx';
-import { getItemDetail } from '../services/alatService.js';
+import { getItemById } from '../services/alatService.js';
 import { createMaintenanceRecord, getItemMaintenanceSettings } from '../services/maintenanceService.js';
+import { hasPermission } from '../../../services/permissions.js';
 
 const statusBadgeStyles = {
   normal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -20,6 +21,12 @@ const statusLabels = {
   inactive: 'Inactive',
 };
 
+function todayDate() {
+  const date = new Date();
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60 * 1000).toISOString().slice(0, 10);
+}
+
 export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, onSignOut }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('alat-sidebar-collapsed') === 'true');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -33,9 +40,10 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
   
   // Form fields
   const [maintenanceType, setMaintenanceType] = useState('routine');
-  const [maintenanceDate, setMaintenanceDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [maintenanceDate, setMaintenanceDate] = useState(todayDate);
   const [performedBy, setPerformedBy] = useState('');
   const [actionDescription, setActionDescription] = useState('');
+  const canCreate = hasPermission('maintenance:create');
 
   useEffect(() => {
     let cancelled = false;
@@ -44,8 +52,8 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
         setLoading(true);
         setError('');
         const [unitData, settingsData] = await Promise.all([
-          getItemDetail(unitId).catch(() => ({ id: unitId, assetCode: `Unit ${unitId}` })),
-          getItemMaintenanceSettings(unitId).catch(() => []),
+          getItemById(unitId),
+          getItemMaintenanceSettings(unitId),
         ]);
         if (cancelled) return;
         setUnit(unitData);
@@ -93,24 +101,28 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
     setSubmitting(true);
     setError('');
 
+    let completed = 0;
     try {
-      // Create maintenance record for each selected setting
-      await Promise.all(
-        selectedSettingIds.map((settingId) =>
-          createMaintenanceRecord({
-            equipmentItemId: Number(unitId),
-            maintenanceSettingId: Number(settingId),
-            maintenanceType,
-            maintenanceDate,
-            actionDescription: actionDescription.trim(),
-            performedBy: performedBy.trim() || undefined,
-          })
-        )
-      );
+      // Submit sequentially so a later validation error does not create a
+      // large set of unrelated partial requests after the first failure.
+      for (const settingId of selectedSettingIds) {
+        await createMaintenanceRecord({
+          equipmentItemId: Number(unitId),
+          maintenanceSettingId: Number(settingId),
+          maintenanceType,
+          maintenanceDate,
+          actionDescription: actionDescription.trim(),
+          performedBy: performedBy.trim() || undefined,
+        });
+        completed += 1;
+      }
 
       onBack('Maintenance reset successfully executed.');
     } catch (submitError) {
-      setError(submitError.message || 'Failed to submit maintenance reset.');
+      const partialMessage = completed > 0
+        ? `${completed} parameter sudah tersimpan sebelum request berikutnya gagal. `
+        : '';
+      setError(`${partialMessage}${submitError.message || 'Failed to submit maintenance reset.'}`);
     } finally {
       setSubmitting(false);
     }
@@ -163,7 +175,13 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
             </div>
           )}
 
-          {loading ? (
+          {!canCreate && (
+             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-700" role="status">
+               Anda hanya dapat melihat data. Reset maintenance memerlukan izin maintenance:create.
+             </div>
+           )}
+
+           {loading ? (
             <div className="card-panel p-12 text-center text-sm text-slate-500">Loading equipment parameters...</div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -361,7 +379,7 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || !selectedSettingIds.length}
+                  disabled={submitting || !canCreate || !selectedSettingIds.length}
                   className="btn btn-primary text-xs flex items-center gap-2"
                 >
                   {submitting ? 'Executing Reset...' : `Confirm Reset (${selectedSettingIds.length} Selected)`}

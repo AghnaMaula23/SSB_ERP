@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Login from './pages/Login.jsx';
 import ModuleSelection from './pages/ModuleSelection.jsx';
 import ItemsPage from './modules/alat/pages/ItemsPage.jsx';
@@ -10,16 +10,56 @@ import PurchaseOrderPage from './modules/alat/pages/PurchaseOrderPage.jsx';
 import PurchaseOrderCreatePage from './modules/alat/pages/PurchaseOrderCreatePage.jsx';
 import PurchaseOrderEditPage from './modules/alat/pages/PurchaseOrderEditPage.jsx';
 import KasPage from './modules/alat/pages/KasPage.jsx';
-import KasRequestPendapatanPage from './modules/alat/pages/KasRequestPendapatanPage.jsx';
+import KasClaimPendapatanPage from './modules/alat/pages/KasClaimPendapatanPage.jsx';
+import { clearSession, getCurrentUser } from './services/auth.js';
 
 function getInitialRoute() {
-  const route = window.location.hash.replace('#/', '');
+  const route = window.location.hash.replace(/^#\/?/, '').split('?')[0].replace(/\/+$/, '');
   return route || (localStorage.getItem('token') ? 'modules' : 'login');
+}
+
+function readStoredUser() {
+  try {
+    return JSON.parse(localStorage.getItem('user') || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function isKnownRoute(route) {
+  return route === 'login' ||
+    route === 'modules' ||
+    route === 'alat/items' ||
+    /^\/alat\/items\/\d+\/?$/.test(`/${route}`) ||
+    route === 'alat/information' ||
+    route === 'alat/maintenance' ||
+    /^alat\/maintenance\/reset\/\d+\/?$/.test(route) ||
+    route === 'alat/purchase-orders' ||
+    route === 'alat/purchase-orders/create' ||
+    /^alat\/purchase-orders\/\d+\/edit\/?$/.test(route) ||
+    route === 'alat/kas' ||
+    route === 'alat/kas/claim-pendapatan' ||
+    route === 'alat/kas/request-pendapatan';
+}
+
+function AppLoading() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
+      Memuat sesi...
+    </main>
+  );
 }
 
 export default function App() {
   const [route, setRoute] = useState(getInitialRoute);
+  const [user, setUser] = useState(readStoredUser);
+  const [authStatus, setAuthStatus] = useState(() => (localStorage.getItem('token') ? 'checking' : 'anonymous'));
   const [maintenanceNotice, setMaintenanceNotice] = useState('');
+
+  const navigate = useCallback((nextRoute) => {
+    const cleanRoute = String(nextRoute).replace(/^#?\/?/, '').split('?')[0].replace(/\/+$/, '');
+    if (window.location.hash !== `#/${cleanRoute}`) window.location.hash = `/${cleanRoute}`;
+  }, []);
 
   useEffect(() => {
     const handleHashChange = () => setRoute(getInitialRoute());
@@ -27,39 +67,71 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const navigate = (nextRoute) => {
-    window.location.hash = `/${nextRoute}`;
-    setRoute(nextRoute);
-  };
+  useEffect(() => {
+    if (!localStorage.getItem('token')) return undefined;
 
-  const isKnownRoute =
-    route === 'login' ||
-    route === 'modules' ||
-    route === 'alat/items' ||
-    route.startsWith('alat/items/') ||
-    route === 'alat/information' ||
-    route === 'alat/maintenance' ||
-    route.startsWith('alat/maintenance/reset/') ||
-    route === 'alat/purchase-orders' ||
-    route === 'alat/purchase-orders/create' ||
-    route.startsWith('alat/purchase-orders/') ||
-    route === 'alat/kas' ||
-    route === 'alat/kas/request-pendapatan';
+    let cancelled = false;
+    getCurrentUser()
+      .then((currentUser) => {
+        if (!cancelled) {
+          setUser(currentUser);
+          setAuthStatus('authenticated');
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (error?.status === 401) {
+          clearSession();
+          setUser(null);
+          setAuthStatus('anonymous');
+          return;
+        }
+        // A temporary network/server failure must not destroy a valid local
+        // session or its demo data. Individual screens will surface API errors.
+        setUser(readStoredUser());
+        setAuthStatus('authenticated');
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      clearSession();
+      setUser(null);
+      setAuthStatus('anonymous');
+      navigate('login');
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (authStatus === 'checking') return;
+
+    const hasToken = Boolean(localStorage.getItem('token'));
+    if (!hasToken) {
+      if (route !== 'login') navigate('login');
+      return;
+    }
+    if (route === 'login') {
+      navigate('modules');
+      return;
+    }
+    if (!isKnownRoute(route)) navigate('modules');
+  }, [authStatus, navigate, route]);
 
   const signOut = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearSession();
+    setUser(null);
+    setAuthStatus('anonymous');
     navigate('login');
   };
 
-  useEffect(() => {
-    if (!isKnownRoute) {
-      window.location.hash = `/${localStorage.getItem('token') ? 'modules' : 'login'}`;
-    }
-  }, [isKnownRoute, route]);
-
-  if (route === 'login') return <Login onLoginSuccess={() => navigate('modules')} />;
-  if (route === 'modules') return <ModuleSelection onSelectModule={navigate} onSignOut={signOut} />;
+  if (authStatus === 'checking' || (authStatus !== 'authenticated' && route !== 'login')) return <AppLoading />;
+  if (authStatus === 'authenticated' && route === 'login') return <AppLoading />;
+  if (route === 'login') return <Login onLoginSuccess={({ user: loggedInUser }) => { setUser(loggedInUser); setAuthStatus('authenticated'); navigate('modules'); }} />;
+  if (route === 'modules') return <ModuleSelection user={user || {}} onSelectModule={navigate} onSignOut={signOut} />;
   if (route === 'alat/items') return <ItemsPage onBackToModules={() => navigate('modules')} onSignOut={signOut} onViewDetails={(itemId) => navigate(`alat/items/${itemId}`)} />;
   if (route.startsWith('alat/items/')) return <ItemDetailPage key={route} itemId={route.split('/')[2]} onBackToItems={() => navigate('alat/items')} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (route === 'alat/information') return <InformationPage onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
@@ -98,9 +170,9 @@ export default function App() {
   }
   if (route === 'alat/kas')
     return <KasPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
-  if (route === 'alat/kas/request-pendapatan')
-    return <KasRequestPendapatanPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (route === 'alat/kas/claim-pendapatan' || route === 'alat/kas/request-pendapatan')
+    return <KasClaimPendapatanPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
 
-  return null;
+  return <AppLoading />;
 }
 

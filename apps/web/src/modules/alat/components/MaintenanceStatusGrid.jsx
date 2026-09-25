@@ -1,15 +1,4 @@
-const defaultMetrics = [
-  ['Oli Mesin', '120 Jam', 'Next service in 30 hrs'],
-  ['Filter Udara', '200 Jam', 'Condition: Optimal'],
-  ['Filter Solar', '150 Jam', 'Last check: 2023-11-01'],
-  ['Oli Transmisi', '450 Jam', 'Critical threshold at 500'],
-  ['Filter Oli Mesin', '250 Jam', 'Replacement scheduled'],
-  ['Filter Hidrolik', '300 Jam', 'Stable performance'],
-  ['Oli Hidrolik', '450 Jam', 'Critical threshold at 500'],
-  ['Oli Gardan', '450 Jam', 'Critical threshold at 500'],
-];
-
-export default function MaintenanceStatusGrid({ metrics = defaultMetrics, status = 'Running Well' }) {
+export default function MaintenanceStatusGrid({ metrics = [], status = 'Running Well' }) {
   return (
     <section className="card-panel" aria-labelledby="maintenance-title">
       <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
@@ -26,13 +15,11 @@ export default function MaintenanceStatusGrid({ metrics = defaultMetrics, status
 
       <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 sm:divide-x lg:grid-cols-4">
         {metrics.length > 0 ? metrics.map((metric, index) => {
-          const [name, hours, condition] = Array.isArray(metric)
-            ? metric
-            : [
-              metric.name || metric.maintenanceAspect?.aspectName || 'Aspect',
-              metric.hours || `${metric.currentValueSinceReset ?? 0} / ${metric.thresholdValue ?? '-'} Jam`,
-              metric.condition || (metric.status ? `Status: ${metric.status}` : `${metric.remainingValue ?? '-'} hrs remaining`),
-            ];
+          const name = metric.name || metric.maintenanceAspect?.aspectName || `Aspect ${index + 1}`;
+          const current = Number(metric.current ?? metric.currentValueSinceReset ?? 0);
+          const threshold = Number(metric.threshold ?? metric.thresholdValue ?? 0);
+          const hours = threshold ? `${current} / ${threshold} Jam` : `${current} Jam`;
+          const condition = metric.condition || (metric.status ? `Status: ${metric.status}` : `${metric.remainingValue ?? '-'} hrs remaining`);
           return (
             <div key={`${name}-${index}`} className="p-5">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">{name}</h3>
@@ -47,4 +34,3 @@ export default function MaintenanceStatusGrid({ metrics = defaultMetrics, status
     </section>
   );
 }
-

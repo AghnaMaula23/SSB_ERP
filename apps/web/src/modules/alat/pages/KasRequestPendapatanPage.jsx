@@ -1,9 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AlatHeader from '../components/AlatHeader.jsx';
 import AlatSidebar from '../components/AlatSidebar.jsx';
-import { createKasTransaction, formatRupiah, UNIT_OPTIONS } from '../services/kasService.js';
+import { formatRupiah, getEquipmentUnitOptions, UNIT_OPTIONS } from '../services/kasService.js';
+import { createIncomeClaim } from '../services/incomeClaimService.js';
 
-export default function KasRequestPendapatanPage({ onBackToModules, onSignOut }) {
+function todayDate() {
+  const date = new Date();
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60 * 1000).toISOString().slice(0, 10);
+}
+
+export default function KasClaimPendapatanPage({ onBackToModules, onSignOut }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('alat-sidebar-collapsed') === 'true');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -12,7 +19,8 @@ export default function KasRequestPendapatanPage({ onBackToModules, onSignOut })
   const [project, setProject] = useState('Project Nickel Mining Morowali');
   const [subProject, setSubProject] = useState('Land Clearing Pit Alpha');
   const [clientName, setClientName] = useState('PT Halmahera Utama');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayDate);
+  const [unitOptions, setUnitOptions] = useState(UNIT_OPTIONS);
 
   const [equipments, setEquipments] = useState([
     { id: 1, unitAlat: 'Bulldozer01', hours: 45, rate: 350000 },
@@ -23,13 +31,22 @@ export default function KasRequestPendapatanPage({ onBackToModules, onSignOut })
     { id: 1, name: 'Solar HSD (Operasional)', qty: 500, unit: 'Liter', rate: 17000 },
   ]);
 
+  useEffect(() => {
+    getEquipmentUnitOptions().then((options) => {
+      setUnitOptions(options);
+      setEquipments((current) => current.map((item) => (
+        options.includes(item.unitAlat) ? item : { ...item, unitAlat: options[0] || item.unitAlat }
+      )));
+    });
+  }, []);
+
   const navigate = (route) => { window.location.hash = `/${route}`; };
 
   // Equipment helpers
   const addEquipmentRow = () => {
     setEquipments((prev) => [
       ...prev,
-      { id: Date.now(), unitAlat: UNIT_OPTIONS[0] || 'Bulldozer01', hours: 0, rate: 0 },
+      { id: Date.now(), unitAlat: unitOptions[0] || 'Bulldozer01', hours: 0, rate: 0 },
     ]);
   };
 
@@ -83,14 +100,16 @@ export default function KasRequestPendapatanPage({ onBackToModules, onSignOut })
 
     setSaving(true);
     try {
-      createKasTransaction({
+      const claim = createIncomeClaim({
         date,
-        type: 'masuk',
-        category: 'rental_unit',
-        unitAlat: equipments[0]?.unitAlat || '-',
-        nominal: grandTotal,
-        description: `[Request Pendapatan] ${project} - ${subProject} (${clientName})`,
+        project,
+        subProject,
+        clientName,
+        equipment: equipments,
+        materials,
+        totalAmount: grandTotal,
       });
+      sessionStorage.setItem('kas-notice', `${claim.claimCode} tersimpan sebagai claim pending. Cash-in menunggu approval modul finance.`);
       navigate('alat/kas');
     } catch (err) {
       setError(err.message);
@@ -120,14 +139,15 @@ export default function KasRequestPendapatanPage({ onBackToModules, onSignOut })
             <span>/</span>
             <a href="#/alat/kas" className="hover:text-teal-700 transition-colors">Kas</a>
             <span>/</span>
-            <span className="text-slate-900 font-semibold">Request Pendapatan</span>
+            <span className="text-slate-900 font-semibold">Claim Pendapatan</span>
           </nav>
 
           {/* Header & Estimasi Summary Card */}
           <div className="mb-6 grid gap-4 md:grid-cols-[1fr_auto]">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Request Pendapatan Project</h1>
-              <p className="mt-1 text-xs text-slate-500">Form pengajuan klaim pendapatan sewa unit & operasional ke Kas Pusat</p>
+              <h1 className="text-2xl font-bold text-slate-900">Claim Pendapatan Project</h1>
+              <p className="mt-1 text-xs text-slate-500">Form klaim pendapatan sewa unit & operasional untuk Kas Alat</p>
+               <p className="mt-1 text-xs text-amber-700">Mode demo: endpoint income claim belum tersedia, sehingga claim ini belum menjadi transaksi cash-in database.</p>
             </div>
             <div className="flex items-center rounded-xl bg-amber-500 p-4 text-white shadow-sm min-w-[260px]">
               <div>
@@ -183,7 +203,7 @@ export default function KasRequestPendapatanPage({ onBackToModules, onSignOut })
                           onChange={(e) => updateEquipment(eq.id, 'unitAlat', e.target.value)}
                           className="input-control mt-1 text-xs"
                         >
-                          {UNIT_OPTIONS.map((u) => (
+                          {unitOptions.map((u) => (
                             <option key={u} value={u}>{u}</option>
                           ))}
                         </select>
@@ -310,7 +330,7 @@ export default function KasRequestPendapatanPage({ onBackToModules, onSignOut })
                 Batal
               </button>
               <button type="submit" disabled={saving} className="btn btn-primary">
-                {saving ? 'Mengajukan...' : '▷ Submit Request Pendapatan'}
+                {saving ? 'Mengajukan...' : '▷ Submit Claim Pendapatan'}
               </button>
             </div>
 

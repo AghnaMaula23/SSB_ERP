@@ -1,22 +1,10 @@
 import { useState } from 'react';
-import { fixIssue } from '../services/alatService.js';
+import DamageLogActionModal from '../information/components/DamageLogActionModal.jsx';
+import { hasPermission } from '../../../services/permissions.js';
 
 export default function ActiveIssuesCard({ issues = [], onFixed }) {
-  const [fixingId, setFixingId] = useState(null);
-  const [error, setError] = useState('');
-
-  const handleFix = async (issueId) => {
-    setError('');
-    setFixingId(issueId);
-    try {
-      await fixIssue(issueId);
-      onFixed(issueId);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setFixingId(null);
-    }
-  };
+  const [selectedIssue, setSelectedIssue] = useState(null);
+  const canUpdate = hasPermission('damage:update');
 
   return (
     <section className="card-panel" aria-labelledby="active-issues-title">
@@ -28,8 +16,6 @@ export default function ActiveIssuesCard({ issues = [], onFixed }) {
       </div>
 
       <div className="p-6">
-        {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">{error}</div>}
-        
         {issues.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-xs text-slate-500">
             No active damage issues reported for this equipment unit.
@@ -52,18 +38,29 @@ export default function ActiveIssuesCard({ issues = [], onFixed }) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleFix(issue.id)}
-                  disabled={fixingId === issue.id}
+                  onClick={() => setSelectedIssue(issue)}
+                  disabled={!canUpdate}
+                  title={canUpdate ? 'Resolve damage issue' : 'Anda tidak memiliki izin memperbarui damage log'}
                   className="btn btn-secondary py-1.5 px-3 text-xs shrink-0"
                 >
-                  {fixingId === issue.id ? 'Resolving...' : 'Mark Resolved'}
+                  Mark Resolved
                 </button>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      <DamageLogActionModal
+        key={selectedIssue?.id || 'no-issue'}
+        log={selectedIssue}
+        action="resolve"
+        onClose={() => setSelectedIssue(null)}
+        onSaved={() => {
+          if (selectedIssue && onFixed) onFixed(selectedIssue.id);
+          setSelectedIssue(null);
+        }}
+      />
     </section>
   );
 }
-

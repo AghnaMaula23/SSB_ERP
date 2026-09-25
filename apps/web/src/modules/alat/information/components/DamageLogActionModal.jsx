@@ -3,19 +3,32 @@ import { cancelDamageLog, resolveDamageLog } from '../services/informationServic
 
 const initialResolve = { maintenanceType: 'repair', actionDescription: '', performedBy: '' };
 
+function todayDate() {
+  const date = new Date();
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60 * 1000).toISOString().slice(0, 10);
+}
+
 export default function DamageLogActionModal({ log, action, onClose, onSaved }) {
   const [form, setForm] = useState(initialResolve);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
   if (!log || !action) return null;
 
   const isResolve = action === 'resolve';
   const update = (event) => { const { name, value } = event.target; setForm((current) => ({ ...current, [name]: value })); setError(''); };
   const submit = async (event) => {
-    event.preventDefault(); setError(''); setLoading(true);
+    event.preventDefault();
+    if (isResolve && !form.actionDescription.trim()) {
+      setError('Deskripsi tindakan wajib diisi.');
+      return;
+    }
+    setError('');
+    setLoading(true);
     try {
-      if (isResolve) await resolveDamageLog(log.id, { ...form, actionDescription: form.actionDescription.trim(), maintenanceDate: new Date().toISOString().slice(0, 10) });
+      if (isResolve) await resolveDamageLog(log.id, { ...form, actionDescription: form.actionDescription.trim(), maintenanceDate: todayDate() });
       else await cancelDamageLog(log.id, notes.trim());
       onSaved(action); onClose();
     } catch (requestError) { setError(requestError.message); } finally { setLoading(false); }

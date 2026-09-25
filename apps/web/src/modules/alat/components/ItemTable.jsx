@@ -1,20 +1,21 @@
+import { equipmentStatusLabel, normalizeEquipmentStatus } from '../services/alatService.js';
+
 const statusStyles = {
-  Available: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  'Not Available': 'bg-slate-100 text-slate-700 border-slate-200',
-  'Delivery to Palembang': 'bg-blue-50 text-blue-700 border-blue-200',
-  'Delivery to Subang': 'bg-blue-50 text-blue-700 border-blue-200',
-  'Maintenance Due': 'bg-amber-50 text-amber-700 border-amber-200',
+  operational: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  maintenance: 'bg-amber-50 text-amber-700 border-amber-200',
+  retired: 'bg-slate-100 text-slate-700 border-slate-200',
 };
 
 function StatusBadge({ status }) {
+  const canonicalStatus = normalizeEquipmentStatus(status);
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusStyles[status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-      {status}
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusStyles[canonicalStatus] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+      {equipmentStatusLabel(canonicalStatus)}
     </span>
   );
 }
 
-export default function ItemTable({ items, totalItems, page, pageSize, onPageChange, onViewDetails, onDelete }) {
+export default function ItemTable({ items, totalItems, page, pageSize, onPageChange, onViewDetails, onDelete, canDelete = true }) {
   const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
   const firstItem = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const lastItem = Math.min(page * pageSize, totalItems);
@@ -62,15 +63,17 @@ export default function ItemTable({ items, totalItems, page, pageSize, onPageCha
                     >
                       ↗
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(item)}
-                      className="btn btn-ghost px-2 py-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
-                      aria-label={`Archive ${item.itemCode}`}
-                      title="Archive Item"
-                    >
-                      ✕
-                    </button>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => onDelete(item)}
+                        className="btn btn-ghost px-2 py-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                        aria-label={`Archive ${item.itemCode}`}
+                        title="Archive Item"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -89,8 +92,8 @@ export default function ItemTable({ items, totalItems, page, pageSize, onPageCha
         <div className="flex items-center gap-1" aria-label="Pagination">
           <button
             type="button"
-            onClick={() => onPageChange(page - 1)}
             disabled={page === 1}
+            onClick={() => onPageChange(page - 1)}
             className="btn btn-secondary px-2.5 py-1 text-xs"
             aria-label="Previous page"
           >
@@ -99,8 +102,8 @@ export default function ItemTable({ items, totalItems, page, pageSize, onPageCha
           <span className="px-2 font-medium">Page {page} of {pageCount}</span>
           <button
             type="button"
-            onClick={() => onPageChange(page + 1)}
             disabled={page === pageCount}
+            onClick={() => onPageChange(page + 1)}
             className="btn btn-secondary px-2.5 py-1 text-xs"
             aria-label="Next page"
           >
@@ -111,4 +114,3 @@ export default function ItemTable({ items, totalItems, page, pageSize, onPageCha
     </div>
   );
 }
-

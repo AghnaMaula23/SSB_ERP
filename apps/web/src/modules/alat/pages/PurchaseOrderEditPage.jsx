@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import AlatHeader from '../components/AlatHeader.jsx';
 import AlatSidebar from '../components/AlatSidebar.jsx';
 import { getPurchaseOrderById, updatePurchaseOrder } from '../services/purchaseOrderService.js';
@@ -6,38 +6,23 @@ import { getPurchaseOrderById, updatePurchaseOrder } from '../services/purchaseO
 export default function PurchaseOrderEditPage({ poId, onBackToModules, onSignOut }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('alat-sidebar-collapsed') === 'true');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const initialOrder = getPurchaseOrderById(poId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [notFound, setNotFound] = useState(false);
+  const [notFound] = useState(!initialOrder);
+  const canEdit = initialOrder?.status === 'pending';
 
-  const [form, setForm] = useState({
-    orderCode: '',
-    date: '',
-    description: '',
-    unitAlat: '',
-    quantity: '',
-    unitPrice: '',
-    notes: '',
-  });
+  const [form, setForm] = useState(() => ({
+    orderCode: initialOrder?.orderCode || '',
+    date: initialOrder?.date || '',
+    description: initialOrder?.description || '',
+    unitAlat: initialOrder?.unitAlat || '',
+    quantity: initialOrder ? String(initialOrder.quantity) : '',
+    unitPrice: initialOrder ? String(initialOrder.unitPrice) : '',
+    notes: initialOrder?.notes || '',
+  }));
 
   const navigate = (route) => { window.location.hash = `/${route}`; };
-
-  useEffect(() => {
-    const po = getPurchaseOrderById(poId);
-    if (!po) {
-      setNotFound(true);
-      return;
-    }
-    setForm({
-      orderCode: po.orderCode,
-      date: po.date,
-      description: po.description,
-      unitAlat: po.unitAlat,
-      quantity: String(po.quantity),
-      unitPrice: String(po.unitPrice),
-      notes: po.notes || '',
-    });
-  }, [poId]);
 
   const update = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
@@ -45,6 +30,10 @@ export default function PurchaseOrderEditPage({ poId, onBackToModules, onSignOut
     e.preventDefault();
     setError('');
 
+    if (!canEdit) {
+      setError('Purchase order sudah diproses modul lain dan tidak dapat diedit dari Divisi Alat.');
+      return;
+    }
     if (!form.description.trim()) { setError('Item / deskripsi pekerjaan wajib diisi.'); return; }
     if (!form.quantity || Number(form.quantity) <= 0) { setError('Jumlah harus lebih dari 0.'); return; }
     if (!form.unitPrice || Number(form.unitPrice) <= 0) { setError('Harga harus lebih dari 0.'); return; }
@@ -124,7 +113,12 @@ export default function PurchaseOrderEditPage({ poId, onBackToModules, onSignOut
               <p className="mt-1 text-xs text-slate-500">Resource Management Workflow</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            {!canEdit && (
+               <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700" role="status">
+                 Status purchase order sudah diproses modul lain. Divisi Alat tidak dapat mengubah, menyetujui, atau menolak dokumen ini.
+               </div>
+             )}
+             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Order Code + Date */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
@@ -187,7 +181,7 @@ export default function PurchaseOrderEditPage({ poId, onBackToModules, onSignOut
                 <button type="button" onClick={() => navigate('alat/purchase-orders')} className="btn btn-secondary">
                   Batal
                 </button>
-                <button type="submit" disabled={saving} className="btn btn-primary">
+                <button type="submit" disabled={saving || !canEdit} className="btn btn-primary">
                   {saving ? 'Menyimpan...' : '💾 Simpan Perubahan'}
                 </button>
               </div>

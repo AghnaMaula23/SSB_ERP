@@ -4,25 +4,19 @@ import AlatSidebar from '../components/AlatSidebar.jsx';
 import ActiveIssuesCard from '../components/ActiveIssuesCard.jsx';
 import ItemInfoForm from '../components/ItemInfoForm.jsx';
 import MaintenanceStatusGrid from '../components/MaintenanceStatusGrid.jsx';
-import { getEquipmentTypes, getItemDetail, updateItem, updateItemStatus } from '../services/alatService.js';
+import { getEquipmentTypes, getItemById, getItemDetail, normalizeEquipmentStatus, updateItem, updateItemStatus } from '../services/alatService.js';
+import { hasPermission } from '../../../services/permissions.js';
 
-const emptyItem = { itemCode: '', equipmentTypeId: '', jenis: '', merk: '', model: '', status: 'available' };
+const emptyItem = { itemCode: '', equipmentTypeId: '', jenis: '', merk: '', model: '', status: 'operational' };
 
 function normalizeItem(data, itemId) {
-  const statusMap = {
-    Available: 'available',
-    'Not Available': 'assigned_to_location',
-    'Delivery to Palembang': 'assigned_to_location',
-    'Delivery to Subang': 'assigned_to_location',
-    'Maintenance Due': 'maintenance',
-  };
   return {
     itemCode: data.itemCode || data.assetCode || itemId,
     equipmentTypeId: data.equipmentTypeId || data.equipmentType?.id || '',
     jenis: data.jenis || data.equipmentType?.typeName || '',
     merk: data.merk || data.brand || '',
     model: data.model || data.typeModel || '',
-    status: statusMap[data.status] || statusMap[data.currentStatus] || data.status || data.currentStatus || 'available',
+    status: normalizeEquipmentStatus(data.status || data.currentStatus),
   };
 }
 
@@ -36,8 +30,10 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [subresourceWarnings, setSubresourceWarnings] = useState([]);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const canUpdate = hasPermission('equipment:update');
 
   useEffect(() => {
     let cancelled = false;
@@ -46,9 +42,10 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
         if (cancelled) return;
         setEquipmentTypes(types || []);
         setItem(normalizeItem(data, itemId));
-        setSavedStatus(data.currentStatus || data.status || 'available');
+        setSavedStatus(normalizeEquipmentStatus(data.currentStatus || data.status));
         setMaintenanceMetrics(data.maintenanceMetrics || data.maintenance || []);
         setIssues(data.activeIssues || data.activeIssueLogs || []);
+        setSubresourceWarnings(data.subresourceErrors || []);
       })
       .catch((error) => {
         if (!cancelled) setLoadError(error.message);
@@ -81,7 +78,7 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
       let statusUpdated = {};
       if (item.status !== savedStatus) {
         statusUpdated = await updateItemStatus(itemId, item.status);
-        setSavedStatus(item.status);
+        setSavedStatus(normalizeEquipmentStatus(item.status));
       }
       setItem((currentItem) => ({ ...currentItem, ...normalizeItem({ ...updated, ...statusUpdated }, itemId) }));
     } catch (error) {
@@ -91,8 +88,16 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
     }
   };
 
-  const handleIssueFixed = (issueId) => {
+  const handleIssueFixed = async (issueId) => {
     setIssues((currentIssues) => currentIssues.filter((issue) => issue.id !== issueId));
+    try {
+      const freshItem = await getItemById(itemId);
+      const normalized = normalizeItem(freshItem, itemId);
+      setItem((currentItem) => ({ ...currentItem, ...normalized }));
+      setSavedStatus(normalized.status);
+    } catch (error) {
+      setFormError(`Status equipment tidak dapat diperbarui: ${error.message}`);
+    }
   };
 
   return (
@@ -126,10 +131,15 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
 
           {loading && <div className="card-panel p-12 text-center text-sm text-slate-500">Loading item specifications...</div>}
           {!loading && loadError && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700" role="alert">{loadError}</div>}
-          {!loading && !loadError && (
+          {!loading && subresourceWarnings.length > 0 && (
+             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-700" role="status">
+               Sebagian data equipment tidak dapat dimuat: {subresourceWarnings.join('; ')}
+             </div>
+           )}
+           {!loading && !loadError && (
             <>
-              <ItemInfoForm item={item} form={item} equipmentTypes={equipmentTypes} saving={saving} error={formError} onChange={handleFormChange} onSubmit={handleSave} />
-              <MaintenanceStatusGrid metrics={maintenanceMetrics} status={item.status === 'maintenance' ? 'Maintenance' : 'Running Well'} />
+              <ItemInfoForm item={item} form={item} equipmentTypes={equipmentTypes} saving={saving} error={formError} readOnly={!canUpdate} onChange={handleFormChange} onSubmit={handleSave} />
+              <MaintenanceStatusGrid metrics={maintenanceMetrics} status={item.status === 'maintenance' ? 'Maintenance Due' : 'Running Well'} />
               <ActiveIssuesCard issues={issues} onFixed={handleIssueFixed} />
             </>
           )}

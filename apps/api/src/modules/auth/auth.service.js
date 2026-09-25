@@ -22,7 +22,11 @@ const login = async ({ login: loginField, password }) => {
   const user = await prisma.user.findFirst({
     where: { OR: [{ username: loginField }, { email: loginField }] },
     include: {
-      userRoles: { include: { role: true } }
+      userRoles: {
+        include: {
+          role: { include: { permissions: { include: { permission: true } } } },
+        },
+      }
     }
   });
 
@@ -45,6 +49,9 @@ const login = async ({ login: loginField, password }) => {
       email: user.email,
       fullName: user.fullName,
       roles: user.userRoles.map(ur => ur.role.code),
+      permissions: [...new Set(
+        user.userRoles.flatMap(ur => ur.role.permissions.map(rp => `${rp.permission.module}:${rp.permission.action}`))
+      )],
     }
   };
 };

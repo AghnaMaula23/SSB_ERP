@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { equipmentStatusLabel } from '../services/alatService.js';
 
 const capacityOptions = ['Kelas 10 Ton', 'Kelas 20 Ton', 'Kelas >20 Ton'];
 
@@ -54,7 +55,7 @@ export default function FilterItemModal({ isOpen, options, value, onApply, onRes
               className="input-control text-xs"
             >
               <option value="">All Statuses</option>
-              {options.statuses.map((status) => <option key={status} value={status}>{status}</option>)}
+              {options.statuses.map((status) => <option key={status} value={status}>{equipmentStatusLabel(status)}</option>)}
             </select>
           </FilterSection>
 

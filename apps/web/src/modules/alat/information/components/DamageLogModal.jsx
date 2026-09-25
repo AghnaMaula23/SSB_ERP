@@ -4,6 +4,12 @@ import { createDamageLog, getInformationItems, updateDamageLog } from '../servic
 const emptyForm = { equipmentItemId: '', description: '', sparePartSource: 'warehouse', mechanicTeam: 'internal', stopsOperation: false };
 const formFromLog = (log) => ({ equipmentItemId: String(log?.equipmentItemId || ''), description: log?.description || '', sparePartSource: log?.sparePartSource || 'warehouse', mechanicTeam: log?.mechanicTeam || 'internal', stopsOperation: Boolean(log?.stopsOperation) });
 
+function todayDate() {
+  const date = new Date();
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60 * 1000).toISOString().slice(0, 10);
+}
+
 export default function DamageLogModal({ isOpen, onClose, onSaved, log = null }) {
   const isEdit = Boolean(log);
   const [form, setForm] = useState(emptyForm);
@@ -46,7 +52,7 @@ export default function DamageLogModal({ isOpen, onClose, onSaved, log = null })
       };
       const saved = isEdit
         ? await updateDamageLog(log.id, payload)
-        : await createDamageLog({ ...payload, equipmentItemId: Number(form.equipmentItemId), damageDate: new Date().toISOString().slice(0, 10) });
+        : await createDamageLog({ ...payload, equipmentItemId: Number(form.equipmentItemId), damageDate: todayDate() });
       onSaved(saved);
       setForm(emptyForm);
       onClose();
