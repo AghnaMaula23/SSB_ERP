@@ -1,6 +1,7 @@
 import { apiRequest } from '../../../services/api.js';
 
 const API_PREFIX = import.meta.env.VITE_ALAT_API_PREFIX || '/api/equipment';
+const CUSTOM_ASPECTS_KEY = 'maintenance_custom_aspects';
 
 const statusOrder = { overdue: 4, due: 3, warning: 2, normal: 1, inactive: 0 };
 
@@ -34,6 +35,26 @@ function groupSettings(settings) {
   return [...grouped.values()];
 }
 
+function getCustomAspects() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CUSTOM_ASPECTS_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function createMaintenanceAspect({ aspectCode, aspectName, defaultThresholdValue }) {
+  const rows = getCustomAspects();
+  const code = String(aspectCode || '').trim().toUpperCase();
+  const name = String(aspectName || '').trim();
+  if (!code || !name) throw new Error('Kode dan nama aspek wajib diisi.');
+  if (rows.some((row) => row.aspectCode === code)) throw new Error('Kode aspek sudah dipakai.');
+  const aspect = { id: `custom-${Date.now()}`, aspectCode: code, aspectName: name, defaultThresholdValue: Number(defaultThresholdValue) || null, warningLeadValue: 50, isActive: true, isDummy: true };
+  localStorage.setItem(CUSTOM_ASPECTS_KEY, JSON.stringify([...rows, aspect]));
+  return aspect;
+}
+
 export async function getMaintenanceAspects() {
   const rows = [];
   let page = 1;
@@ -45,7 +66,7 @@ export async function getMaintenanceAspects() {
     page += 1;
   } while (rows.length < total && page <= 1000);
   if (rows.length < total) throw new Error('Data maintenance melebihi batas pagination.');
-  return rows;
+  return [...rows, ...getCustomAspects().filter((aspect) => !rows.some((row) => row.aspectCode === aspect.aspectCode))];
 }
 
 export async function getMaintenanceOverview() {
@@ -86,9 +107,37 @@ export async function getItemMaintenanceSettings(itemId) {
   return rows;
 }
 
+export async function getMaintenancePerformedByOptions() {
+  try {
+    const result = await apiRequest('/api/users?limit=100&isActive=true');
+    const users = (result.data || []).map((user) => ({
+      value: user.fullName || user.username,
+      label: `${user.fullName || user.username}${user.username && user.fullName ? ` · ${user.username}` : ''}`,
+    })).filter((option) => option.value);
+    return users.length ? users : [
+      { value: 'Tim Mekanik Internal', label: 'Tim Mekanik Internal' },
+      { value: 'Admin Divisi Alat', label: 'Admin Divisi Alat' },
+    ];
+  } catch (error) {
+    if (error?.status === 401) throw error;
+    return [
+      { value: 'Tim Mekanik Internal', label: 'Tim Mekanik Internal' },
+      { value: 'Admin Divisi Alat', label: 'Admin Divisi Alat' },
+    ];
+  }
+}
+
 export function createMaintenanceRecord(payload) {
   return apiRequest(`${API_PREFIX}/maintenance-records`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+}
+
+/** Log tindakan service/maintenance yang sudah pernah dilakukan. */
+export async function getMaintenanceRecords({ equipmentItemId, limit = 20 } = {}) {
+  const query = new URLSearchParams({ page: '1', limit: String(limit), sort: 'maintenanceDate', order: 'desc' });
+  if (equipmentItemId) query.set('equipmentItemId', String(equipmentItemId));
+  const result = await apiRequest(`${API_PREFIX}/maintenance-records?${query}`);
+  return result.data || [];
 }

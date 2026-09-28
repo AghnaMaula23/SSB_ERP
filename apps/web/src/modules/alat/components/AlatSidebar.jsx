@@ -45,7 +45,7 @@ export default function AlatSidebar({ collapsed, mobileOpen = false, onToggle, o
           {collapsed ? '›' : '‹'}
         </button>
 
-        <nav className="flex-1 px-3 py-4" aria-label="Equipment navigation">
+        <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4" aria-label="Equipment navigation">
           <ul className="space-y-1">
             {navigationItems.map((item) => {
               const isActive = item.route === activeRoute;

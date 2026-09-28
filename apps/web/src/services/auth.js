@@ -15,6 +15,9 @@ export function clearSession() {
   localStorage.removeItem('kas_seq');
   localStorage.removeItem('income_claims');
   localStorage.removeItem('income_claim_seq');
+  localStorage.removeItem('maintenance_reset_purchase_refs');
+  localStorage.removeItem('maintenance_type_thresholds');
+  localStorage.removeItem('maintenance_custom_aspects');
 }
 
 export async function login(credentials) {

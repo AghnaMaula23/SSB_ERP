@@ -189,53 +189,57 @@ button, a, input, select {
   font-size: 0.875rem;
 }
 
+/* Damage log table — fixed layout with explicit column classes so the desktop
+   and mobile variants (different column counts) never fight each other. */
 .damage-log-table {
-  min-width: 1120px;
+  width: 100%;
   table-layout: fixed;
 }
 
 .damage-log-table th,
 .damage-log-table td {
   vertical-align: middle;
+  word-break: break-word;
 }
 
-.damage-log-table th:nth-child(1),
-.damage-log-table td:nth-child(1) {
+.damage-log-table tbody tr:nth-child(even) {
+  background-color: #fcfdfe;
+}
+
+.damage-log-table tbody tr:hover {
+  background-color: #f1f5f9;
+}
+
+.damage-log-table--wide {
+  min-width: 34rem;
+}
+
+.damage-log-table .col-no {
   width: 3.5rem;
 }
 
-.damage-log-table th:nth-child(2),
-.damage-log-table td:nth-child(2) {
-  width: 9rem;
-  white-space: nowrap;
+.damage-log-table .col-code {
+  width: 9.5rem;
 }
 
-.damage-log-table th:nth-child(3),
-.damage-log-table td:nth-child(3) {
-  width: 20rem;
+.damage-log-table .col-date {
+  width: 7.5rem;
 }
 
-.damage-log-table th:nth-child(4),
-.damage-log-table td:nth-child(4) {
-  width: 8rem;
-  white-space: nowrap;
+.damage-log-table .col-level {
+  width: 6.5rem;
 }
 
-.damage-log-table th:nth-child(5),
-.damage-log-table td:nth-child(5),
-.damage-log-table th:nth-child(6),
-.damage-log-table td:nth-child(6),
-.damage-log-table th:nth-child(7),
-.damage-log-table td:nth-child(7),
-.damage-log-table th:nth-child(8),
-.damage-log-table td:nth-child(8) {
-  width: 8.5rem;
-  white-space: nowrap;
+.damage-log-table .col-status {
+  width: 7.5rem;
 }
 
-.damage-log-table th:nth-child(9),
-.damage-log-table td:nth-child(9) {
-  width: 8rem;
+.damage-log-table .col-actions {
+  width: 6.5rem;
+}
+
+.damage-log-table .col-actions-mobile {
+  width: 7rem;
 }
 
 .table-modern th {
@@ -264,9 +268,43 @@ button, a, input, select {
   background-color: #f8fafc;
 }
 
+/* Maintenance table — four columns only, so the widths are pinned to keep
+   the status & action columns from drifting into a big empty gap. */
+.maintenance-table {
+  table-layout: fixed;
+}
+
+.maintenance-table th,
+.maintenance-table td {
+  vertical-align: middle;
+}
+
+.maintenance-table .col-index {
+  width: 5rem;
+}
+
+.maintenance-table .col-status {
+  width: 14rem;
+}
+
+.maintenance-table .col-actions {
+  width: 9rem;
+}
+
+.maintenance-table tbody tr:nth-child(even) {
+  background-color: #fcfdfe;
+}
+
+.maintenance-table tbody tr:hover {
+  background-color: #f1f5f9;
+}
+
+/* Fade only. A lingering `transform` on the page root would become the
+   containing block of the fixed sidebar & header, making them scroll with
+   the page — so the animation must never leave a transform behind. */
 @keyframes page-enter {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .page-enter {

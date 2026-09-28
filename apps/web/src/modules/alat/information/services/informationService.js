@@ -11,6 +11,10 @@ export async function getDamageLogs({ page = 1, limit = 10, search, status, spar
   return apiRequest(`${API_PREFIX}/damage-logs?${query}`);
 }
 
+export function getDamageLogById(id) {
+  return apiRequest(`${API_PREFIX}/damage-logs/${id}`);
+}
+
 export async function getInformationItems() {
   const items = [];
   let page = 1;

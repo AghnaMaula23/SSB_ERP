@@ -249,31 +249,30 @@ export default function KasPage({ onBackToModules, onSignOut }) {
           <section aria-label="Jurnal Mutasi Kas">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-sm font-bold text-slate-900">Jurnal Mutasi Kas Alat</h2>
-              <div className="flex items-center gap-2">
-                <div className="relative">
+              <div className="grid w-full grid-cols-[1fr_1fr_auto] items-center gap-2 sm:flex sm:w-auto sm:flex-nowrap">
+                <div className="relative col-span-3 sm:col-span-1 sm:w-44">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">🔍</span>
                   <input
                     value={searchJournal}
                     onChange={(e) => { setSearchJournal(e.target.value); setPage(1); }}
-                    className="input-control pl-8 text-xs"
+                    className="input-control w-full pl-8 text-xs"
                     placeholder="Search journal..."
-                    style={{ width: 180 }}
                   />
                 </div>
-                <select value={filterType} onChange={(e) => { setFilterType(e.target.value); setPage(1); }} className="input-control text-xs" style={{ width: 120 }}>
+                <select value={filterType} onChange={(e) => { setFilterType(e.target.value); setPage(1); }} className="input-control w-full text-xs sm:w-28">
                   <option value="all">All Types</option>
                   {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
-                <select value={filterCategory} onChange={(e) => { setFilterCategory(e.target.value); setPage(1); }} className="input-control text-xs" style={{ width: 130 }}>
+                <select value={filterCategory} onChange={(e) => { setFilterCategory(e.target.value); setPage(1); }} className="input-control w-full text-xs sm:w-32">
                   <option value="all">All Categories</option>
                   {CATEGORY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
-                <button type="button" onClick={handleExport} className="btn btn-ghost px-2 py-1 text-xs" title="Export">↓</button>
+                <button type="button" onClick={handleExport} className="btn btn-ghost px-2.5 py-1 text-xs" title="Export">↓</button>
               </div>
             </div>
 
             <div className="table-container">
-              <table className="table-modern">
+              <table className="table-modern hidden md:table">
                 <thead>
                   <tr>
                     <th className="w-12 text-center">No</th>
@@ -319,11 +318,10 @@ export default function KasPage({ onBackToModules, onSignOut }) {
                             <button
                               type="button"
                               onClick={() => handleDelete(row)}
-                               disabled={row.source === 'income_claim' || row.source === 'purchase_request'}
-                               title={row.source === 'manual' ? 'Delete manual transaction' : 'Transaksi otomatis tidak dapat dihapus'}
+                              disabled={row.source === 'income_claim' || row.source === 'purchase_request'}
                               title={row.source === 'income_claim' || row.source === 'purchase_request' ? 'Transaksi otomatis tidak dapat dihapus' : 'Delete transaksi manual'}
                               className="flex h-7 w-7 items-center justify-center rounded-md text-red-400 hover:bg-red-50 hover:text-red-600"
-                            >🗑️</button>
+                            >🗑</button>
                           </div>
                         </td>
                       </tr>
@@ -337,7 +335,62 @@ export default function KasPage({ onBackToModules, onSignOut }) {
                   )}
                 </tbody>
               </table>
-              <footer className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+
+              <table className="table-modern w-full table-fixed md:hidden">
+                <thead>
+                  <tr>
+                    <th className="w-12 text-center">No</th>
+                    <th>Transaksi</th>
+                    <th className="w-28 text-right">Nominal</th>
+                    <th className="w-14 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleRows.length > 0 ? (
+                    visibleRows.map((row, idx) => (
+                      <tr key={row.id}>
+                        <td className="text-center font-mono text-xs font-semibold text-slate-400">
+                          {String((page - 1) * PAGE_SIZE + idx + 1).padStart(2, '0')}
+                        </td>
+                        <td>
+                          <div className="flex items-start gap-2.5">
+                            <span className={`mt-0.5 h-9 w-1 shrink-0 rounded-full ${row.type === 'masuk' ? 'bg-emerald-400' : 'bg-orange-400'}`} aria-hidden="true" />
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-semibold text-slate-900">{row.description || sourceLabel(row.source)}</p>
+                              <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                                {formatDate(row.date)} · {categoryLabel(row.category)}
+                              </p>
+                              <p className="mt-0.5 truncate font-mono text-[10px] text-slate-400">
+                                {sourceLabel(row.source)}{row.sourceId ? ` · ${row.sourceId}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className={`whitespace-nowrap text-right text-xs font-semibold ${row.type === 'masuk' ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {row.type === 'masuk' ? '+' : '-'} {formatRupiah(row.nominal)}
+                        </td>
+                        <td className="text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(row)}
+                            disabled={row.source === 'income_claim' || row.source === 'purchase_request'}
+                            title={row.source === 'income_claim' || row.source === 'purchase_request' ? 'Transaksi otomatis tidak dapat dihapus' : 'Delete transaksi manual'}
+                            aria-label={`Hapus transaksi ${row.transactionCode || row.id}`}
+                            className="flex h-7 w-7 items-center justify-center rounded-md text-red-400 hover:bg-red-50 hover:text-red-600"
+                          >🗑</button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="py-10 text-center text-sm text-slate-500">
+                        Tidak ada transaksi kas yang cocok dengan filter.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+              <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
                 <span>Showing {visibleRows.length} of {rows.length} transactions</span>
                 <div className="flex items-center gap-2">
                   <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="btn btn-ghost px-2 py-1 text-xs">← Prev</button>

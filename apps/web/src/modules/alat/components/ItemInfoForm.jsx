@@ -1,6 +1,7 @@
 import { EQUIPMENT_STATUS_OPTIONS } from '../services/alatService.js';
 
 export default function ItemInfoForm({ item, form, equipmentTypes = [], saving, error, readOnly = false, onChange, onSubmit }) {
+  const hasSelectedType = equipmentTypes.some((type) => String(type.id) === String(form.equipmentTypeId || ''));
   return (
     <section className="card-panel" aria-labelledby="item-information-title">
       <div className="flex items-center gap-3 border-b border-slate-200 px-6 py-4">
@@ -26,7 +27,7 @@ export default function ItemInfoForm({ item, form, equipmentTypes = [], saving, 
               disabled={readOnly}
               className="input-control mt-1 text-xs"
             >
-              <option value="">Select Jenis / Category</option>
+              {!hasSelectedType && <option value="">Select Jenis / Category</option>}
               {equipmentTypes.map((type) => (
                 <option key={type.id} value={type.id}>
                   {type.typeName}

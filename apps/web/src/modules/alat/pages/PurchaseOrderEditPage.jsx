@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AlatHeader from '../components/AlatHeader.jsx';
 import AlatSidebar from '../components/AlatSidebar.jsx';
 import { getPurchaseOrderById, updatePurchaseOrder } from '../services/purchaseOrderService.js';
+import ActionButton from '../../../components/ActionButton.jsx';
 
 export default function PurchaseOrderEditPage({ poId, onBackToModules, onSignOut }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('alat-sidebar-collapsed') === 'true');
@@ -31,7 +32,7 @@ export default function PurchaseOrderEditPage({ poId, onBackToModules, onSignOut
     setError('');
 
     if (!canEdit) {
-      setError('Purchase order sudah diproses modul lain dan tidak dapat diedit dari Divisi Alat.');
+      setError('Purchase order sudah diproses dan tidak dapat diedit dari Divisi Alat.');
       return;
     }
     if (!form.description.trim()) { setError('Item / deskripsi pekerjaan wajib diisi.'); return; }
@@ -72,9 +73,7 @@ export default function PurchaseOrderEditPage({ poId, onBackToModules, onSignOut
           <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
             <div className="card-panel p-12 text-center">
               <p className="text-sm text-slate-500">Purchase order tidak ditemukan.</p>
-              <button type="button" onClick={() => navigate('alat/purchase-orders')} className="btn btn-primary mt-4 text-xs">
-                ← Kembali ke Purchase Order
-              </button>
+              <ActionButton kind="back" label="Kembali ke daftar purchase order" onClick={() => navigate('alat/purchase-orders')} className="mt-4" />
             </div>
           </div>
         </main>
@@ -115,7 +114,7 @@ export default function PurchaseOrderEditPage({ poId, onBackToModules, onSignOut
 
             {!canEdit && (
                <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700" role="status">
-                 Status purchase order sudah diproses modul lain. Divisi Alat tidak dapat mengubah, menyetujui, atau menolak dokumen ini.
+                 Status purchase order sudah diproses. Divisi Alat tidak dapat mengubah, menyetujui, atau menolak dokumen ini.
                </div>
              )}
              <form onSubmit={handleSubmit} className="space-y-5">

@@ -2,13 +2,18 @@ import { useCallback, useEffect, useState } from 'react';
 import Login from './pages/Login.jsx';
 import ModuleSelection from './pages/ModuleSelection.jsx';
 import ItemsPage from './modules/alat/pages/ItemsPage.jsx';
+import RegisterItemPage from './modules/alat/pages/RegisterItemPage.jsx';
 import ItemDetailPage from './modules/alat/pages/ItemDetailPage.jsx';
 import InformationPage from './modules/alat/information/pages/InformationPage.jsx';
+import DamageLogFormPage from './modules/alat/information/pages/DamageLogFormPage.jsx';
+import DamageLogDetailPage from './modules/alat/information/pages/DamageLogDetailPage.jsx';
 import MaintenancePage from './modules/alat/pages/MaintenancePage.jsx';
+import MaintenanceThresholdPage from './modules/alat/pages/MaintenanceThresholdPage.jsx';
 import ResetMaintenancePage from './modules/alat/pages/ResetMaintenancePage.jsx';
 import PurchaseOrderPage from './modules/alat/pages/PurchaseOrderPage.jsx';
 import PurchaseOrderCreatePage from './modules/alat/pages/PurchaseOrderCreatePage.jsx';
 import PurchaseOrderEditPage from './modules/alat/pages/PurchaseOrderEditPage.jsx';
+import PurchaseOrderDetailPage from './modules/alat/pages/PurchaseOrderDetailPage.jsx';
 import KasPage from './modules/alat/pages/KasPage.jsx';
 import KasClaimPendapatanPage from './modules/alat/pages/KasClaimPendapatanPage.jsx';
 import { clearSession, getCurrentUser } from './services/auth.js';
@@ -30,13 +35,19 @@ function isKnownRoute(route) {
   return route === 'login' ||
     route === 'modules' ||
     route === 'alat/items' ||
+    route === 'alat/items/register' ||
     /^\/alat\/items\/\d+\/?$/.test(`/${route}`) ||
     route === 'alat/information' ||
+    route === 'alat/information/create' ||
+    /^\/alat\/information\/\d+\/?$/.test(`/${route}`) ||
+    /^alat\/information\/\d+\/edit\/?$/.test(route) ||
     route === 'alat/maintenance' ||
+    route === 'alat/maintenance/thresholds' ||
     /^alat\/maintenance\/reset\/\d+\/?$/.test(route) ||
     route === 'alat/purchase-orders' ||
     route === 'alat/purchase-orders/create' ||
     /^alat\/purchase-orders\/\d+\/edit\/?$/.test(route) ||
+    /^alat\/purchase-orders\/\d+\/?$/.test(route) ||
     route === 'alat/kas' ||
     route === 'alat/kas/claim-pendapatan' ||
     route === 'alat/kas/request-pendapatan';
@@ -133,18 +144,31 @@ export default function App() {
   if (route === 'login') return <Login onLoginSuccess={({ user: loggedInUser }) => { setUser(loggedInUser); setAuthStatus('authenticated'); navigate('modules'); }} />;
   if (route === 'modules') return <ModuleSelection user={user || {}} onSelectModule={navigate} onSignOut={signOut} />;
   if (route === 'alat/items') return <ItemsPage onBackToModules={() => navigate('modules')} onSignOut={signOut} onViewDetails={(itemId) => navigate(`alat/items/${itemId}`)} />;
+  if (route === 'alat/items/register') return <RegisterItemPage onBackToItems={() => navigate('alat/items')} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (route.startsWith('alat/items/')) return <ItemDetailPage key={route} itemId={route.split('/')[2]} onBackToItems={() => navigate('alat/items')} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (route === 'alat/information') return <InformationPage onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (route === 'alat/information/create') return <DamageLogFormPage onBack={() => navigate('alat/information')} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (route.startsWith('alat/information/') && route.endsWith('/edit')) {
+    const logId = route.split('/')[2];
+    return <DamageLogFormPage key={route} logId={logId} onBack={() => navigate('alat/information')} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  }
+  if (route.startsWith('alat/information/')) {
+    const logId = route.split('/')[2];
+    return <DamageLogDetailPage key={route} logId={logId} onBack={() => navigate('alat/information')} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  }
   if (route === 'alat/maintenance')
     return (
       <MaintenancePage
         key={route}
         initialNotice={maintenanceNotice}
         onNavigateToReset={(unitId) => navigate(`alat/maintenance/reset/${unitId}`)}
+         onNavigateToThresholds={() => navigate('alat/maintenance/thresholds')}
         onBackToModules={() => navigate('modules')}
         onSignOut={signOut}
       />
     );
+  if (route === 'alat/maintenance/thresholds')
+    return <MaintenanceThresholdPage onBack={() => navigate('alat/maintenance')} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (route.startsWith('alat/maintenance/reset/')) {
     const unitId = route.split('/')[3];
     return (
@@ -161,17 +185,21 @@ export default function App() {
     );
   }
   if (route === 'alat/purchase-orders')
-    return <PurchaseOrderPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+    return <PurchaseOrderPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} onViewDetails={(order) => navigate(`alat/purchase-orders/${order.id}`)} />;
   if (route === 'alat/purchase-orders/create')
-    return <PurchaseOrderCreatePage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+    return <PurchaseOrderCreatePage key={route} onBackToModules={() => navigate('modules')} onBackToPurchaseOrders={() => navigate('alat/purchase-orders')} onSignOut={signOut} />;
   if (route.startsWith('alat/purchase-orders/') && route.endsWith('/edit')) {
     const poId = route.split('/')[2];
-    return <PurchaseOrderEditPage key={route} poId={poId} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+    return <PurchaseOrderEditPage key={route} poId={poId} onBackToModules={() => navigate('modules')} onBackToPurchaseOrders={() => navigate('alat/purchase-orders')} onSignOut={signOut} />;
+  }
+  if (route.startsWith('alat/purchase-orders/')) {
+    const poId = route.split('/')[2];
+    return <PurchaseOrderDetailPage key={route} orderId={poId} onBack={() => navigate('alat/purchase-orders')} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   }
   if (route === 'alat/kas')
     return <KasPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (route === 'alat/kas/claim-pendapatan' || route === 'alat/kas/request-pendapatan')
-    return <KasClaimPendapatanPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+    return <KasClaimPendapatanPage key={route} onBackToModules={() => navigate('modules')} onBackToKas={() => navigate('alat/kas')} onSignOut={signOut} />;
 
   return <AppLoading />;
 }

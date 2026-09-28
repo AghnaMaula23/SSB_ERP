@@ -3,6 +3,7 @@ import AlatHeader from '../components/AlatHeader.jsx';
 import AlatSidebar from '../components/AlatSidebar.jsx';
 import StatCard from '../components/StatCard.jsx';
 import { downloadCsv } from '../../../utils/csv.js';
+import ActionButton from '../../../components/ActionButton.jsx';
 import {
   getPurchaseOrders,
   deletePurchaseOrder,
@@ -19,6 +20,12 @@ const statusStyles = {
   rejected: 'bg-red-50 text-red-700 border-red-200',
 };
 
+const statusAccent = {
+  pending: 'bg-amber-400',
+  approved: 'bg-emerald-400',
+  rejected: 'bg-red-400',
+};
+
 function formatRupiah(num) {
   return new Intl.NumberFormat('id-ID').format(num);
 }
@@ -28,7 +35,7 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export default function PurchaseOrderPage({ onBackToModules, onSignOut }) {
+export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDetails }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('alat-sidebar-collapsed') === 'true');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [rows, setRows] = useState([]);
@@ -37,7 +44,7 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut }) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(() => sessionStorage.getItem('purchase-order-notice') || '');
   const [error, setError] = useState('');
 
   const loadData = useCallback(() => {
@@ -54,6 +61,8 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut }) {
     const timeout = window.setTimeout(loadData, 0);
     return () => window.clearTimeout(timeout);
   }, [loadData]);
+
+  useEffect(() => { sessionStorage.removeItem('purchase-order-notice'); }, []);
 
   const navigate = (route) => { window.location.hash = `/${route}`; };
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -78,7 +87,7 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut }) {
 
   const handleDelete = (item) => {
     if (item.status !== 'pending') {
-      setNotice('Purchase order yang sudah diproses modul lain tidak dapat dihapus dari Divisi Alat.');
+      setNotice('Purchase order yang sudah diproses tidak dapat dihapus dari Divisi Alat.');
       return;
     }
     if (!window.confirm(`Hapus purchase order ${item.orderCode}?`)) return;
@@ -123,8 +132,7 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut }) {
                 <span className="text-slate-900 font-semibold">Purchase Order</span>
               </nav>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Purchase Orders</h1>
-              <p className="mt-1 text-xs text-amber-700">Mode demo: endpoint purchase request belum tersedia, sehingga data belum tersimpan di database.</p>
-              <p className="mt-1 text-xs text-slate-500">Approval dan rejection dilakukan oleh modul lain, bukan Divisi Alat.</p>
+              <p className="mt-1 text-xs text-amber-700">Endpoint purchase request akan dipakai otomatis jika tersedia; fallback demo disimpan di browser.</p>
             </div>
             <div className="flex items-center gap-3">
               <button type="button" onClick={handleExport} className="btn btn-secondary text-xs">↓ Export</button>
@@ -135,7 +143,7 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut }) {
           <div className="mb-6 grid gap-4 sm:grid-cols-3">
             <StatCard label="Total Purchase Orders" value={rows.length} tone="blue" />
             <StatCard label="Pending Approval" value={pendingCount} tone="amber" />
-            <StatCard label="Approved by Other Module" value={approvedCount} tone="green" />
+            <StatCard label="Approved" value={approvedCount} tone="green" />
           </div>
 
           {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{notice}</div>}
@@ -170,7 +178,7 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut }) {
           </section>
 
           <div className="table-container">
-            <table className="table-modern">
+            <table className="table-modern hidden md:table">
               <thead>
                 <tr>
                   <th>Order Code</th>
@@ -199,14 +207,8 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut }) {
                     </td>
                     <td className="text-center">
                       <div className="flex items-center justify-center gap-1">
-                        {row.status === 'pending' ? (
-                          <>
-                            <button type="button" onClick={() => navigate(`alat/purchase-orders/${row.id}/edit`)} title="Edit pengajuan" className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800">✏️</button>
-                            <button type="button" onClick={() => handleDelete(row)} title="Hapus pengajuan" className="flex h-7 w-7 items-center justify-center rounded-md text-red-400 hover:bg-red-50 hover:text-red-600">🗑️</button>
-                          </>
-                        ) : (
-                          <span className="text-[10px] text-slate-400">Diproses modul lain</span>
-                        )}
+                        <ActionButton kind="view" label={`Lihat detail ${row.orderCode}`} onClick={() => onViewDetails?.(row)} />
+                        {row.status === 'pending' && <ActionButton kind="delete" tone="danger" label={`Hapus ${row.orderCode}`} onClick={() => handleDelete(row)} />}
                       </div>
                     </td>
                   </tr>
@@ -215,7 +217,43 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut }) {
                 )}
               </tbody>
             </table>
-            <footer className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+
+            <table className="table-modern w-auto md:hidden">
+              <thead>
+                <tr>
+                  <th>Order Code</th>
+                  <th className="w-20 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.length > 0 ? visibleRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <div className="flex items-start gap-2.5">
+                        <span className={`mt-0.5 h-9 w-1 shrink-0 rounded-full ${statusAccent[row.status] || 'bg-slate-300'}`} aria-hidden="true" title={statusLabel(row.status)} />
+                        <div className="min-w-0 max-w-[12rem]">
+                          <p className="font-mono text-xs font-semibold text-slate-900">{row.orderCode}</p>
+                          <p className="mt-0.5 text-[11px] text-slate-500">
+                            <span className="whitespace-nowrap">{formatDate(row.date)}</span>
+                            <span className="mx-1.5 text-slate-300">·</span>
+                            <span>{categoryLabel(row.category)}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <ActionButton kind="view" label={`Lihat detail ${row.orderCode}`} onClick={() => onViewDetails?.(row)} />
+                        {row.status === 'pending' && <ActionButton kind="delete" tone="danger" label={`Hapus ${row.orderCode}`} onClick={() => handleDelete(row)} />}
+                      </div>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={2} className="py-10 text-center text-sm text-slate-500">Tidak ada purchase order yang cocok dengan filter.</td></tr>
+                )}
+              </tbody>
+            </table>
+            <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
               <span>Showing {visibleRows.length} of {rows.length} orders</span>
               <div className="flex items-center gap-2">
                 <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="btn btn-ghost px-2 py-1 text-xs">← Prev</button>

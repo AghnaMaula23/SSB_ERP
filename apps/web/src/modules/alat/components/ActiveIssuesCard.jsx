@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import ActionButton from '../../../components/ActionButton.jsx';
+import { recordActivity } from '../../../services/activityLogService.js';
 import DamageLogActionModal from '../information/components/DamageLogActionModal.jsx';
 import { hasPermission } from '../../../services/permissions.js';
 
-export default function ActiveIssuesCard({ issues = [], onFixed }) {
+export default function ActiveIssuesCard({ issues = [], onFixed, onViewDetails }) {
   const [selectedIssue, setSelectedIssue] = useState(null);
   const canUpdate = hasPermission('damage:update');
 
@@ -36,15 +38,22 @@ export default function ActiveIssuesCard({ issues = [], onFixed }) {
                     {issue.stopsOperation && <span className="font-semibold text-red-600">⛔ Halts Operation</span>}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedIssue(issue)}
-                  disabled={!canUpdate}
-                  title={canUpdate ? 'Resolve damage issue' : 'Anda tidak memiliki izin memperbarui damage log'}
-                  className="btn btn-secondary py-1.5 px-3 text-xs shrink-0"
-                >
-                  Mark Resolved
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <ActionButton
+                    kind="view"
+                    label={`Lihat detail ${issue.damageCode || 'damage log'}`}
+                    onClick={() => onViewDetails?.(issue)}
+                    disabled={!onViewDetails}
+                  />
+                  <ActionButton
+                    kind="resolve"
+                    tone="success"
+                    label={canUpdate ? `Tandai selesai ${issue.damageCode || 'damage log'}` : 'Anda tidak memiliki izin memperbarui damage log'}
+                    onClick={() => setSelectedIssue(issue)}
+                    disabled={!canUpdate}
+                    className="px-3 py-1.5"
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -58,6 +67,13 @@ export default function ActiveIssuesCard({ issues = [], onFixed }) {
         onClose={() => setSelectedIssue(null)}
         onSaved={() => {
           if (selectedIssue && onFixed) onFixed(selectedIssue.id);
+          if (selectedIssue) {
+            recordActivity({
+              module: 'Information',
+              action: 'Active issue diselesaikan',
+              description: `${selectedIssue.damageCode || 'Damage log'} · ${selectedIssue.description || ''}`.slice(0, 160),
+            });
+          }
           setSelectedIssue(null);
         }}
       />

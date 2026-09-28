@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import AlatHeader from '../components/AlatHeader.jsx';
 import AlatSidebar from '../components/AlatSidebar.jsx';
 import ActiveIssuesCard from '../components/ActiveIssuesCard.jsx';
+import ActionButton from '../../../components/ActionButton.jsx';
 import ItemInfoForm from '../components/ItemInfoForm.jsx';
 import MaintenanceStatusGrid from '../components/MaintenanceStatusGrid.jsx';
 import { getEquipmentTypes, getItemById, getItemDetail, normalizeEquipmentStatus, updateItem, updateItemStatus } from '../services/alatService.js';
@@ -12,7 +13,7 @@ const emptyItem = { itemCode: '', equipmentTypeId: '', jenis: '', merk: '', mode
 function normalizeItem(data, itemId) {
   return {
     itemCode: data.itemCode || data.assetCode || itemId,
-    equipmentTypeId: data.equipmentTypeId || data.equipmentType?.id || '',
+    equipmentTypeId: data.equipmentTypeId != null ? String(data.equipmentTypeId) : data.equipmentType?.id != null ? String(data.equipmentType.id) : '',
     jenis: data.jenis || data.equipmentType?.typeName || '',
     merk: data.merk || data.brand || '',
     model: data.model || data.typeModel || '',
@@ -40,8 +41,13 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
     Promise.all([getItemDetail(itemId), getEquipmentTypes()])
       .then(([data, types]) => {
         if (cancelled) return;
-        setEquipmentTypes(types || []);
-        setItem(normalizeItem(data, itemId));
+        const normalizedItem = normalizeItem(data, itemId);
+         const typeOptions = [...(types || [])];
+         if (normalizedItem.equipmentTypeId && !typeOptions.some((type) => String(type.id) === normalizedItem.equipmentTypeId)) {
+           typeOptions.push({ id: normalizedItem.equipmentTypeId, typeName: data.equipmentType?.typeName || normalizedItem.jenis || 'Jenis equipment' });
+         }
+         setEquipmentTypes(typeOptions);
+         setItem(normalizedItem);
         setSavedStatus(normalizeEquipmentStatus(data.currentStatus || data.status));
         setMaintenanceMetrics(data.maintenanceMetrics || data.maintenance || []);
         setIssues(data.activeIssues || data.activeIssueLogs || []);
@@ -124,9 +130,7 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
               </nav>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Equipment Summary — {item.itemCode || itemId}</h1>
             </div>
-            <button type="button" onClick={onBackToItems} className="btn btn-secondary text-xs">
-              ← Back to Inventory
-            </button>
+            <ActionButton kind="back" label="Kembali ke Items Inventory" onClick={onBackToItems} />
           </header>
 
           {loading && <div className="card-panel p-12 text-center text-sm text-slate-500">Loading item specifications...</div>}
@@ -140,7 +144,7 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
             <>
               <ItemInfoForm item={item} form={item} equipmentTypes={equipmentTypes} saving={saving} error={formError} readOnly={!canUpdate} onChange={handleFormChange} onSubmit={handleSave} />
               <MaintenanceStatusGrid metrics={maintenanceMetrics} status={item.status === 'maintenance' ? 'Maintenance Due' : 'Running Well'} />
-              <ActiveIssuesCard issues={issues} onFixed={handleIssueFixed} />
+              <ActiveIssuesCard issues={issues} onFixed={handleIssueFixed} onViewDetails={(issue) => { window.location.hash = `/alat/information/${issue.id}`; }} />
             </>
           )}
         </div>
