@@ -1,5 +1,7 @@
 const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
+const { assertNotFuture } = require('../../utils/date.js');
+const { nextDocumentNumber } = require('../../utils/document-number.js');
 const maintenance = require('./maintenance.service.js');
 
 const DAMAGE_DOC_TYPE = 'DMG';
@@ -179,13 +181,10 @@ const create = async (payload, userId) => {
   if (!item.isActive) throw httpError(`Alat "${item.assetCode}" nonaktif`, 409);
   if (item.currentStatus === 'retired') throw httpError(`Alat "${item.assetCode}" sudah pensiun`, 409);
 
-  const date = new Date(damageDate);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (date > today) throw httpError('Tanggal kerusakan tidak boleh di masa depan', 400);
+  const date = assertNotFuture(damageDate, 'Tanggal kerusakan');
 
   const log = await prisma.$transaction(async (tx) => {
-    const damageCode = await maintenance.nextDocumentNumber(tx, DAMAGE_DOC_TYPE, { pad: DAMAGE_DOC_PAD });
+    const damageCode = await nextDocumentNumber(tx, DAMAGE_DOC_TYPE, { pad: DAMAGE_DOC_PAD });
 
     const created = await tx.damageLog.create({
       data: {
@@ -231,12 +230,7 @@ const update = async (id, payload, userId) => {
 
   const { description, sparePartSource, mechanicTeam, damageDate, stopsOperation } = payload;
 
-  if (damageDate) {
-    const date = new Date(damageDate);
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    if (date > today) throw httpError('Tanggal kerusakan tidak boleh di masa depan', 400);
-  }
+  if (damageDate) assertNotFuture(damageDate, 'Tanggal kerusakan');
 
   const updated = await prisma.$transaction(async (tx) => {
     const result = await tx.damageLog.update({
@@ -287,36 +281,27 @@ const resolve = async (id, payload, userId) => {
     throw httpError(`Laporan berstatus "${log.status}" tidak bisa diselesaikan`, 409);
   }
 
-  const { maintenanceType, actionDescription, performedBy, maintenanceDate, maintenanceSettingId } = payload;
+  const { maintenanceType, actionDescription, performedBy, maintenanceDate } = payload;
 
-  const workDate = maintenanceDate ? new Date(maintenanceDate) : new Date();
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (workDate > today) throw httpError('Tanggal pengerjaan tidak boleh di masa depan', 400);
-
-  let setting = null;
-  if (maintenanceSettingId) {
-    setting = await prisma.equipmentMaintenanceSetting.findUnique({
-      where: { id: maintenanceSettingId },
-      include: { maintenanceAspect: true },
-    });
-    if (!setting) throw httpError(`Maintenance setting dengan ID ${maintenanceSettingId} tidak ditemukan`, 404);
-    if (setting.equipmentItemId !== log.equipmentItemId) {
-      throw httpError('Maintenance setting tersebut milik unit alat yang berbeda', 409);
-    }
-  }
+  const workDate = maintenanceDate
+    ? assertNotFuture(maintenanceDate, 'Tanggal pengerjaan')
+    : new Date();
 
   const item = await findItemOrFail(log.equipmentItemId);
 
   const resolved = await prisma.$transaction(async (tx) => {
-    const maintenanceCode = await maintenance.nextDocumentNumber(tx, 'MTN', { pad: 6 });
+    const maintenanceCode = await nextDocumentNumber(tx, 'MTN', { pad: 6 });
 
     await tx.maintenanceRecord.create({
       data: {
         maintenanceCode,
         equipmentItemId: log.equipmentItemId,
         damageLogId: id,
-        maintenanceSettingId: maintenanceSettingId ?? null,
+        // Selalu null: menyelesaikan kerusakan TIDAK mereset jadwal servis.
+        // Reset perawatan rutin adalah aksi manual terpisah di halaman
+        // Maintenance, dan aspek perawatan tidak boleh menumpang order
+        // perbaikan karena kategori ordernya berbeda.
+        maintenanceSettingId: null,
         maintenanceType,
         maintenanceDate: workDate,
         workhourAtMaintenance: item.totalWorkhour,
@@ -325,24 +310,6 @@ const resolve = async (id, payload, userId) => {
         createdBy: userId,
       },
     });
-
-    // Kalau perbaikannya sekalian mereset jadwal servis, counter ikut nol
-    if (setting) {
-      await tx.equipmentMaintenanceSetting.update({
-        where: { id: setting.id },
-        data: {
-          currentValueSinceReset: 0,
-          lastMaintenanceDate: workDate,
-          lastResetWorkhour: item.totalWorkhour,
-          status: maintenance.computeStatus({
-            thresholdValue: setting.thresholdValue,
-            currentValueSinceReset: 0,
-            warningLeadValue: setting.maintenanceAspect.warningLeadValue,
-            isActive: setting.isActive,
-          }),
-        },
-      });
-    }
 
     const result = await tx.damageLog.update({
       where: { id },
