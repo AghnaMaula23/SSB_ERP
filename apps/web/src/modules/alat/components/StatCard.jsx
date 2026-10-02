@@ -12,13 +12,14 @@ export default function StatCard({ label, value, tone = 'blue', hint, onClick })
   const Wrapper = onClick ? 'button' : 'article';
 
   return (
-    <Wrapper type={onClick ? 'button' : undefined} onClick={onClick} className="card-panel flex items-center justify-between p-4 text-left transition hover:border-slate-300 hover:shadow-md">
+    // Di mobile kartu dibuat ringkas (tanpa ikon) supaya beberapa kartu muat dalam satu baris.
+    <Wrapper type={onClick ? 'button' : undefined} onClick={onClick} className="card-panel flex items-center justify-between gap-2 p-3 text-left transition hover:border-slate-300 hover:shadow-md sm:p-4">
       <div className="min-w-0">
-        <p className="text-xs font-semibold text-slate-500">{label}</p>
-        <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
-        {hint && <p className="mt-0.5 truncate text-[11px] text-slate-400">{hint}</p>}
+        <p className="line-clamp-2 text-[11px] font-semibold leading-tight text-slate-500 sm:text-xs">{label}</p>
+        <p className="mt-1 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{value}</p>
+        {hint && <p className="mt-0.5 truncate text-[10px] text-slate-400 sm:text-[11px]">{hint}</p>}
       </div>
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-lg ${styles.badge}`}>
+      <div className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-lg sm:flex ${styles.badge}`}>
         {styles.icon}
       </div>
     </Wrapper>

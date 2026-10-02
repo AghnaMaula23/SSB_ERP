@@ -246,29 +246,29 @@ export default function KasPage({ onBackToModules, onSignOut }) {
             <p className="mt-1 text-xs text-slate-500">Cash-in dari klaim pendapatan, cash-out dari purchase request yang disetujui Finance.</p>
           </div>
 
-          <div className="mb-6 grid gap-4 sm:grid-cols-3">
-            <article className="flex items-center justify-between rounded-xl bg-gradient-to-br from-teal-800 to-teal-900 p-5 text-white shadow-md">
-              <div>
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+            <article className="col-span-2 flex items-center justify-between rounded-xl bg-gradient-to-br from-teal-800 to-teal-900 p-4 text-white shadow-md sm:col-span-1 sm:p-5">
+              <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wider text-teal-200">Saldo Kas Alat</p>
-                <p className="mt-1.5 text-2xl font-bold tracking-tight">Rp {formatRupiah(summary.balance)}</p>
+                <p className="mt-1.5 break-words text-2xl font-bold tracking-tight">Rp {formatRupiah(summary.balance)}</p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15 text-lg">💰</div>
             </article>
-            <article className="card-panel flex items-center justify-between p-5">
-              <div>
-                <p className="text-xs font-semibold text-slate-500">Total Pemasukan</p>
-                <p className="mt-1.5 text-2xl font-bold tracking-tight text-emerald-600">+ Rp {formatRupiah(summary.totalIn)}</p>
+            <article className="card-panel flex items-center justify-between gap-2 p-3 sm:p-5">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-slate-500 sm:text-xs">Total Pemasukan</p>
+                <p className="mt-1.5 break-words text-base font-bold tracking-tight text-emerald-600 sm:text-2xl">+ Rp {formatRupiah(summary.totalIn)}</p>
                 <div className="mt-2 h-1 w-16 rounded-full bg-emerald-500" />
               </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-lg">📈</div>
+              <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-lg sm:flex">📈</div>
             </article>
-            <article className="card-panel flex items-center justify-between p-5">
-              <div>
-                <p className="text-xs font-semibold text-slate-500">Total Pengeluaran</p>
-                <p className="mt-1.5 text-2xl font-bold tracking-tight text-red-600">- Rp {formatRupiah(summary.totalOut)}</p>
+            <article className="card-panel flex items-center justify-between gap-2 p-3 sm:p-5">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-slate-500 sm:text-xs">Total Pengeluaran</p>
+                <p className="mt-1.5 break-words text-base font-bold tracking-tight text-red-600 sm:text-2xl">- Rp {formatRupiah(summary.totalOut)}</p>
                 <div className="mt-2 h-1 w-16 rounded-full bg-red-500" />
               </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-lg">📉</div>
+              <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-lg sm:flex">📉</div>
             </article>
           </div>
 

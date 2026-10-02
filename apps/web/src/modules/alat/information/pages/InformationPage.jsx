@@ -79,7 +79,7 @@ export default function InformationPage({ onBackToModules, onSignOut }) {
           {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{notice}</div>}
           {error && <div className="mb-4 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700"><span>{error}</span><button type="button" onClick={loadLogs} className="font-bold underline">Retry</button></div>}
 
-          <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <StatCard label="Total Damage Logs" value={summary.total} tone="slate" hint="Seluruh laporan kerusakan" />
             <StatCard label="Active Issues" value={summary.reported} tone="amber" hint="Menunggu ditangani" onClick={() => applyFilter({ status: 'reported' })} />
             <StatCard label="Resolved" value={summary.resolved} tone="green" hint="Sudah diperbaiki" onClick={() => applyFilter({ status: 'resolved' })} />
@@ -87,7 +87,7 @@ export default function InformationPage({ onBackToModules, onSignOut }) {
           </div>
 
           <section className="card-panel mb-6 p-4" aria-label="Damage log filters">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1.5fr)_minmax(130px,0.6fr)_minmax(130px,0.6fr)_minmax(130px,0.6fr)_auto] md:items-end">
+            <div className="grid grid-cols-2 items-end gap-3 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1 md:grid-cols-[minmax(0,1.5fr)_minmax(130px,0.6fr)_minmax(130px,0.6fr)_minmax(130px,0.6fr)_auto]">
               <div><label htmlFor="search-log" className="block text-xs font-semibold text-slate-600">Search</label><div className="relative mt-1"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">🔍</span><input id="search-log" name="search" value={filters.search} onChange={updateFilter} className="input-control pl-8 text-xs" placeholder="Search item code or description..." /></div></div>
               <div><label htmlFor="part-source" className="block text-xs font-semibold text-slate-600">Spare Part</label><select id="part-source" name="sparePartSource" value={filters.sparePartSource} onChange={updateFilter} className="input-control mt-1 text-xs"><option value="all">All Sources</option><option value="warehouse">Warehouse</option><option value="supplier">Supplier</option></select></div>
               <div><label htmlFor="mechanic-team" className="block text-xs font-semibold text-slate-600">Mechanic</label><select id="mechanic-team" name="mechanicTeam" value={filters.mechanicTeam} onChange={updateFilter} className="input-control mt-1 text-xs"><option value="all">All Teams</option><option value="internal">Internal</option><option value="external">External</option></select></div>

@@ -244,13 +244,13 @@ export default function PurchaseOrderDetailPage({ orderId, onBack, onBackToModul
       <AlatHeader collapsed={collapsed} onToggle={() => setMobileSidebarOpen((value) => !value)} />
       <main className={`min-h-screen pt-16 transition-[padding] duration-300 ${collapsed ? 'lg:pl-20' : 'lg:pl-64'}`}>
         <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-          <header className="flex flex-wrap items-start justify-between gap-3">
-            <div>
+          <header className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <nav className="flex items-center gap-2 text-xs font-medium text-slate-500"><button type="button" onClick={onBack} className="hover:text-slate-800">Purchase Orders</button><span>/</span><span className="text-slate-900 font-semibold">{order?.orderCode || 'Detail'}</span></nav>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{order?.purpose || 'Purchase Request'}</h1>
+              <h1 className="mt-1 break-words text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{order?.purpose || 'Purchase Request'}</h1>
               <p className="mt-1 text-xs text-slate-500">Diajukan oleh {order?.submittedBy || 'Divisi Alat'} · {formatDate(order?.date)} · Kategori: {categoryLabel(order?.category)}</p>
             </div>
-            <ActionButton kind="back" label="Kembali ke daftar purchase order" onClick={onBack} />
+            <ActionButton kind="back" className="shrink-0" label="Kembali ke daftar purchase order" onClick={onBack} />
           </header>
 
           {loading && <div className="card-panel p-12 text-center text-sm text-slate-500">Memuat detail purchase request...</div>}
@@ -270,18 +270,18 @@ export default function PurchaseOrderDetailPage({ orderId, onBack, onBackToModul
                 {order.balanceProjection && <p className="mt-2 text-[11px] text-violet-800">Saldo setelah dicairkan: {money(order.balanceProjection.projectedBalance)}</p>}
               </section>
 
-              <section className="card-panel overflow-x-auto p-6">
-                <div className="relative flex min-w-[620px] items-start justify-between">
+              <section className="card-panel p-4 sm:p-6">
+                <div className="relative flex items-start justify-between">
                   {steps.map((step, index) => {
                     const state = stepState(order.status, index);
                     const completedIndex = order.status === 'approved' ? 3 : order.status === 'rejected_by_finance' ? 2 : 1;
                     return (
                       <div key={step.key} className="relative flex flex-1 flex-col items-center text-center">
-                        <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${state === 'done' ? 'bg-teal-600 text-white' : state === 'rejected' ? 'bg-red-600 text-white' : state === 'cancelled' ? 'bg-slate-400 text-white' : state === 'current' ? 'border-2 border-teal-600 bg-white text-teal-700' : 'border-2 border-slate-200 bg-white text-slate-400'}`}>
+                        <div className={`relative z-10 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold sm:h-8 sm:w-8 sm:text-sm ${state === 'done' ? 'bg-teal-600 text-white' : state === 'rejected' ? 'bg-red-600 text-white' : state === 'cancelled' ? 'bg-slate-400 text-white' : state === 'current' ? 'border-2 border-teal-600 bg-white text-teal-700' : 'border-2 border-slate-200 bg-white text-slate-400'}`}>
                           {state === 'done' ? '✓' : state === 'rejected' ? '!' : state === 'cancelled' ? '✕' : index + 1}
                         </div>
-                        <span className={`mt-2 text-xs font-semibold ${state === 'pending' ? 'text-slate-400' : 'text-slate-800'}`}>{step.label}</span>
-                        {index < steps.length - 1 && <span className={`absolute left-1/2 top-4 h-0.5 w-full ${index < completedIndex ? 'bg-teal-500' : 'bg-slate-200'}`} />}
+                        <span className={`mt-2 px-1 text-[10px] font-semibold leading-tight sm:text-xs ${state === 'pending' ? 'text-slate-400' : 'text-slate-800'}`}>{step.label}</span>
+                        {index < steps.length - 1 && <span className={`absolute left-1/2 top-3.5 h-0.5 w-full sm:top-4 ${index < completedIndex ? 'bg-teal-500' : 'bg-slate-200'}`} />}
                       </div>
                     );
                   })}
@@ -289,11 +289,47 @@ export default function PurchaseOrderDetailPage({ orderId, onBack, onBackToModul
               </section>
 
               <section className="card-panel overflow-hidden">
-                <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-1 border-b border-slate-200 px-4 py-4 sm:px-6">
                   <h2 className="text-sm font-bold text-slate-900">Rincian Item</h2>
                   {canEdit && <span className="text-[11px] text-slate-500">Edit per item · hanya selagi status Diajukan</span>}
                 </div>
-                <div className="table-container">
+                {/* Mobile: kartu per item. Tabel di bawah hanya untuk layar md ke atas. */}
+                <ul className="divide-y divide-slate-200 md:hidden">
+                  {(order.items || []).map((item) => (
+                    <li key={item.id} className="space-y-3 px-4 py-4">
+                      {editingItemId === item.id ? (
+                        <>
+                          {renderEditForm()}
+                          {itemError && <p className="text-xs text-red-600">{itemError}</p>}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs text-slate-500">Estimasi: <strong className="text-slate-900">{money(editingTotal)}</strong></span>
+                            <div className="flex gap-1">
+                              <ActionButton kind="cancel" label="Batal" tone="danger" showLabel onClick={() => setEditingItemId(null)} />
+                              <ActionButton kind="save" label="Simpan" tone="success" showLabel onClick={saveItem} disabled={savingItem} />
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="break-words font-semibold text-slate-900">{item.itemName}</p>
+                              <p className="mt-0.5 break-words text-xs text-slate-500">{item.itemType === 'stock' || (item.itemType !== 'repair' && item.itemType !== 'maintenance') ? `Stok gudang · Qty ${item.quantity}` : item.relatedLabel || '-'}</p>
+                              {item.itemType === 'repair' && <p className="mt-1 text-[11px] text-slate-500">Biaya jasa: {money(item.serviceFee)}</p>}
+                              {item.itemType === 'repair' && (item.spareparts || []).map((sp) => <p key={sp.id} className="text-[11px] text-slate-500">· {sp.itemName} × {sp.quantity} @ {money(sp.estimatedUnitPrice)}</p>)}
+                            </div>
+                            {canEdit && <ActionButton kind="edit" label="Edit" showLabel className="shrink-0" onClick={() => startEdit(item)} />}
+                          </div>
+                          <dl className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-3 text-xs">
+                            <div><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Estimasi</dt><dd className="mt-0.5 font-semibold text-slate-900">{money(item.itemType === 'maintenance' ? item.estimatedUnitPrice : item.estimatedTotalPrice)}</dd></div>
+                            <div><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Disetujui Finance</dt><dd className="mt-0.5 font-semibold text-slate-900">{money(item.approvedTotalPrice)}</dd></div>
+                          </dl>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <div className="table-container hidden rounded-none border-0 md:block">
                   <table className="table-modern">
                     <thead>
                       <tr>
@@ -312,15 +348,18 @@ export default function PurchaseOrderDetailPage({ orderId, onBack, onBackToModul
                           <tr key={item.id}>
                             {isEditing ? (
                               <>
-                                <td colSpan={3 + extraCols}>
+                                {/* Form menempati kolom Item, Terkait (dan Qty); sisanya tetap sejajar header. */}
+                                <td colSpan={2 + extraCols}>
                                   {renderEditForm()}
                                   {itemError && <p className="mt-2 text-xs text-red-600">{itemError}</p>}
                                 </td>
-                                <td className="text-right text-xs font-semibold">{money(editingTotal)}</td>
-                                <td className="text-right text-xs text-slate-400">diisi Finance</td>
+                                <td className="whitespace-nowrap text-right text-xs font-semibold">{money(editingTotal)}</td>
+                                <td className="whitespace-nowrap text-right text-xs text-slate-400">diisi Finance</td>
                                 <td className="text-center">
-                                  <ActionButton kind="save" label="Simpan item" tone="success" onClick={saveItem} disabled={savingItem} />
-                                  <ActionButton kind="cancel" label="Batal edit item" tone="danger" onClick={() => setEditingItemId(null)} />
+                                  <div className="flex items-center justify-center gap-1">
+                                    <ActionButton kind="save" label="Simpan item" tone="success" onClick={saveItem} disabled={savingItem} />
+                                    <ActionButton kind="cancel" label="Batal edit item" tone="danger" onClick={() => setEditingItemId(null)} />
+                                  </div>
                                 </td>
                               </>
                             ) : (

@@ -50,253 +50,257 @@ button, a, input, select {
 }
 
 /* Global Component Classes */
+/* Dibungkus @layer components supaya utility Tailwind (px-2, text-xs,
+   justify-start, dst.) tetap bisa menimpa kelas komponen ini. */
+@layer components {
 
-/* Buttons */
-.btn {
-  display: inline-flex;
-  items-center: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-weight: 600;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  border: 1px solid transparent;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background-color: var(--primary-700);
-  color: #ffffff;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-}
-.btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-800);
-}
-
-.btn-secondary {
-  background-color: #ffffff;
-  color: #334155;
-  border-color: var(--border-medium);
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-}
-.btn-secondary:hover:not(:disabled) {
-  background-color: #f8fafc;
-  border-color: #94a3b8;
-  color: #0f172a;
-}
-
-.btn-danger {
-  background-color: #ef4444;
-  color: #ffffff;
-}
-.btn-danger:hover:not(:disabled) {
-  background-color: #dc2626;
-}
-
-.btn-ghost {
-  background-color: transparent;
-  color: #64748b;
-}
-.btn-ghost:hover:not(:disabled) {
-  background-color: #f1f5f9;
-  color: #0f172a;
-}
-
-/* Form Inputs */
-.input-control {
-  width: 100%;
-  height: 2.5rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--border-medium);
-  background-color: #ffffff;
-  color: var(--text-main);
-  font-size: 0.875rem;
-  outline: none;
-}
-.input-control:focus {
-  border-color: var(--primary-600);
-  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
-}
-
-/* Reserve space for the search icon used inside shared controls. */
-.input-control.pl-8,
-.input-control.pl-9,
-.field-control.pl-10 {
-  padding-left: 2.75rem;
-}
-
-/* Cards & Panels */
-.card-panel {
-  background-color: var(--surface);
-  border: 1px solid var(--border-light);
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
-}
-
-/* Modal Shell */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  background-color: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(4px);
-  overflow-y: auto;
-  padding: clamp(1rem, 6vh, 4rem) 1rem 1rem;
-}
-
-.modal-content {
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  margin: 0;
-  background-color: var(--surface);
-  border: 1px solid var(--border-light);
-  border-radius: 0.75rem;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
-
-@media (min-height: 700px) {
-  .modal-content {
-    margin: auto 0;
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
   }
-}
 
-/* Tables */
-.table-container {
-  width: 100%;
-  overflow-x: auto;
-  border: 1px solid var(--border-light);
-  border-radius: 0.75rem;
-  background: var(--surface);
-}
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 
-.table-modern {
-  width: 100%;
-  text-align: left;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
+  .btn-primary {
+    background-color: var(--primary-700);
+    color: #ffffff;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-800);
+  }
 
-/* Damage log table — fixed layout with explicit column classes so the desktop
-   and mobile variants (different column counts) never fight each other. */
-.damage-log-table {
-  width: 100%;
-  table-layout: fixed;
-}
+  .btn-secondary {
+    background-color: #ffffff;
+    color: #334155;
+    border-color: var(--border-medium);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: #f8fafc;
+    border-color: #94a3b8;
+    color: #0f172a;
+  }
 
-.damage-log-table th,
-.damage-log-table td {
-  vertical-align: middle;
-  word-break: break-word;
-}
+  .btn-danger {
+    background-color: #ef4444;
+    color: #ffffff;
+  }
+  .btn-danger:hover:not(:disabled) {
+    background-color: #dc2626;
+  }
 
-.damage-log-table tbody tr:nth-child(even) {
-  background-color: #fcfdfe;
-}
+  .btn-ghost {
+    background-color: transparent;
+    color: #64748b;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background-color: #f1f5f9;
+    color: #0f172a;
+  }
 
-.damage-log-table tbody tr:hover {
-  background-color: #f1f5f9;
-}
+  /* Form Inputs */
+  .input-control {
+    width: 100%;
+    height: 2.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border-medium);
+    background-color: #ffffff;
+    color: var(--text-main);
+    font-size: 0.875rem;
+    outline: none;
+  }
+  .input-control:focus {
+    border-color: var(--primary-600);
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+  }
 
-.damage-log-table--wide {
-  min-width: 34rem;
-}
+  /* Reserve space for the search icon used inside shared controls. */
+  .input-control.pl-8,
+  .input-control.pl-9,
+  .field-control.pl-10 {
+    padding-left: 2.75rem;
+  }
 
-.damage-log-table .col-no {
-  width: 3.5rem;
-}
+  /* Cards & Panels */
+  .card-panel {
+    background-color: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  }
 
-.damage-log-table .col-code {
-  width: 9.5rem;
-}
+  /* Modal Shell */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    background-color: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(4px);
+    overflow-y: auto;
+    padding: clamp(1rem, 6vh, 4rem) 1rem 1rem;
+  }
 
-.damage-log-table .col-date {
-  width: 7.5rem;
-}
+  .modal-content {
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    margin: 0;
+    background-color: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: 0.75rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
 
-.damage-log-table .col-level {
-  width: 6.5rem;
-}
+  @media (min-height: 700px) {
+    .modal-content {
+      margin: auto 0;
+    }
+  }
 
-.damage-log-table .col-status {
-  width: 7.5rem;
-}
+  /* Tables */
+  .table-container {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--border-light);
+    border-radius: 0.75rem;
+    background: var(--surface);
+  }
 
-.damage-log-table .col-actions {
-  width: 6.5rem;
-}
+  .table-modern {
+    width: 100%;
+    text-align: left;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
 
-.damage-log-table .col-actions-mobile {
-  width: 7rem;
-}
+  /* Damage log table — fixed layout with explicit column classes so the desktop
+     and mobile variants (different column counts) never fight each other. */
+  .damage-log-table {
+    width: 100%;
+    table-layout: fixed;
+  }
 
-.table-modern th {
-  padding: 0.75rem 1rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  background-color: #f8fafc;
-  border-bottom: 1px solid var(--border-light);
-}
+  .damage-log-table th,
+  .damage-log-table td {
+    vertical-align: middle;
+    word-break: break-word;
+  }
 
-.table-modern td {
-  padding: 0.875rem 1rem;
-  color: var(--text-main);
-  border-bottom: 1px solid var(--border-light);
-  vertical-align: middle;
-}
+  .damage-log-table tbody tr:nth-child(even) {
+    background-color: #fcfdfe;
+  }
 
-.table-modern tbody tr:last-child td {
-  border-bottom: none;
-}
+  .damage-log-table tbody tr:hover {
+    background-color: #f1f5f9;
+  }
 
-.table-modern tbody tr:hover {
-  background-color: #f8fafc;
-}
+  .damage-log-table--wide {
+    min-width: 34rem;
+  }
 
-/* Maintenance table — four columns only, so the widths are pinned to keep
-   the status & action columns from drifting into a big empty gap. */
-.maintenance-table {
-  table-layout: fixed;
-}
+  .damage-log-table .col-no {
+    width: 3.5rem;
+  }
 
-.maintenance-table th,
-.maintenance-table td {
-  vertical-align: middle;
-}
+  .damage-log-table .col-code {
+    width: 9.5rem;
+  }
 
-.maintenance-table .col-index {
-  width: 5rem;
-}
+  .damage-log-table .col-date {
+    width: 7.5rem;
+  }
 
-.maintenance-table .col-status {
-  width: 14rem;
-}
+  .damage-log-table .col-level {
+    width: 6.5rem;
+  }
 
-.maintenance-table .col-actions {
-  width: 9rem;
-}
+  .damage-log-table .col-status {
+    width: 7.5rem;
+  }
 
-.maintenance-table tbody tr:nth-child(even) {
-  background-color: #fcfdfe;
-}
+  .damage-log-table .col-actions {
+    width: 6.5rem;
+  }
 
-.maintenance-table tbody tr:hover {
-  background-color: #f1f5f9;
+  .damage-log-table .col-actions-mobile {
+    width: 7rem;
+  }
+
+  .table-modern th {
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    background-color: #f8fafc;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .table-modern td {
+    padding: 0.875rem 1rem;
+    color: var(--text-main);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+
+  .table-modern tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .table-modern tbody tr:hover {
+    background-color: #f8fafc;
+  }
+
+  /* Maintenance table — four columns only, so the widths are pinned to keep
+     the status & action columns from drifting into a big empty gap. */
+  .maintenance-table {
+    table-layout: fixed;
+  }
+
+  .maintenance-table th,
+  .maintenance-table td {
+    vertical-align: middle;
+  }
+
+  .maintenance-table .col-index {
+    width: 5rem;
+  }
+
+  .maintenance-table .col-status {
+    width: 14rem;
+  }
+
+  .maintenance-table .col-actions {
+    width: 9rem;
+  }
+
+  .maintenance-table tbody tr:nth-child(even) {
+    background-color: #fcfdfe;
+  }
+
+  .maintenance-table tbody tr:hover {
+    background-color: #f1f5f9;
+  }
 }
 
 /* Fade only. A lingering `transform` on the page root would become the

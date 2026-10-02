@@ -121,16 +121,16 @@ export default function ItemDetailPage({ itemId, onBackToItems, onBackToModules,
       
       <main className={`min-h-screen pt-16 transition-[padding] duration-300 ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'}`}>
         <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-          <header className="flex items-center justify-between">
-            <div>
+          <header className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <nav className="flex items-center gap-2 text-xs font-medium text-slate-500">
                 <button type="button" onClick={onBackToItems} className="hover:text-slate-800">Items Inventory</button>
                 <span>/</span>
                 <span className="text-slate-900 font-semibold">{item.itemCode || itemId}</span>
               </nav>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Equipment Summary — {item.itemCode || itemId}</h1>
+              <h1 className="mt-1 break-words text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Equipment Summary — {item.itemCode || itemId}</h1>
             </div>
-            <ActionButton kind="back" label="Kembali ke Items Inventory" onClick={onBackToItems} />
+            <ActionButton kind="back" className="shrink-0" label="Kembali ke Items Inventory" onClick={onBackToItems} />
           </header>
 
           {loading && <div className="card-panel p-12 text-center text-sm text-slate-500">Loading item specifications...</div>}

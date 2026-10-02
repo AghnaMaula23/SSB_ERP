@@ -146,7 +146,7 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDe
             </div>
           </div>
 
-          <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-4">
             <StatCard label="Total Purchase Orders" value={rows.length} tone="blue" />
             <StatCard label="Menunggu Proses" value={pendingCount} tone="amber" hint="Diajukan + menunggu Finance" />
             <StatCard label="Disetujui" value={approvedCount} tone="green" hint="Dana sudah dicairkan ke Kas Alat" />
@@ -156,7 +156,7 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDe
           {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
 
           <section className="card-panel mb-6 p-4" aria-label="Purchase Order Filters">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1.5fr)_minmax(130px,0.5fr)_minmax(130px,0.5fr)_minmax(130px,0.5fr)_auto] md:items-end">
+            <div className="grid grid-cols-2 items-end gap-3 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1 md:grid-cols-[minmax(0,1.5fr)_minmax(130px,0.5fr)_minmax(130px,0.5fr)_minmax(130px,0.5fr)_auto]">
               <div>
                 <label htmlFor="po-search" className="block text-xs font-semibold text-slate-600">Search</label>
                 <div className="relative mt-1">
@@ -225,7 +225,7 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDe
               </tbody>
             </table>
 
-            <table className="table-modern w-auto md:hidden">
+            <table className="table-modern w-full md:hidden">
               <thead>
                 <tr>
                   <th>Order Code</th>

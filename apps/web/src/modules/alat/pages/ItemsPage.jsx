@@ -107,7 +107,7 @@ export default function ItemsPage({ onBackToModules, onSignOut, onViewDetails })
             </div>
           </div>
 
-          <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-4">
             <StatCard label="Total Equipment Units" value={items.length} tone="blue" />
             <StatCard label="Maintenance Due" value={items.filter((item) => item.status === 'maintenance').length} tone="amber" />
             <StatCard label="Available for Dispatch" value={items.filter((item) => item.status === 'operational').length} tone="green" />
@@ -117,7 +117,7 @@ export default function ItemsPage({ onBackToModules, onSignOut, onViewDetails })
           {loadError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{loadError}</div>}
 
           <section className="card-panel mb-6 p-4" aria-label="Inventory Filters">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1.5fr)_minmax(140px,0.6fr)_minmax(140px,0.6fr)_auto] md:items-end">
+            <div className="grid grid-cols-2 items-end gap-3 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1 [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1 md:grid-cols-[minmax(0,1.5fr)_minmax(140px,0.6fr)_minmax(140px,0.6fr)_auto]">
               <div>
                 <label htmlFor="search-input" className="block text-xs font-semibold text-slate-600">Search</label>
                 <div className="relative mt-1">

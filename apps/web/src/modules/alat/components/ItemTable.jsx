@@ -77,7 +77,7 @@ export default function ItemTable({ items, totalItems, page, pageSize, onPageCha
         </tbody>
       </table>
 
-      <table className="table-modern w-auto md:hidden">
+      <table className="table-modern w-full md:hidden">
         <thead>
           <tr>
             <th className="w-12 text-center">No</th>

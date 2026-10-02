@@ -71,12 +71,12 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
       <AlatHeader collapsed={collapsed} onToggle={() => setMobileSidebarOpen((value) => !value)} />
       <main className={`min-h-screen pt-16 transition-[padding] duration-300 ${collapsed ? 'lg:pl-20' : 'lg:pl-64'}`}>
         <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-          <header className="flex flex-wrap items-center justify-between gap-3">
-            <div>
+          <header className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <nav className="flex items-center gap-2 text-xs font-medium text-slate-500"><button type="button" onClick={onBack} className="hover:text-slate-800">Damage Logs</button><span>/</span><span className="text-slate-900 font-semibold">{log?.damageCode || 'Detail'}</span></nav>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Detail Damage Log</h1>
+              <h1 className="mt-1 break-words text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Detail Damage Log</h1>
             </div>
-            <ActionButton kind="back" label="Kembali ke daftar damage log" onClick={onBack} />
+            <ActionButton kind="back" className="shrink-0" label="Kembali ke daftar damage log" onClick={onBack} />
           </header>
           {loading && <div className="card-panel p-12 text-center text-sm text-slate-500">Memuat detail damage log...</div>}
           {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700" role="alert">{error}</div>}
@@ -86,7 +86,7 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
                 <section className="card-panel p-6">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div><h2 className="text-sm font-bold text-slate-900">Alur Perbaikan Equipment</h2><p className="mt-1 text-xs text-slate-500">Damage log → Purchase Order Perbaikan Alat → Perbaikan. Setelah PO approved, selesaikan damage log dengan memilih PO tersebut.</p></div>
-                    <ActionButton kind="add" label="Buat purchase order untuk damage ini" tone="primary" onClick={startPurchaseOrder} />
+                    <ActionButton kind="add" label="Buat purchase order" tone="primary" showLabel className="border border-teal-200" onClick={startPurchaseOrder} />
                   </div>
                   <ol className="mt-5 grid gap-3 md:grid-cols-3">
                     <FlowStep index={1} label="Damage Log" description="Dilaporkan" state="done" />
@@ -95,7 +95,7 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
                   </ol>
                   {approvedOrder && canUpdate && (
                     <div className="mt-4 flex justify-end">
-                      <ActionButton kind="resolve" label="Selesaikan perbaikan dengan purchase order" tone="success" onClick={() => setActionType('resolve')} />
+                      <ActionButton kind="resolve" label="Selesaikan perbaikan" tone="success" showLabel className="border border-emerald-200" onClick={() => setActionType('resolve')} />
                     </div>
                   )}
                 </section>
@@ -105,7 +105,7 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
                   <div><span className="font-mono text-xs font-semibold text-teal-700">{log.damageCode}</span><h2 className="mt-1 text-xl font-bold text-slate-900">{log.description}</h2><p className="mt-1 text-xs text-slate-500">{log.equipmentItem?.assetCode || 'Equipment'} · {formatDate(log.damageDate)}</p></div>
                   <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase ${log.status === 'resolved' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : log.status === 'cancelled' ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>{log.status}</span>
                 </div>
-                <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                   <Detail label="Level" value={log.level || (log.stopsOperation ? 'critical' : 'minor')} />
                   <Detail label="Spare Part" value={log.sparePartSource || '-'} />
                   <Detail label="Mechanic" value={log.mechanicTeam || '-'} />
@@ -153,7 +153,7 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
                   </div>
                 )}
               </section>
-              {canUpdate && log.status === 'reported' && <div className="flex justify-end gap-2"><ActionButton kind="cancel" tone="danger" label={`Batalkan damage log ${log.damageCode || ''}`} onClick={() => setActionType('cancel')} /><ActionButton kind="resolve" tone="success" label={`Tandai selesai damage log ${log.damageCode || ''}`} onClick={() => setActionType('resolve')} /></div>}
+              {canUpdate && log.status === 'reported' && <div className="flex justify-end gap-2"><ActionButton kind="cancel" tone="danger" showLabel className="border border-red-200" label="Batalkan damage log" onClick={() => setActionType('cancel')} /><ActionButton kind="resolve" tone="success" showLabel className="border border-emerald-200" label="Tandai selesai" onClick={() => setActionType('resolve')} /></div>}
             </>
           )}
         </div>

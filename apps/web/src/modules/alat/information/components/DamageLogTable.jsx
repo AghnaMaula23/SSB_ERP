@@ -31,7 +31,10 @@ function ActionButtons({ log, onViewDetails, onEdit, canEdit }) {
   return (
     <div className="flex items-center justify-center gap-1">
       <ActionButton kind="view" label={`Lihat detail ${log.damageCode}`} onClick={() => onViewDetails(log)} />
-      {canEdit && log.status === 'reported' && <ActionButton kind="edit" label={`Edit ${log.damageCode}`} onClick={() => onEdit(log)} />}
+      {/* Slot edit tetap disisakan supaya ikon detail sejajar di semua baris. */}
+      {canEdit && log.status === 'reported'
+        ? <ActionButton kind="edit" label={`Edit ${log.damageCode}`} onClick={() => onEdit(log)} />
+        : <span className="inline-block min-w-8" aria-hidden="true" />}
     </div>
   );
 }

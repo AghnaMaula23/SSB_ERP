@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 const navigationItems = [
   { label: 'Items', icon: '📦', route: 'alat/items' },
   { label: 'Information', icon: '📋', route: 'alat/information' },
@@ -14,24 +16,50 @@ function BrandMark() {
   );
 }
 
+/**
+ * `collapsed` hanya berlaku di desktop (lg). Di mobile sidebar tampil sebagai
+ * drawer yang selalu lengkap dengan label, apa pun state collapsed desktop.
+ */
 export default function AlatSidebar({ collapsed, mobileOpen = false, onToggle, onClose, onBackToModules, onSignOut, activeRoute = 'alat/items' }) {
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const handleKey = (event) => { if (event.key === 'Escape') onClose?.(); };
+    // Halaman di belakang drawer tidak ikut ter-scroll.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [mobileOpen, onClose]);
+
+  const desktopHidden = collapsed ? 'lg:hidden' : '';
+
   return (
     <>
       {mobileOpen && <button type="button" className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden" onClick={onClose} aria-label="Close navigation" />}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-slate-200 bg-white shadow-sm transition-[width,transform] duration-300 lg:shadow-none ${
-          mobileOpen ? 'w-64 translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-xl transition-[width,transform] duration-300 lg:max-w-none lg:translate-x-0 lg:shadow-none ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
         } ${collapsed ? 'lg:w-20' : 'lg:w-64'}`}
+        aria-label="Navigasi Divisi Alat"
       >
-        <div className="flex h-16 items-center border-b border-slate-200 px-4">
-          <button type="button" onClick={onBackToModules} className="flex items-center gap-3 text-left" title="Back to module selection">
+        <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4">
+          <button type="button" onClick={onBackToModules} className="flex min-w-0 items-center gap-3 text-left" title="Back to module selection">
             <BrandMark />
-            {!collapsed && (
-              <div className="min-w-0">
-                <h1 className="text-sm font-bold leading-none text-slate-900">Divisi Alat</h1>
-                <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Resource System</p>
-              </div>
-            )}
+            <div className={`min-w-0 ${desktopHidden}`}>
+              <h1 className="truncate text-sm font-bold leading-none text-slate-900">Divisi Alat</h1>
+              <p className="mt-1 truncate text-[11px] font-semibold uppercase tracking-wider text-slate-500">Resource System</p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 lg:hidden"
+            aria-label="Tutup navigasi"
+          >
+            ✕
           </button>
         </div>
 
@@ -54,8 +82,8 @@ export default function AlatSidebar({ collapsed, mobileOpen = false, onToggle, o
                   <a
                     onClick={onClose}
                     href={`#/${item.route || 'alat/items'}`}
-                    className={`flex items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
-                      collapsed ? 'justify-center px-0' : 'gap-3'
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition lg:py-2 ${
+                      collapsed ? 'lg:justify-center lg:gap-0 lg:px-0' : ''
                     } ${
                       isActive
                         ? 'bg-teal-50 text-teal-800 font-semibold'
@@ -65,7 +93,7 @@ export default function AlatSidebar({ collapsed, mobileOpen = false, onToggle, o
                     aria-current={isActive ? 'page' : undefined}
                   >
                     <span className="text-base">{item.icon}</span>
-                    {!collapsed && <span>{item.label}</span>}
+                    <span className={desktopHidden}>{item.label}</span>
                   </a>
                 </li>
               );
@@ -78,16 +106,15 @@ export default function AlatSidebar({ collapsed, mobileOpen = false, onToggle, o
             type="button"
             onClick={onSignOut}
             className={`btn btn-ghost w-full justify-start text-xs font-semibold text-slate-600 ${
-              collapsed ? 'px-0 justify-center' : ''
+              collapsed ? 'lg:justify-center lg:px-0' : ''
             }`}
             title="Sign Out"
           >
             <span className="text-base">↪</span>
-            {!collapsed && <span>Sign Out</span>}
+            <span className={desktopHidden}>Sign Out</span>
           </button>
         </div>
       </aside>
     </>
   );
 }
-

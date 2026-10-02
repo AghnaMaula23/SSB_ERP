@@ -21,17 +21,22 @@ const TONES = {
   primary: 'text-teal-700 hover:bg-teal-50',
 };
 
-export default function ActionButton({ kind = 'view', label, onClick, disabled = false, tone = 'default', className = '' }) {
+/**
+ * Tombol aksi berbasis simbol. `showLabel` menampilkan teks di samping simbol —
+ * dipakai untuk aksi utama halaman karena tooltip tidak muncul di layar sentuh.
+ */
+export default function ActionButton({ kind = 'view', label, onClick, disabled = false, tone = 'default', className = '', showLabel = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`btn btn-ghost px-2 py-1 text-xs ${TONES[tone] || TONES.default} ${className}`}
-      aria-label={label}
+      className={`btn btn-ghost min-h-8 min-w-8 py-1 text-xs ${showLabel ? 'px-3' : 'px-2'} ${TONES[tone] || TONES.default} ${className}`}
+      aria-label={showLabel ? undefined : label}
       title={label}
     >
-      {SYMBOLS[kind] || kind}
+      <span aria-hidden={showLabel ? 'true' : undefined}>{SYMBOLS[kind] || kind}</span>
+      {showLabel && <span>{label}</span>}
     </button>
   );
 }
