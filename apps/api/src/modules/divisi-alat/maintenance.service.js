@@ -402,7 +402,7 @@ const shapeRecord = (record) => ({
       }
     : null,
   damageLogId: record.damageLogId,
-  purchaseRequestItemId: record.purchaseRequestItemId,
+  purchaseRequestId: record.purchaseRequestId,
   maintenanceType: record.maintenanceType,
   maintenanceDate: toDateOnly(record.maintenanceDate),
   workhourAtMaintenance: toNumber(record.workhourAtMaintenance),
@@ -462,7 +462,7 @@ const getRecordById = async (id) => shapeRecord(await findRecordOrFail(id));
  */
 const createRecord = async (payload, userId) => {
   const {
-    equipmentItemId, maintenanceSettingId, damageLogId, purchaseRequestItemId,
+    equipmentItemId, maintenanceSettingId, damageLogId, purchaseRequestId,
     maintenanceType, maintenanceDate, workhourAtMaintenance, actionDescription, performedBy,
   } = payload;
 
@@ -494,7 +494,7 @@ const createRecord = async (payload, userId) => {
         equipmentItemId,
         maintenanceSettingId: maintenanceSettingId ?? null,
         damageLogId: damageLogId ?? null,
-        purchaseRequestItemId: purchaseRequestItemId ?? null,
+        purchaseRequestId: purchaseRequestId ?? null,
         maintenanceType,
         maintenanceDate: workDate,
         // Default ke jam alat saat ini supaya titik servis terekam walau tidak diisi

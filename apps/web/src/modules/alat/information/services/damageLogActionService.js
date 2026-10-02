@@ -29,4 +29,22 @@ export function completeAction(recordId) {
   return data;
 }
 
+// PO Perbaikan Alat yang dipakai saat damage log diselesaikan (belum ada kolomnya di API).
+const RESOLVE_REFERENCE_KEY = 'damage_log_resolve_purchase_refs';
+
+export function getResolvePurchaseReferences() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(RESOLVE_REFERENCE_KEY) || '[]');
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveResolvePurchaseReference(reference) {
+  const rows = getResolvePurchaseReferences().filter((row) => String(row.damageLogId) !== String(reference.damageLogId));
+  rows.push({ ...reference, resolvedAt: new Date().toISOString() });
+  localStorage.setItem(RESOLVE_REFERENCE_KEY, JSON.stringify(rows));
+}
+
 export const ACTION_STATUS_STORAGE_KEY = STORAGE_KEY;

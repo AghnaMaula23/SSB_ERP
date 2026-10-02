@@ -5,7 +5,7 @@ import ActionButton from '../../../../components/ActionButton.jsx';
 import DamageLogActionModal from '../components/DamageLogActionModal.jsx';
 import { getDamageLogById } from '../services/informationService.js';
 import { completeAction, getActionStatuses } from '../services/damageLogActionService.js';
-import { getPurchaseOrders } from '../../services/purchaseOrderService.js';
+import { getPurchaseOrders, ordersForDamageLog } from '../../services/purchaseOrderService.js';
 import { recordActivity } from '../../../../services/activityLogService.js';
 import { hasPermission } from '../../../../services/permissions.js';
 
@@ -27,7 +27,7 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
     getDamageLogById(logId)
       .then((result) => {
         setLog(result);
-        setRelatedOrders(getPurchaseOrders().filter((order) => (order.items || []).some((item) => item.relatedType === 'damage' && String(item.relatedId) === String(logId))));
+        setRelatedOrders(ordersForDamageLog(getPurchaseOrders(), logId));
       })
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false));
@@ -51,7 +51,8 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
     });
   };
 
-  const approvedOrder = relatedOrders.find((order) => order.status === 'approved');
+  const approvedOrders = relatedOrders.filter((order) => order.status === 'approved');
+  const approvedOrder = approvedOrders[0];
   const navigate = (route) => { window.location.hash = `/${route}`; };
   const startPurchaseOrder = () => {
     sessionStorage.setItem('po-preselect-damage', JSON.stringify({ damageLogId: log.id, assetCode: log.equipmentItem?.assetCode || '', equipmentItemId: log.equipmentItemId || log.equipmentItem?.id || null }));
@@ -78,17 +79,17 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
               {log.status === 'reported' && (
                 <section className="card-panel p-6">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div><h2 className="text-sm font-bold text-slate-900">Alur Perbaikan Equipment</h2><p className="mt-1 text-xs text-slate-500">Damage log → Purchase Order → Service / Maintenance. Issue aktif otomatis berstatus repaired setelah maintenance dilakukan.</p></div>
+                    <div><h2 className="text-sm font-bold text-slate-900">Alur Perbaikan Equipment</h2><p className="mt-1 text-xs text-slate-500">Damage log → Purchase Order Perbaikan Alat → Perbaikan. Setelah PO approved, selesaikan damage log dengan memilih PO tersebut.</p></div>
                     <ActionButton kind="add" label="Buat purchase order untuk damage ini" tone="primary" onClick={startPurchaseOrder} />
                   </div>
                   <ol className="mt-5 grid gap-3 md:grid-cols-3">
                     <FlowStep index={1} label="Damage Log" description="Dilaporkan" state="done" />
                     <FlowStep index={2} label="Purchase Order" description={relatedOrders.length ? relatedOrders.map((order) => `${order.orderCode} · ${order.status}`).join(', ') : 'Belum ada pengajuan'} state={approvedOrder ? 'done' : relatedOrders.length ? 'current' : 'pending'} />
-                    <FlowStep index={3} label="Service / Maintenance" description={approvedOrder ? 'Purchase order approved, siap dilaksanakan' : 'Menunggu purchase order approved'} state={approvedOrder ? 'current' : 'pending'} />
+                    <FlowStep index={3} label="Perbaikan" description={approvedOrder ? 'Purchase order approved, siap diselesaikan' : 'Menunggu purchase order approved'} state={approvedOrder ? 'current' : 'pending'} />
                   </ol>
-                  {approvedOrder && log.equipmentItemId && (
+                  {approvedOrder && canUpdate && (
                     <div className="mt-4 flex justify-end">
-                      <ActionButton kind="reset" label="Lakukan service / maintenance" tone="success" onClick={() => navigate(`alat/maintenance/reset/${log.equipmentItemId}`)} />
+                      <ActionButton kind="resolve" label="Selesaikan perbaikan dengan purchase order" tone="success" onClick={() => setActionType('resolve')} />
                     </div>
                   )}
                 </section>
@@ -142,7 +143,7 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-xs text-slate-500">
-                    Belum ada tindakan untuk damage log ini. Lakukan service atau maintenance dari halaman Reset Maintenance setelah purchase order di-approve.
+                    Belum ada tindakan untuk damage log ini. Selesaikan damage log setelah purchase order Perbaikan Alat di-approve.
                   </div>
                 )}
               </section>
@@ -155,6 +156,7 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
         key={`${log?.id || 'none'}-${actionType || 'none'}`}
         log={actionType ? log : null}
         action={actionType}
+        purchaseOrders={approvedOrders}
         onClose={() => setActionType(null)}
         onSaved={() => {
           recordActivity({

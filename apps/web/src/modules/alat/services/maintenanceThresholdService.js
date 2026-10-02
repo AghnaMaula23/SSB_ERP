@@ -37,10 +37,17 @@ export function deleteTypeThreshold(equipmentTypeId, maintenanceAspectId) {
   writeAll(data);
 }
 
+export function getMaintenanceResetReferences() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(RESET_REFERENCE_KEY) || '[]');
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
 export function saveMaintenanceResetReference(reference) {
-  let rows;
-  try { rows = JSON.parse(localStorage.getItem(RESET_REFERENCE_KEY) || '[]'); } catch { rows = []; }
-  if (!Array.isArray(rows)) rows = [];
+  const rows = getMaintenanceResetReferences();
   rows.push({ ...reference, resetAt: new Date().toISOString() });
   localStorage.setItem(RESET_REFERENCE_KEY, JSON.stringify(rows));
 }

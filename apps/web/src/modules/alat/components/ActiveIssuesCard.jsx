@@ -3,6 +3,7 @@ import ActionButton from '../../../components/ActionButton.jsx';
 import { recordActivity } from '../../../services/activityLogService.js';
 import DamageLogActionModal from '../information/components/DamageLogActionModal.jsx';
 import { hasPermission } from '../../../services/permissions.js';
+import { getPurchaseOrders, ordersForDamageLog } from '../services/purchaseOrderService.js';
 
 export default function ActiveIssuesCard({ issues = [], onFixed, onViewDetails }) {
   const [selectedIssue, setSelectedIssue] = useState(null);
@@ -64,6 +65,7 @@ export default function ActiveIssuesCard({ issues = [], onFixed, onViewDetails }
         key={selectedIssue?.id || 'no-issue'}
         log={selectedIssue}
         action="resolve"
+        purchaseOrders={selectedIssue ? ordersForDamageLog(getPurchaseOrders({ status: 'approved' }), selectedIssue.id) : []}
         onClose={() => setSelectedIssue(null)}
         onSaved={() => {
           if (selectedIssue && onFixed) onFixed(selectedIssue.id);

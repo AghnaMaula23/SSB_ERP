@@ -12,10 +12,10 @@ const STORAGE_KEY = 'po_data';
 const SEQ_KEY = 'po_seq';
 
 const SEED_DATA = [
-  { id: 1, orderCode: 'PO-2023-0892', date: '2023-10-10', category: 'suku_cadang', unitAlat: 'Bulldozer-02', description: 'Ban Bulldozer', quantity: 3, unitPrice: 600000, totalPrice: 1800000, status: 'pending', notes: '' },
-  { id: 2, orderCode: 'PO-2023-0893', date: '2023-10-11', category: 'service_rutin', unitAlat: 'HINO DT-01', description: 'Ganti Oli Gardan', quantity: 1, unitPrice: 500000, totalPrice: 500000, status: 'approved', notes: '' },
-  { id: 3, orderCode: 'PO-2023-0894', date: '2023-10-14', category: 'suku_cadang', unitAlat: 'Bulldozer-03', description: 'Knalpot bulldozer', quantity: 10, unitPrice: 150000, totalPrice: 1500000, status: 'approved', notes: '' },
-  { id: 4, orderCode: 'PO-2023-0895', date: '2023-10-15', category: 'service_rutin', unitAlat: 'Excavator-PC200', description: 'Ganti Filter Oli & Inspeksi', quantity: 1, unitPrice: 850000, totalPrice: 850000, status: 'rejected', notes: 'Budget exceeded' },
+  { id: 1, orderCode: 'PO-2023-0892', date: '2023-10-10', category: 'perbaikan_alat', unitAlat: 'Bulldozer-02', description: 'Ban Bulldozer', quantity: 3, unitPrice: 600000, totalPrice: 1800000, status: 'pending', notes: '' },
+  { id: 2, orderCode: 'PO-2023-0893', date: '2023-10-11', category: 'servis_rutin', unitAlat: 'HINO DT-01', description: 'Ganti Oli Gardan', quantity: 1, unitPrice: 500000, totalPrice: 500000, status: 'approved', notes: '' },
+  { id: 3, orderCode: 'PO-2023-0894', date: '2023-10-14', category: 'perbaikan_alat', unitAlat: 'Bulldozer-03', description: 'Knalpot bulldozer', quantity: 10, unitPrice: 150000, totalPrice: 1500000, status: 'approved', notes: '' },
+  { id: 4, orderCode: 'PO-2023-0895', date: '2023-10-15', category: 'servis_rutin', unitAlat: 'Excavator-PC200', description: 'Ganti Filter Oli & Inspeksi', quantity: 1, unitPrice: 850000, totalPrice: 850000, status: 'rejected', notes: 'Budget exceeded' },
 ];
 
 function todayDate() {
@@ -24,12 +24,19 @@ function todayDate() {
   return new Date(date.getTime() - offset * 60 * 1000).toISOString().slice(0, 10);
 }
 
+// Kategori lama (sebelum kategori dipilih per PO) dipetakan ke kategori baru.
+const LEGACY_CATEGORY_MAP = { suku_cadang: 'perbaikan_alat', service_rutin: 'servis_rutin' };
+
+export function normalizeCategory(category) {
+  return LEGACY_CATEGORY_MAP[category] || category;
+}
+
 function itemTypeFromCategory(category) {
-  return category === 'service_rutin' ? 'service' : 'sparepart';
+  return normalizeCategory(category) === 'servis_rutin' ? 'service' : 'sparepart';
 }
 
 function categoryFromItemType(itemType) {
-  return itemType === 'service' ? 'service_rutin' : 'suku_cadang';
+  return itemType === 'service' ? 'servis_rutin' : 'perbaikan_alat';
 }
 
 function normalizeLocalOrder(row) {
@@ -47,6 +54,9 @@ function normalizeLocalOrder(row) {
   }];
   return {
     ...row,
+    category: normalizeCategory(row.category),
+    maintenanceSettingIds: (row.maintenanceSettingIds || []).map(String),
+    maintenanceAspects: row.maintenanceAspects || [],
     purpose: row.purpose || row.description || '',
     description: row.description || row.purpose || '',
     items,
@@ -141,8 +151,11 @@ export async function getPurchaseOrderDetail(id) {
 export async function createPurchaseOrderRequest(data) {
   const payload = {
     requestDate: data.date,
+    category: data.category,
     purpose: data.purpose,
     description: data.description || data.purpose,
+    ...(data.equipmentItemId ? { equipmentItemId: Number(data.equipmentItemId) } : {}),
+    ...(data.category === 'servis_rutin' ? { maintenanceSettingIds: (data.maintenanceSettingIds || []).filter((id) => !String(id).startsWith('demo-')).map(Number) } : {}),
     items: (data.items || []).map((item) => {
       const isDemoReference = String(item.relatedId || '').startsWith('demo-');
       return {
@@ -154,13 +167,15 @@ export async function createPurchaseOrderRequest(data) {
         ...(!isDemoReference && item.relatedId && item.relatedType === 'damage' ? { damageLogId: item.relatedId } : {}),
         ...(!isDemoReference && item.relatedId && item.relatedType === 'maintenance' ? { maintenanceSettingId: item.relatedId } : {}),
         ...(!isDemoReference ? {} : { relatedType: item.relatedType, relatedLabel: item.relatedLabel }),
+        ...(item.equipmentItemId && !String(item.equipmentItemId).startsWith('demo-') ? { equipmentItemId: Number(item.equipmentItemId) } : {}),
+        ...(item.maintenanceSettingIds?.length ? { maintenanceSettingIds: item.maintenanceSettingIds.filter((settingId) => !String(settingId).startsWith('demo-')).map(Number) } : {}),
       };
     }),
   };
   try {
     const result = await apiRequest('/api/equipment/purchase-requests', { method: 'POST', body: JSON.stringify(payload) });
     if (!result) return createPurchaseOrder(data);
-    const normalized = normalizeApiOrder(result);
+    const normalized = normalizeApiOrder({ ...orderReferenceFields(data), ...result });
     persistApiOrder(normalized);
     return normalized;
   } catch (error) {
@@ -168,6 +183,17 @@ export async function createPurchaseOrderRequest(data) {
     if (![404, 405, 501].includes(error?.status) && error?.status !== 0) throw error;
     return createPurchaseOrder(data);
   }
+}
+
+function orderReferenceFields(data) {
+  return {
+    category: data.category,
+    equipmentItemId: data.equipmentItemId ? Number(data.equipmentItemId) || data.equipmentItemId : null,
+    equipmentAssetCode: data.equipmentAssetCode || '',
+    damageLogId: data.damageLogId || null,
+    maintenanceSettingIds: (data.maintenanceSettingIds || []).map(String),
+    maintenanceAspects: data.maintenanceAspects || [],
+  };
 }
 
 export function createPurchaseOrder(data) {
@@ -184,7 +210,9 @@ export function createPurchaseOrder(data) {
     relatedId: item.relatedId ? Number(item.relatedId) || item.relatedId : null,
     relatedLabel: item.relatedLabel || null,
     equipmentAssetCode: item.equipmentAssetCode || data.unitAlat || '',
-    equipmentItemId: item.equipmentItemId ? Number(item.equipmentItemId) : null,
+    equipmentItemId: item.equipmentItemId ? Number(item.equipmentItemId) || item.equipmentItemId : null,
+    maintenanceSettingIds: (item.maintenanceSettingIds || []).map(String),
+    maintenanceAspects: item.maintenanceAspects || [],
   }));
   const first = items[0];
   const totalPrice = items.reduce((sum, item) => sum + item.quantity * item.estimatedUnitPrice, 0);
@@ -192,6 +220,7 @@ export function createPurchaseOrder(data) {
     id,
     orderCode: `PO-${new Date().getFullYear()}-${String(id).padStart(4, '0')}`,
     date: data.date || todayDate(),
+    ...orderReferenceFields(data),
     category: data.category || categoryFromItemType(first.itemType),
     unitAlat: first.equipmentAssetCode || data.unitAlat || '',
     purpose: data.purpose || first.itemName,
@@ -262,6 +291,25 @@ export function deletePurchaseOrder(id) {
   writeAll(rows.filter((row) => row.id !== Number(id)));
 }
 
+/**
+ * Aspek maintenance servis rutin yang dicakup PO untuk satu unit.
+ * Unit & aspek disimpan per item; PO lama menyimpannya di level order.
+ */
+export function maintenanceAspectsForUnit(order, unitId) {
+  const fromItems = (order.items || [])
+    .filter((item) => String(item.equipmentItemId) === String(unitId))
+    .flatMap((item) => item.maintenanceAspects?.length ? item.maintenanceAspects : (item.maintenanceSettingIds || []).map((settingId) => ({ settingId: String(settingId), name: String(settingId) })));
+  const legacy = String(order.equipmentItemId) === String(unitId) ? order.maintenanceAspects || [] : [];
+  const bySetting = new Map([...legacy, ...fromItems].map((aspect) => [String(aspect.settingId), aspect]));
+  return [...bySetting.values()];
+}
+
+export const maintenanceSettingIdsForUnit = (order, unitId) => maintenanceAspectsForUnit(order, unitId).map((aspect) => String(aspect.settingId));
+
+/** PO perbaikan alat yang memuat item terhubung ke damage log tertentu. */
+export const ordersForDamageLog = (orders, damageLogId) => orders.filter((order) => order.category === 'perbaikan_alat'
+  && (order.items || []).some((item) => item.relatedType === 'damage' && String(item.relatedId) === String(damageLogId)));
+
 export const ITEM_TYPE_OPTIONS = [
   { value: 'sparepart', label: 'Sparepart' },
   { value: 'service', label: 'Service' },
@@ -269,8 +317,9 @@ export const ITEM_TYPE_OPTIONS = [
   { value: 'other', label: 'Other' },
 ];
 export const CATEGORY_OPTIONS = [
-  { value: 'suku_cadang', label: 'Suku Cadang' },
-  { value: 'service_rutin', label: 'Service Rutin' },
+  { value: 'perbaikan_alat', label: 'Perbaikan Alat' },
+  { value: 'servis_rutin', label: 'Servis Rutin' },
+  { value: 'stok_gudang', label: 'Stok Gudang' },
 ];
 export const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending' },
@@ -281,6 +330,7 @@ export const categoryLabel = (value) => {
   if (value === 'sparepart') return 'Suku Cadang';
   if (value === 'service') return 'Service Rutin';
   if (value === 'consumable') return 'Consumable';
-  return CATEGORY_OPTIONS.find((option) => option.value === value)?.label || value;
+  const category = normalizeCategory(value);
+  return CATEGORY_OPTIONS.find((option) => option.value === category)?.label || value;
 };
 export const statusLabel = (value) => STATUS_OPTIONS.find((option) => option.value === value)?.label || value;

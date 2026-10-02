@@ -830,7 +830,7 @@ const swaggerSpec = {
             equipmentItemId: { type: 'integer', description: 'Wajib. Selalu terisi supaya riwayat per alat utuh.' },
             maintenanceSettingId: { type: 'integer', nullable: true, description: 'Isi kalau tindakan ini mereset jadwal servis. Harus milik alat yang sama.' },
             damageLogId: { type: 'integer', nullable: true, description: 'FK menyusul di batch Damage Log' },
-            purchaseRequestItemId: { type: 'integer', nullable: true, description: 'FK menyusul di batch Purchase Request' },
+            purchaseRequestId: { type: 'integer', nullable: true, description: 'ID equipment_purchase_requests yang mendasari tindakan ini' },
             maintenanceType: { type: 'string', enum: ['routine','repair','replacement','inspection','adjustment'] },
             maintenanceDate: { type: 'string', format: 'date', example: '2026-09-13' },
             workhourAtMaintenance: { type: 'number', description: 'Default ke total jam alat saat ini kalau dikosongkan' },

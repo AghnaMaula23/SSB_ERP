@@ -250,14 +250,14 @@ export default function KasPage({ onBackToModules, onSignOut }) {
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-sm font-bold text-slate-900">Jurnal Mutasi Kas Alat</h2>
               <div className="grid w-full grid-cols-[1fr_1fr_auto] items-center gap-2 sm:flex sm:w-auto sm:flex-nowrap">
-                <div className="relative col-span-3 sm:col-span-1 sm:w-44">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">🔍</span>
-                  <input
-                    value={searchJournal}
-                    onChange={(e) => { setSearchJournal(e.target.value); setPage(1); }}
-                    className="input-control w-full pl-8 text-xs"
-                    placeholder="Search journal..."
-                  />
+                <div className="relative col-span-3 sm:col-span-2 sm:w-72">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">🔍</span>
+                    <input
+                        value={searchJournal}
+                        onChange={(e) => { setSearchJournal(e.target.value); setPage(1); }}
+                        className="input-control w-full pl-8 text-xs"
+                        placeholder="Search journal..."
+                    />
                 </div>
                 <select value={filterType} onChange={(e) => { setFilterType(e.target.value); setPage(1); }} className="input-control w-full text-xs sm:w-28">
                   <option value="all">All Types</option>

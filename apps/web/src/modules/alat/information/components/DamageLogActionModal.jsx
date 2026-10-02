@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { cancelDamageLog, resolveDamageLog } from '../services/informationService.js';
+import { saveResolvePurchaseReference } from '../services/damageLogActionService.js';
 
 const initialResolve = { maintenanceType: 'repair', actionDescription: '', performedBy: '' };
 
@@ -9,9 +10,14 @@ function todayDate() {
   return new Date(date.getTime() - offset * 60 * 1000).toISOString().slice(0, 10);
 }
 
-export default function DamageLogActionModal({ log, action, onClose, onSaved }) {
+/**
+ * purchaseOrders: PO Perbaikan Alat approved yang merujuk damage log ini.
+ * Resolve wajib memilih minimal satu PO tersebut.
+ */
+export default function DamageLogActionModal({ log, action, purchaseOrders = [], onClose, onSaved }) {
   const [form, setForm] = useState(initialResolve);
   const [notes, setNotes] = useState('');
+  const [selectedOrderIds, setSelectedOrderIds] = useState(() => purchaseOrders.length === 1 ? [String(purchaseOrders[0].id)] : []);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -19,8 +25,13 @@ export default function DamageLogActionModal({ log, action, onClose, onSaved }) 
 
   const isResolve = action === 'resolve';
   const update = (event) => { const { name, value } = event.target; setForm((current) => ({ ...current, [name]: value })); setError(''); };
+  const toggleOrder = (id) => { setSelectedOrderIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]); setError(''); };
   const submit = async (event) => {
     event.preventDefault();
+    if (isResolve && !selectedOrderIds.length) {
+      setError('Pilih minimal satu purchase order Perbaikan Alat yang sudah approved.');
+      return;
+    }
     if (isResolve && !form.actionDescription.trim()) {
       setError('Deskripsi tindakan wajib diisi.');
       return;
@@ -28,7 +39,11 @@ export default function DamageLogActionModal({ log, action, onClose, onSaved }) 
     setError('');
     setLoading(true);
     try {
-      if (isResolve) await resolveDamageLog(log.id, { ...form, actionDescription: form.actionDescription.trim(), maintenanceDate: todayDate() });
+      if (isResolve) {
+        const selectedOrders = purchaseOrders.filter((order) => selectedOrderIds.includes(String(order.id)));
+        await resolveDamageLog(log.id, { ...form, actionDescription: form.actionDescription.trim(), maintenanceDate: todayDate() });
+        saveResolvePurchaseReference({ damageLogId: log.id, purchaseOrderIds: selectedOrders.map((order) => order.id), purchaseOrderCodes: selectedOrders.map((order) => order.orderCode) });
+      }
       else await cancelDamageLog(log.id, notes.trim());
       onSaved(action); onClose();
     } catch (requestError) { setError(requestError.message); } finally { setLoading(false); }
@@ -69,6 +84,30 @@ export default function DamageLogActionModal({ log, action, onClose, onSaved }) 
 
           {isResolve ? (
             <>
+              <div>
+                <p className="text-xs font-semibold text-slate-600">Purchase Order Perbaikan Alat (Approved) *</p>
+                {purchaseOrders.length === 0 ? (
+                  <p className="mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">Belum ada purchase order Perbaikan Alat approved untuk damage log ini. Ajukan purchase order terlebih dahulu dan tunggu sampai di-approve.</p>
+                ) : (
+                  <div className="mt-1 space-y-2">
+                    {purchaseOrders.map((order) => {
+                      const id = String(order.id);
+                      const checked = selectedOrderIds.includes(id);
+                      const items = (order.items || []).filter((item) => item.relatedType === 'damage' && String(item.relatedId) === String(log.id));
+                      return (
+                        <label key={id} className={`flex cursor-pointer gap-3 rounded-lg border p-3 text-[11px] transition ${checked ? 'border-teal-500 bg-teal-50/40 ring-1 ring-teal-500' : 'border-slate-200 hover:border-slate-300'}`}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleOrder(id)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600" />
+                          <span className="min-w-0 text-slate-600">
+                            <span className="block text-xs font-bold text-slate-900">{order.orderCode}</span>
+                            <span className="mt-0.5 block">{items.map((item) => `${item.itemName} (${item.quantity} ${item.unit})`).join(', ') || order.description}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label htmlFor="maintenanceType" className="block text-xs font-semibold text-slate-600">Action Category</label>
                 <select id="maintenanceType" name="maintenanceType" value={form.maintenanceType} onChange={update} className="input-control mt-1 text-xs">
@@ -126,7 +165,7 @@ export default function DamageLogActionModal({ log, action, onClose, onSaved }) 
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (isResolve && !purchaseOrders.length)}
               className={`btn text-xs ${isResolve ? 'btn-primary' : 'btn-danger'}`}
             >
               {loading ? 'Processing...' : isResolve ? 'Confirm Resolution' : 'Confirm Cancellation'}

@@ -302,8 +302,8 @@ router.post('/maintenance-records',
     body('maintenanceSettingId').optional({ nullable: true })
       .isInt({ min: 1 }).withMessage('maintenanceSettingId harus angka').toInt(),
     body('damageLogId').optional({ nullable: true }).isInt({ min: 1 }).withMessage('damageLogId harus angka').toInt(),
-    body('purchaseRequestItemId').optional({ nullable: true })
-      .isInt({ min: 1 }).withMessage('purchaseRequestItemId harus angka').toInt(),
+    body('purchaseRequestId').optional({ nullable: true })
+      .isInt({ min: 1 }).withMessage('purchaseRequestId harus angka').toInt(),
     body('maintenanceType').notEmpty().withMessage('maintenanceType wajib diisi')
       .isIn(MAINTENANCE_TYPES).withMessage(`maintenanceType harus salah satu dari: ${MAINTENANCE_TYPES.join(', ')}`),
     body('maintenanceDate').notEmpty().withMessage('Tanggal maintenance wajib diisi')

@@ -278,8 +278,8 @@ model MaintenanceRecord {
   equipmentItemId       Int                     @map("equipment_item_id")
   maintenanceSettingId  Int?                    @map("maintenance_setting_id")
   damageLogId           Int?                    @map("damage_log_id")
-  // FK menyusul saat modul Purchase Request dibangun
-  purchaseRequestItemId Int?                    @map("purchase_request_item_id")
+  // FK ke equipment_purchase_requests dibuat oleh migrasi batch4 (Purchase Request)
+  purchaseRequestId     Int?                    @map("purchase_request_id")
   maintenanceType       MaintenanceType         @map("maintenance_type")
   maintenanceDate       DateTime                @map("maintenance_date") @db.Date
   workhourAtMaintenance Decimal?                @map("workhour_at_maintenance") @db.Decimal(12, 2)
