@@ -129,8 +129,19 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
           maintenanceDate,
           actionDescription: actionDescription.trim(),
           performedBy: performedBy || undefined,
-          purchaseOrderId: order ? Number(order.id) : undefined,
-          purchaseOrderCode: order?.orderCode,
+          // Kaitan ke order pembelian BELUM dikirim.
+          //
+          // Backend menamai field ini `purchaseRequestId` dan menjaganya dengan
+          // foreign key ke equipment_purchase_requests. Sementara daftar PO di
+          // halaman ini masih berasal dari mock localStorage, `selectedPurchaseOrderId`
+          // bukan id purchase request sungguhan — mengirimnya membuat request
+          // ditolak 409, atau lebih buruk, menaut ke PR lain yang kebetulan ber-id sama.
+          //
+          // Nama lama `purchaseOrderId` tidak dikenali backend dan diabaikan diam-diam,
+          // jadi kaitannya memang tidak pernah tersimpan sejak awal.
+          //
+          // TODO: aktifkan `purchaseRequestId: Number(selectedPurchaseOrderId)`
+          // begitu purchaseOrderService.js memakai GET /api/equipment/purchase-requests.
         });
         if (order) settingIdsByOrder.set(order, [...(settingIdsByOrder.get(order) || []), settingId]);
         completed += 1;

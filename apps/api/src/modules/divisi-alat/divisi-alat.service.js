@@ -1,5 +1,6 @@
 const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
+const { assertNotFuture } = require('../../utils/date.js');
 const maintenance = require('./maintenance.service.js');
 
 const MAX_WORKHOUR_PER_DAY = 24;
@@ -478,10 +479,7 @@ const createWorkhourLog = async (payload, userId) => {
     );
   }
 
-  const work = new Date(workDate);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (work > today) throw httpError('Tanggal kerja tidak boleh di masa depan', 400);
+  const work = assertNotFuture(workDate, 'Tanggal kerja');
 
   if (startedAt && stoppedAt && new Date(stoppedAt) <= new Date(startedAt)) {
     throw httpError('stoppedAt harus lebih besar dari startedAt', 400);

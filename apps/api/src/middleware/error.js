@@ -11,7 +11,17 @@ const mapPrismaError = (err) => {
     return { statusCode: 409, message: `Data sudah ada (duplikat pada: ${fields})` };
   }
   if (err.code === 'P2025') return { statusCode: 404, message: 'Data tidak ditemukan' };
-  if (err.code === 'P2003') return { statusCode: 409, message: 'Data masih dipakai oleh relasi lain' };
+  // P2003 muncul dari dua arah yang berlawanan: saat INSERT/UPDATE berarti data
+  // acuannya tidak ada, saat DELETE berarti datanya masih dipakai. Menyamakan
+  // pesannya membuat kasus pertama terbaca menyesatkan ("masih dipakai" padahal
+  // justru tidak ada), jadi dibedakan lewat metode requestnya.
+  if (err.code === 'P2003') {
+    const field = err.meta?.field_name ? ` (${err.meta.field_name})` : '';
+    return {
+      statusCode: 409,
+      message: `Data yang diacu tidak ditemukan atau masih dipakai relasi lain${field}`,
+    };
+  }
   return null;
 };
 

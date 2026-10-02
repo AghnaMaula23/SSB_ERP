@@ -106,7 +106,7 @@ sudah terjawab `equipment_items.current_status = maintenance` serta
 | | |
 |---|---|
 | ERD | submitted, admin_validated, rejected_by_admin, waiting_finance_approval, rejected_by_finance, approved, in_progress, completed, cancelled |
-| Dipakai | **submitted, admin_validated, rejected_by_admin, waiting_finance_approval, rejected_by_finance, approved, cancelled** |
+| Dipakai | **submitted, rejected_by_admin, waiting_finance_approval, rejected_by_finance, approved, cancelled** (`admin_validated` juga dibuang 27 Sep 2026 — lihat catatan di bawah) |
 
 Approved dianggap selesai. **Konsekuensi yang wajib dipatuhi saat implementasi:
 ketika menyetujui, Finance mengisi nominal yang BENAR-BENAR dicairkan, bukan
@@ -116,44 +116,63 @@ estimasi, bukan angka riil.
 Pembatalan setelah approved berarti uang sudah keluar, jadi perlu transaksi
 `adjustment` masuk untuk mengembalikannya.
 
-### purchase_item_type — `repair` tidak dipakai
+### purchase_item_type — DIHAPUS SELURUHNYA (revisi 27 September 2026)
 
-Dipakai: **sparepart, consumable, service, other** (sesuai ERD).
+Keputusan sebelumnya mempertahankan **sparepart, consumable, service, other**,
+dengan alasan `consumable` perlu dipisah demi hitungan biaya operasi per jam.
+**Keputusan itu dibatalkan.**
 
-`consumable` dipertahankan dan **tidak boleh digabung ke sparepart**. Sparepart
-adalah barang yang menempel jadi bagian alat (seal, bearing, hose, track link);
-consumable adalah barang habis pakai (oli, grease, filter, solar, majun). Untuk
-alat berat, consumable adalah komponen biaya rutin terbesar, dan memisahkannya
-diperlukan untuk menghitung biaya operasi per jam — angka yang dipakai menentukan
-`default_hourly_rate`.
+Sebabnya struktur tabel berubah (lihat `purchase-request-schema.md`): kategori
+order kini punya tabel item masing-masing, dan pada kategori repair sparepart
+sudah punya tabel sendiri yang terpisah dari kolom harga jasa. Struktur tabel
+sudah membedakan "apa yang dibeli", jadi kolom `item_type` tidak punya pekerjaan
+lagi di tabel mana pun.
+
+**Konsekuensi yang diterima sadar:**
+
+- Belanja stok gudang tidak bisa dipilah sparepart vs consumable — semua barang
+  gudang masuk satu tabel tanpa penanda jenis.
+- Biaya perawatan terjadwal disimpan satu harga per aspek, jadi biaya oli/filter
+  tidak terpisah dari jasa bengkel.
+- Akibatnya **biaya operasi per jam memakai total biaya perawatan per unit**,
+  bukan rincian consumable seperti rencana awal. Kalau nanti rincian itu
+  dibutuhkan, jalannya adalah menambah kolom jenis barang pada tabel stok dan
+  memecah item perawatan — bukan menghidupkan kembali enum ini.
 
 ---
 
-## Telusur service vs repair
+## Telusur alasan pembelian
 
-`purchase_item_type` menjawab **apa yang dibeli**. **Kenapa dibeli** dijawab FK
-mana yang terisi di `equipment_purchase_request_items`:
+Sebelumnya "kenapa dibeli" dijawab FK mana yang terisi pada satu tabel item
+bersama, dengan aturan `maintenance_setting_id` dan `damage_log_id` tidak boleh
+terisi bersamaan. **Aturan itu tidak diperlukan lagi**, karena satu tabel item
+bersama sudah tidak ada.
 
-| Kasus | item_type | FK terisi |
-|---|---|---|
-| Oli mesin untuk servis 250 jam | consumable | maintenance_setting_id |
-| Jasa bengkel servis berkala | service | maintenance_setting_id |
-| Seal hidrolik bocor karena benturan | sparepart | damage_log_id |
-| Jasa las chassis retak | service | damage_log_id |
-| Grease & majun stok gudang | consumable | *(kosong)* |
+Sekarang alasan pembelian dijawab oleh **kategori order di header**, dan tabel
+item mana yang dipakai:
+
+| Kategori order | Tabel item | Terikat ke | Alasan pembelian |
+|---|---|---|---|
+| `repair` | `equipment_purchase_repair_items` (+ spareparts) | `damage_logs` | Menangani kerusakan |
+| `maintenance` | `equipment_purchase_maintenance_items` | `equipment_maintenance_settings` | Perawatan terjadwal |
+| `stock` | `equipment_purchase_stock_items` | — | Mengisi stok gudang |
 
 Rantai telusurnya:
 
 ```
-maintenance_setting ─┐
-                     ├─► purchase_request_item ─► maintenance_record ─► equipment_item
-damage_log          ─┘
+damage_log          ─► repair_item      ─┐
+maintenance_setting ─► maintenance_item ─┼─► purchase_request ─► maintenance_record ─► equipment_item
+(stok, tanpa ikatan)─► stock_item       ─┘
 ```
 
-**`maintenance_setting_id` dan `damage_log_id` tidak boleh terisi bersamaan** —
-wajib dijaga CHECK constraint. Kalau keduanya terisi, pertanyaan "ini biaya
-perawatan atau biaya kerusakan" tidak punya jawaban tunggal dan laporan biaya
-akan terhitung dobel.
+Kombinasi FK yang bertentangan menjadi **mustahil secara struktural** — bukan
+dicegah CHECK, melainkan karena tabelnya berbeda. Composite FK
+`(purchase_request_id, order_category)` memastikan baris item tidak bisa
+menempel ke header berkategori lain.
+
+`maintenance_records` menunjuk **header** PR lewat `purchase_request_id`
+(menggantikan `purchase_request_item_id`); baris item spesifiknya ditelusuri
+lewat `damage_log_id` / `maintenance_setting_id` yang sama.
 
 ---
 

@@ -830,7 +830,7 @@ const swaggerSpec = {
             equipmentItemId: { type: 'integer', description: 'Wajib. Selalu terisi supaya riwayat per alat utuh.' },
             maintenanceSettingId: { type: 'integer', nullable: true, description: 'Isi kalau tindakan ini mereset jadwal servis. Harus milik alat yang sama.' },
             damageLogId: { type: 'integer', nullable: true, description: 'FK menyusul di batch Damage Log' },
-            purchaseRequestId: { type: 'integer', nullable: true, description: 'ID equipment_purchase_requests yang mendasari tindakan ini' },
+            purchaseRequestId: { type: 'integer', nullable: true, description: 'Header PR asal biaya; baris item ditelusuri lewat damageLogId/maintenanceSettingId' },
             maintenanceType: { type: 'string', enum: ['routine','repair','replacement','inspection','adjustment'] },
             maintenanceDate: { type: 'string', format: 'date', example: '2026-09-13' },
             workhourAtMaintenance: { type: 'number', description: 'Default ke total jam alat saat ini kalau dikosongkan' },
@@ -973,49 +973,214 @@ const swaggerSpec = {
         responses: { 200: { description: 'Paginated riwayat kerusakan alat ini' }, 404: { description: 'Unit alat tidak ditemukan' } }
       }
     },
+    // BELUM DIIMPLEMENTASI — kontrak target Batch 4. Struktur item mengikuti
+    // order_category: satu order satu kategori, array item disesuaikan.
+    // Lihat docs/claude_knowledge/purchase-request-schema.md
     '/equipment/purchase-requests': {
-      get: { tags: ['Purchase Requests'], summary: 'List purchase requests', parameters: [ { $ref: '#/components/parameters/PageParam' }, { in: 'query', name: 'status', schema: { type: 'string' } } ], responses: { 200: { description: 'Paginated list' } } },
+      get: { tags: ['Purchase Requests'], summary: 'List purchase requests', parameters: [ { $ref: '#/components/parameters/PageParam' }, { in: 'query', name: 'orderCategory', schema: { type: 'string', enum: ['repair','maintenance','stock'] } }, { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted','rejected_by_admin','waiting_finance_approval','rejected_by_finance','approved','cancelled'] } } ], responses: { 200: { description: 'Paginated list (header saja)' } } },
       post: {
-        tags: ['Purchase Requests'], summary: 'Ajukan servis/sparepart', description: 'Role: divisi_alat',
+        tags: ['Purchase Requests'], summary: 'Ajukan order pembelian', description: 'Role: divisi_alat. Array item yang dikirim WAJIB cocok dengan orderCategory — validator menolak kalau tidak.',
         requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['requestDate', 'purpose', 'items'],
+          type: 'object', required: ['requestDate', 'orderCategory'],
           properties: {
-            requestDate: { type: 'string', format: 'date' }, purpose: { type: 'string' }, description: { type: 'string' },
-            items: { type: 'array', items: { type: 'object', required: ['itemType', 'itemName', 'quantity', 'unit', 'estimatedUnitPrice'],
-              properties: {
-                maintenanceSettingId: { type: 'integer', nullable: true }, damageLogId: { type: 'integer', nullable: true },
-                itemType: { type: 'string', enum: ['service','sparepart','consumable','other'] },
-                itemName: { type: 'string' }, quantity: { type: 'number' }, unit: { type: 'string' },
-                estimatedUnitPrice: { type: 'number' }
-              }
-            }}
+            requestDate: { type: 'string', format: 'date' },
+            orderCategory: { type: 'string', enum: ['repair', 'maintenance', 'stock'] },
+            repairItems: {
+              type: 'array', description: 'Wajib & hanya untuk orderCategory=repair. Satu entri per kerusakan.',
+              items: { type: 'object', required: ['damageLogId'], properties: {
+                damageLogId: { type: 'integer' },
+                serviceFee: { type: 'number', default: 0, description: '0 kalau mekanik internal' },
+                description: { type: 'string' },
+                spareparts: { type: 'array', items: { type: 'object', required: ['itemName', 'quantity', 'estimatedUnitPrice'], properties: {
+                  itemName: { type: 'string' }, quantity: { type: 'number' }, estimatedUnitPrice: { type: 'number' }
+                } } }
+              } }
+            },
+            maintenanceItems: {
+              type: 'array', description: 'Wajib & hanya untuk orderCategory=maintenance. Satu entri per aspek.',
+              items: { type: 'object', required: ['maintenanceSettingId', 'estimatedPrice'], properties: {
+                maintenanceSettingId: { type: 'integer', description: 'Setting = unit alat x aspek maintenance' },
+                estimatedPrice: { type: 'number' }
+              } }
+            },
+            stockItems: {
+              type: 'array', description: 'Wajib & hanya untuk orderCategory=stock.',
+              items: { type: 'object', required: ['itemName', 'quantity', 'estimatedUnitPrice'], properties: {
+                itemName: { type: 'string' }, quantity: { type: 'number' }, estimatedUnitPrice: { type: 'number' }
+              } }
+            }
           }
         }}}},
-        responses: { 201: { description: 'Created with items' } }
+        responses: { 201: { description: 'Created. Total dihitung sistem. Kalau melebihi saldo Kas Alat, response menyertakan `balanceWarning` berisi saldo, kekurangan, dan pesannya — peringatan, BUKAN blokir.' } }
       }
     },
     '/equipment/purchase-requests/{id}': {
-      get: { tags: ['Purchase Requests'], summary: 'Detail + items + status', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } }
+      get: { tags: ['Purchase Requests'], summary: 'Detail header + item sesuai kategorinya', description: 'Saat status `waiting_finance_approval`, response menyertakan `balanceProjection` (saldo sekarang, nominal diajukan, saldo setelah pencairan — boleh negatif) untuk layar approval Finance.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
+      put: {
+        tags: ['Purchase Requests'], summary: 'Ubah order', description: 'Role: divisi_alat, hanya pengaju sendiri, dan hanya selama status `submitted`. Array item yang dikirim MENGGANTI seluruh isi sebelumnya (bukan menambah). orderCategory tidak bisa diubah — batalkan dan buat order baru.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: {
+          requestDate: { type: 'string', format: 'date' },
+          repairItems: { type: 'array', description: 'Hanya untuk order berkategori repair', items: { type: 'object' } },
+          maintenanceItems: { type: 'array', description: 'Hanya untuk order berkategori maintenance', items: { type: 'object' } },
+          stockItems: { type: 'array', description: 'Hanya untuk order berkategori stock', items: { type: 'object' } }
+        } } } } },
+        responses: { 200: { description: 'Updated' }, 409: { description: 'Status bukan submitted, atau mencoba mengubah orderCategory' } }
+      }
     },
     '/equipment/purchase-requests/{id}/validate': {
-      put: { tags: ['Purchase Requests'], summary: 'Admin validasi', description: 'Role: admin', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Validated' } } }
+      put: { tags: ['Purchase Requests'], summary: 'Admin validasi', description: 'Role: admin SAJA — super_admin tidak di-bypass. submitted -> waiting_finance_approval. Tanpa body: catatan approval belum punya tempat penyimpanan (rencananya approval_task_logs di Approval Center).', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Validated' } } }
     },
     '/equipment/purchase-requests/{id}/approve': {
-      put: { tags: ['Purchase Requests'], summary: 'Finance approve', description: 'Role: finance', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
-        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { approvedItems: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'integer' }, approvedAmount: { type: 'number' } } } }, notes: { type: 'string' } } } } } },
-        responses: { 200: { description: 'Approved' } } }
+      put: { tags: ['Purchase Requests'], summary: 'Finance approve + cairkan', description: 'Role: finance SAJA — super_admin tidak di-bypass. Nominal aktual per baris WAJIB diisi, bukan menyalin estimasi. Boleh menyebabkan saldo Kas Alat negatif.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: {
+          approvedRepairItems: { type: 'array', items: { type: 'object', properties: { repairItemId: { type: 'integer' }, approvedServiceFee: { type: 'number' }, spareparts: { type: 'array', items: { type: 'object', properties: { sparepartId: { type: 'integer' }, approvedTotalPrice: { type: 'number' } } } } } } },
+          approvedMaintenanceItems: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'integer' }, approvedPrice: { type: 'number' } } } },
+          approvedStockItems: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'integer' }, approvedTotalPrice: { type: 'number' } } } }
+        } } } } },
+        responses: { 200: { description: 'Approved. total_approved_amount dijumlahkan dari baris, lalu cash-out Kas Alat dibuat dalam transaksi yang SAMA — kategori kasnya diturunkan dari orderCategory. Response menyertakan cashTransactionCreated + cashTransaction.' } } }
     },
     '/equipment/purchase-requests/{id}/reject': {
-      put: { tags: ['Purchase Requests'], summary: 'Tolak purchase request', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Rejected' } } }
+      put: { tags: ['Purchase Requests'], summary: 'Tolak order', description: 'Role: admin (saat submitted) atau finance (saat waiting_finance_approval). super_admin tidak di-bypass. CATATAN: alasan penolakan BELUM bisa disimpan — header PR tidak punya kolom teks dan Approval Center belum dibangun. Mengirim `notes` akan ditolak 400 supaya tidak hilang diam-diam.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Rejected' } } }
     },
-    '/equipment/purchase-requests/{id}/complete': {
-      put: { tags: ['Purchase Requests'], summary: 'Tandai selesai', description: 'Role: divisi_alat', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Completed' } } }
+    '/equipment/purchase-requests/{id}/cancel': {
+      put: { tags: ['Purchase Requests'], summary: 'Batalkan order', description: 'Role: divisi_alat, hanya pengaju sendiri, dan hanya SEBELUM approved. Order yang sudah approved ditolak 409 karena dananya sudah dicairkan — siapa yang berwenang mencatat dana kembali masuk belum diputuskan, jadi ditutup untuk MVP. Sementara ini pengembaliannya dicatat manual di Kas Alat sebagai cash-in `adjustment` kategori "Koreksi Masuk".', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Cancelled' } } }
     },
+    // Kas Alat — Batch 5. Saldo TIDAK disimpan per baris, melainkan dijumlahkan
+    // saat dibaca: SUM(cash_in) - SUM(cash_out) atas baris yang tidak dibatalkan.
+    // Lihat docs/kas-alat-kombinasi-transaksi.md §2.
     '/equipment/cash/balance': {
-      get: { tags: ['Kas Divisi Alat'], summary: 'Saldo kas alat saat ini', responses: { 200: { description: 'Balance', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object', properties: { currentBalance: { type: 'number' }, lastTransactionDate: { type: 'string' } } } } } } } } } }
+      get: {
+        tags: ['Kas Divisi Alat'], summary: 'Saldo Kas Alat saat ini',
+        description: 'Permission: cash:read. Dihitung saat dibaca dari seluruh riwayat; baris yang dibatalkan (isVoided) tidak ikut. Saldo BOLEH negatif.',
+        responses: { 200: { description: 'Saldo', content: { 'application/json': { schema: {
+          type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object', properties: {
+            balance: { type: 'number', description: 'totalIn - totalOut. Bisa negatif.' },
+            totalIn: { type: 'number' }, totalOut: { type: 'number' }
+          } } }
+        } } } } }
+      }
+    },
+    '/equipment/cash/summary': {
+      get: {
+        tags: ['Kas Divisi Alat'], summary: 'Saldo + mutasi periode + rincian per kategori',
+        description: 'Permission: cash:read. `balance` SELALU seluruh riwayat (uang yang benar-benar ada); dateFrom/dateTo hanya menyaring `period` dan `byCategory`.',
+        parameters: [
+          { in: 'query', name: 'dateFrom', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'dateTo', schema: { type: 'string', format: 'date' } }
+        ],
+        responses: { 200: { description: 'Ringkasan kas' } }
+      }
+    },
+    '/equipment/cash/categories': {
+      get: {
+        tags: ['Kas Divisi Alat'], summary: 'List kategori kas',
+        description: 'Permission: cash:read. Master kategori, dikelola Divisi Alat. `orderCategory` memetakan kategori order purchase request ke kategori kas ini — kategori kas TIDAK dipilih user saat order dicairkan, melainkan diturunkan dari pemetaan ini.',
+        parameters: [
+          { in: 'query', name: 'transactionType', schema: { type: 'string', enum: ['cash_in','cash_out'] } },
+          { in: 'query', name: 'orderCategory', schema: { type: 'string', enum: ['repair','maintenance','stock'] } },
+          { in: 'query', name: 'isActive', schema: { type: 'boolean' } }
+        ],
+        responses: { 200: { description: 'Daftar kategori + transactionCount per kategori' } }
+      },
+      post: {
+        tags: ['Kas Divisi Alat'], summary: 'Tambah kategori kas',
+        description: 'Permission: cash:create. `orderCategory` hanya boleh pada kategori cash_out — purchase request tidak pernah menambah kas — dan satu kategori order hanya boleh menunjuk satu kategori kas.',
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['categoryName', 'transactionType'],
+          properties: {
+            categoryName: { type: 'string', maxLength: 150, example: 'Perbaikan Alat' },
+            transactionType: { type: 'string', enum: ['cash_in', 'cash_out'] },
+            orderCategory: { type: 'string', enum: ['repair', 'maintenance', 'stock'], nullable: true, description: 'Opsional. Hanya untuk cash_out.' },
+            description: { type: 'string', nullable: true }
+          }
+        }}}},
+        responses: { 201: { description: 'Created' }, 409: { description: 'Nama+arah sudah ada, atau orderCategory sudah dipetakan ke kategori lain' } }
+      }
+    },
+    '/equipment/cash/categories/{id}': {
+      put: {
+        tags: ['Kas Divisi Alat'], summary: 'Ubah kategori kas',
+        description: 'Permission: cash:update. `transactionType` TIDAK bisa diubah — riwayat yang sudah memakainya akan berubah arti. Nonaktifkan lalu buat kategori baru.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: {
+          categoryName: { type: 'string', maxLength: 150 },
+          orderCategory: { type: 'string', enum: ['repair', 'maintenance', 'stock'], nullable: true },
+          description: { type: 'string', nullable: true },
+          isActive: { type: 'boolean' }
+        } } } } },
+        responses: { 200: { description: 'Updated' }, 409: { description: 'Mencoba mengubah arah kategori, atau orderCategory bentrok' } }
+      },
+      delete: {
+        tags: ['Kas Divisi Alat'], summary: 'Hapus kategori kas',
+        description: 'Permission: cash:delete. Hanya kategori yang BELUM dipakai transaksi. Yang sudah dipakai ditolak 409 — nonaktifkan dengan isActive=false supaya riwayatnya tetap terbaca.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Deleted' }, 409: { description: 'Kategori sudah dipakai transaksi' } }
+      }
     },
     '/equipment/cash/transactions': {
-      get: { tags: ['Kas Divisi Alat'], summary: 'List transaksi kas', parameters: [ { $ref: '#/components/parameters/PageParam' }, { in: 'query', name: 'direction', schema: { type: 'string', enum: ['in','out'] } }, { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } }, { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } } ], responses: { 200: { description: 'Paginated transactions' } } }
+      get: {
+        tags: ['Kas Divisi Alat'], summary: 'List transaksi kas',
+        description: 'Permission: cash:read. Baris yang dibatalkan disembunyikan kecuali includeVoided=true — ringkasan yang lupa memfilternya akan langsung salah.',
+        parameters: [
+          { $ref: '#/components/parameters/PageParam' },
+          { in: 'query', name: 'transactionType', schema: { type: 'string', enum: ['cash_in','cash_out'] } },
+          { in: 'query', name: 'categoryId', schema: { type: 'integer' } },
+          { in: 'query', name: 'sourceType', schema: { type: 'string', enum: ['opening_balance','equipment_income_claim','equipment_purchase_request','manual_expense','adjustment'] } },
+          { in: 'query', name: 'dateFrom', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'dateTo', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'includeVoided', schema: { type: 'boolean', default: false } },
+          { in: 'query', name: 'search', schema: { type: 'string' }, description: 'Cocokkan transactionCode atau keterangan' }
+        ],
+        responses: { 200: { description: 'Paginated. Tiap baris punya isSystemGenerated — baris sistem tidak bisa diubah/dibatalkan lewat endpoint ini.' } }
+      },
+      post: {
+        tags: ['Kas Divisi Alat'], summary: 'Catat transaksi kas manual',
+        description: 'Permission: cash:create (divisi_alat). TANPA approval — prerogatif Divisi Alat untuk kebutuhan tak terduga (keputusan 25 Sep 2026). `sourceType` hanya menerima opening_balance, manual_expense, adjustment: baris dari purchase request dan klaim pendapatan WAJIB dibuat sistem, kalau tidak orang bisa mencatat cash-in klaim fiktif. Arah uang per sumber: opening_balance=cash_in, manual_expense=cash_out, adjustment=keduanya. Kategori harus searah dengan transaksinya.',
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['transactionDate', 'transactionType', 'categoryId', 'amount', 'sourceType', 'description'],
+          properties: {
+            transactionDate: { type: 'string', format: 'date', description: 'Tidak boleh di masa depan. Tanggal mundur DIBOLEHKAN — tidak ada rantai saldo yang bisa rusak.' },
+            transactionType: { type: 'string', enum: ['cash_in', 'cash_out'] },
+            categoryId: { type: 'integer' },
+            amount: { type: 'number', description: 'Harus > 0. Arah uang ditentukan transactionType, bukan tanda nominal.' },
+            sourceType: { type: 'string', enum: ['opening_balance', 'manual_expense', 'adjustment'] },
+            description: { type: 'string', description: 'Wajib — tanpa ini baris kas tidak bisa ditelusuri' }
+          }
+        }}}},
+        responses: {
+          201: { description: 'Created. transactionCode dibuat sistem (KAS-NNNNNN).' },
+          400: { description: 'Arah uang tidak cocok dengan sumber atau kategorinya' },
+          403: { description: 'sourceType milik sistem dicoba dicatat manual' }
+        }
+      }
+    },
+    '/equipment/cash/transactions/{id}': {
+      get: { tags: ['Kas Divisi Alat'], summary: 'Detail transaksi kas', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
+      put: {
+        tags: ['Kas Divisi Alat'], summary: 'Ubah transaksi kas manual',
+        description: 'Permission: cash:update. HANYA baris manual — baris bersumber purchase request / klaim pendapatan ditolak 409: kalau ordernya salah, yang dibatalkan ordernya. `transactionType` dan `sourceType` tidak bisa diubah karena keduanya menentukan arti baris; batalkan lalu catat yang benar. Mengedit baris lama MENGUBAH saldo periode lalu — harga yang diterima sadar atas keputusan tidak menyimpan saldo per baris.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: {
+          transactionDate: { type: 'string', format: 'date' },
+          categoryId: { type: 'integer' },
+          amount: { type: 'number' },
+          description: { type: 'string' }
+        } } } } },
+        responses: { 200: { description: 'Updated' }, 409: { description: 'Baris sistem, atau baris sudah dibatalkan' } }
+      }
+    },
+    '/equipment/cash/transactions/{id}/void': {
+      put: {
+        tags: ['Kas Divisi Alat'], summary: 'Batalkan transaksi kas manual',
+        description: 'Permission: cash:update. Barisnya TIDAK dihapus — jejaknya tetap ada beserta alasannya, tapi tidak ikut dihitung ke saldo. Hanya baris manual.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['voidReason'],
+          properties: { voidReason: { type: 'string', maxLength: 500 } }
+        }}}},
+        responses: { 200: { description: 'Voided' }, 409: { description: 'Baris sistem, atau sudah dibatalkan sebelumnya' } }
+      }
     },
 
     // ========================================

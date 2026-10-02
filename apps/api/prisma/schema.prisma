@@ -27,6 +27,14 @@ model User {
   damageLogsReported    DamageLog[]            @relation("DamageReportedBy")
   damageLogsReviewed    DamageLog[]            @relation("DamageReviewedBy")
 
+  purchaseRequestsCreated         EquipmentPurchaseRequest[] @relation("PrRequestedBy")
+  purchaseRequestsAdminValidated  EquipmentPurchaseRequest[] @relation("PrAdminValidatedBy")
+  purchaseRequestsFinanceApproved EquipmentPurchaseRequest[] @relation("PrFinanceApprovedBy")
+  purchaseRequestsCancelled       EquipmentPurchaseRequest[] @relation("PrCancelledBy")
+
+  cashTransactionsCreated EquipmentCashTransaction[] @relation("CashCreatedBy")
+  cashTransactionsVoided  EquipmentCashTransaction[] @relation("CashVoidedBy")
+
   @@map("users")
 }
 
@@ -260,9 +268,10 @@ model EquipmentMaintenanceSetting {
   createdAt              DateTime                 @default(now()) @map("created_at")
   updatedAt              DateTime                 @updatedAt @map("updated_at")
 
-  equipmentItem      EquipmentItem       @relation(fields: [equipmentItemId], references: [id])
-  maintenanceAspect  MaintenanceAspect   @relation(fields: [maintenanceAspectId], references: [id])
-  maintenanceRecords MaintenanceRecord[]
+  equipmentItem            EquipmentItem                      @relation(fields: [equipmentItemId], references: [id])
+  maintenanceAspect        MaintenanceAspect                  @relation(fields: [maintenanceAspectId], references: [id])
+  maintenanceRecords       MaintenanceRecord[]
+  purchaseMaintenanceItems EquipmentPurchaseMaintenanceItem[]
 
   @@unique([equipmentItemId, maintenanceAspectId])
   @@index([status])
@@ -278,7 +287,8 @@ model MaintenanceRecord {
   equipmentItemId       Int                     @map("equipment_item_id")
   maintenanceSettingId  Int?                    @map("maintenance_setting_id")
   damageLogId           Int?                    @map("damage_log_id")
-  // FK ke equipment_purchase_requests dibuat oleh migrasi batch4 (Purchase Request)
+  // Menunjuk header PR, bukan baris item. Baris spesifiknya ditelusuri lewat
+  // damageLogId / maintenanceSettingId yang sama pada tabel item PR.
   purchaseRequestId     Int?                    @map("purchase_request_id")
   maintenanceType       MaintenanceType         @map("maintenance_type")
   maintenanceDate       DateTime                @map("maintenance_date") @db.Date
@@ -293,6 +303,7 @@ model MaintenanceRecord {
   equipmentItem      EquipmentItem                @relation(fields: [equipmentItemId], references: [id])
   maintenanceSetting EquipmentMaintenanceSetting? @relation(fields: [maintenanceSettingId], references: [id])
   damageLog          DamageLog?                   @relation(fields: [damageLogId], references: [id])
+  purchaseRequest    EquipmentPurchaseRequest?    @relation(fields: [purchaseRequestId], references: [id])
   createdByUser      User?                        @relation(fields: [createdBy], references: [id])
 
   @@index([equipmentItemId, maintenanceDate])
@@ -390,12 +401,268 @@ model DamageLog {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  equipmentItem      EquipmentItem       @relation(fields: [equipmentItemId], references: [id])
-  reportedByUser     User?               @relation("DamageReportedBy", fields: [reportedBy], references: [id])
-  reviewedByUser     User?               @relation("DamageReviewedBy", fields: [reviewedBy], references: [id])
-  maintenanceRecords MaintenanceRecord[]
+  equipmentItem       EquipmentItem                 @relation(fields: [equipmentItemId], references: [id])
+  reportedByUser      User?                         @relation("DamageReportedBy", fields: [reportedBy], references: [id])
+  reviewedByUser      User?                         @relation("DamageReviewedBy", fields: [reviewedBy], references: [id])
+  maintenanceRecords  MaintenanceRecord[]
+  purchaseRepairItems EquipmentPurchaseRepairItem[]
 
   @@index([equipmentItemId, damageDate])
   @@index([status])
   @@map("damage_logs")
+}
+
+// ============================================================
+// DIVISI ALAT — Batch 4: Purchase Request
+// ============================================================
+
+/// Kategori order menentukan tabel item mana yang sah untuk satu pengajuan.
+/// Disimpan sebagai enum, BUKAN FK ke equipment_cash_category, karena kategori
+/// kas adalah tabel master yang boleh diubah Divisi Alat — sedangkan jumlah
+/// tabel item adalah struktur skema yang tetap. Kategori kas diturunkan dari
+/// nilai ini lewat equipment_cash_category.order_category (dibangun di Batch 5).
+enum PurchaseOrderCategory {
+  repair
+  maintenance
+  stock
+
+  @@map("purchase_order_category")
+}
+
+/// `admin_validated` dari ERD DIBUANG (27 Sep 2026): ERD Approval Center
+/// memetakan validate_by_admin langsung ke waiting_finance_approval, jadi status
+/// itu tidak pernah mengendap. Siapa yang memvalidasi dan kapan sudah terekam
+/// kolom admin_validated_by/_at — argumen yang sama dipakai saat membuang
+/// `reviewed` dari damage_status.
+enum PurchaseRequestStatus {
+  submitted
+  rejected_by_admin
+  waiting_finance_approval
+  rejected_by_finance
+  approved
+  cancelled
+
+  @@map("purchase_request_status")
+}
+
+/// Header pengajuan pembelian Divisi Alat. Jadi sumber cash-out Kas Alat
+/// (source_type = equipment_purchase_request) dan approval_tasks di Approval Center.
+model EquipmentPurchaseRequest {
+  id            Int                   @id @default(autoincrement())
+  requestCode   String                @unique @map("request_code") @db.VarChar(50)
+  requestDate   DateTime              @map("request_date") @db.Date
+  // Tidak boleh diubah setelah dibuat — item yang sudah menempel akan jadi yatim
+  orderCategory PurchaseOrderCategory @map("order_category")
+  status        PurchaseRequestStatus @default(submitted)
+
+  // Dihitung sistem dari item, bukan dari kiriman klien
+  totalEstimatedAmount Decimal  @default(0) @map("total_estimated_amount") @db.Decimal(18, 2)
+  // Nominal AKTUAL yang dicairkan Finance. INI yang dipakai sebagai amount
+  // cash-out Kas Alat — bukan totalEstimatedAmount.
+  totalApprovedAmount  Decimal? @map("total_approved_amount") @db.Decimal(18, 2)
+
+  requestedBy       Int       @map("requested_by")
+  adminValidatedBy  Int?      @map("admin_validated_by")
+  adminValidatedAt  DateTime? @map("admin_validated_at")
+  financeApprovedBy Int?      @map("finance_approved_by")
+  financeApprovedAt DateTime? @map("finance_approved_at")
+  cancelledBy       Int?      @map("cancelled_by")
+  cancelledAt       DateTime? @map("cancelled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  requestedByUser       User  @relation("PrRequestedBy", fields: [requestedBy], references: [id])
+  adminValidatedByUser  User? @relation("PrAdminValidatedBy", fields: [adminValidatedBy], references: [id])
+  financeApprovedByUser User? @relation("PrFinanceApprovedBy", fields: [financeApprovedBy], references: [id])
+  cancelledByUser       User? @relation("PrCancelledBy", fields: [cancelledBy], references: [id])
+
+  repairItems        EquipmentPurchaseRepairItem[]
+  maintenanceItems   EquipmentPurchaseMaintenanceItem[]
+  stockItems         EquipmentPurchaseStockItem[]
+  maintenanceRecords MaintenanceRecord[]
+
+  // Target composite FK dari tabel item — inilah yang membuat baris item
+  // tidak mungkin menempel ke header berkategori lain
+  @@unique([id, orderCategory])
+  @@index([orderCategory, status])
+  @@index([requestDate])
+  @@map("equipment_purchase_requests")
+}
+
+/// Satu baris per kerusakan yang ditangani. Satu order boleh mencakup beberapa
+/// kerusakan. Unit alat dan uraian kerusakan dibaca dari damage_logs.
+model EquipmentPurchaseRepairItem {
+  id                 Int                   @id @default(autoincrement())
+  purchaseRequestId  Int                   @map("purchase_request_id")
+  orderCategory      PurchaseOrderCategory @default(repair) @map("order_category")
+  damageLogId        Int                   @map("damage_log_id")
+  // 0 kalau dikerjakan mekanik internal
+  serviceFee         Decimal               @default(0) @map("service_fee") @db.Decimal(18, 2)
+  approvedServiceFee Decimal?              @map("approved_service_fee") @db.Decimal(18, 2)
+  notes              String?               @db.Text
+
+  purchaseRequest EquipmentPurchaseRequest           @relation(fields: [purchaseRequestId, orderCategory], references: [id, orderCategory], onDelete: Cascade)
+  damageLog       DamageLog                          @relation(fields: [damageLogId], references: [id])
+  spareparts      EquipmentPurchaseRepairSparepart[]
+
+  @@unique([purchaseRequestId, damageLogId])
+  @@index([damageLogId])
+  @@map("equipment_purchase_repair_items")
+}
+
+/// Sparepart yang dibeli untuk satu kerusakan. Induknya sudah terikat kategori
+/// repair, jadi tidak perlu composite FK lagi di sini.
+model EquipmentPurchaseRepairSparepart {
+  id                  Int      @id @default(autoincrement())
+  repairItemId        Int      @map("repair_item_id")
+  itemName            String   @map("item_name") @db.VarChar(200)
+  quantity            Decimal  @default(1) @db.Decimal(18, 2)
+  estimatedUnitPrice  Decimal  @map("estimated_unit_price") @db.Decimal(18, 2)
+  estimatedTotalPrice Decimal  @map("estimated_total_price") @db.Decimal(18, 2)
+  approvedTotalPrice  Decimal? @map("approved_total_price") @db.Decimal(18, 2)
+
+  repairItem EquipmentPurchaseRepairItem @relation(fields: [repairItemId], references: [id], onDelete: Cascade)
+
+  @@index([repairItemId])
+  @@map("equipment_purchase_repair_spareparts")
+}
+
+/// Satu baris per aspek maintenance pada satu unit. maintenanceSettingId sudah
+/// memuat dua input form sekaligus (unit alat + aspek), jadi tidak disimpan ulang.
+model EquipmentPurchaseMaintenanceItem {
+  id                   Int                   @id @default(autoincrement())
+  purchaseRequestId    Int                   @map("purchase_request_id")
+  orderCategory        PurchaseOrderCategory @default(maintenance) @map("order_category")
+  maintenanceSettingId Int                   @map("maintenance_setting_id")
+  estimatedPrice       Decimal               @map("estimated_price") @db.Decimal(18, 2)
+  approvedPrice        Decimal?              @map("approved_price") @db.Decimal(18, 2)
+
+  purchaseRequest    EquipmentPurchaseRequest    @relation(fields: [purchaseRequestId, orderCategory], references: [id, orderCategory], onDelete: Cascade)
+  maintenanceSetting EquipmentMaintenanceSetting @relation(fields: [maintenanceSettingId], references: [id])
+
+  @@unique([purchaseRequestId, maintenanceSettingId])
+  @@index([maintenanceSettingId])
+  @@map("equipment_purchase_maintenance_items")
+}
+
+/// Pembelian stok gudang — mencakup semua jenis barang (sparepart, oli, grease,
+/// majun), tidak dipilah jenisnya. Tanpa satuan, mengikuti form.
+model EquipmentPurchaseStockItem {
+  id                  Int                   @id @default(autoincrement())
+  purchaseRequestId   Int                   @map("purchase_request_id")
+  orderCategory       PurchaseOrderCategory @default(stock) @map("order_category")
+  itemName            String                @map("item_name") @db.VarChar(200)
+  quantity            Decimal               @db.Decimal(18, 2)
+  estimatedUnitPrice  Decimal               @map("estimated_unit_price") @db.Decimal(18, 2)
+  estimatedTotalPrice Decimal               @map("estimated_total_price") @db.Decimal(18, 2)
+  approvedTotalPrice  Decimal?              @map("approved_total_price") @db.Decimal(18, 2)
+
+  purchaseRequest EquipmentPurchaseRequest @relation(fields: [purchaseRequestId, orderCategory], references: [id, orderCategory], onDelete: Cascade)
+
+  @@index([purchaseRequestId])
+  @@map("equipment_purchase_stock_items")
+}
+
+// ============================================================
+// DIVISI ALAT — Batch 5: Kas Alat
+// ============================================================
+
+enum CashTransactionType {
+  cash_in
+  cash_out
+
+  @@map("cash_transaction_type")
+}
+
+/// Dari mana baris kas ini lahir.
+/// `opening_balance`, `manual_expense`, dan `adjustment` diketik manusia.
+/// `equipment_purchase_request` dan `equipment_income_claim` WAJIB dibuat sistem —
+/// kalau boleh diketik manual, orang bisa mencatat cash-in klaim fiktif tanpa
+/// klaim di belakangnya.
+enum CashTransactionSourceType {
+  opening_balance
+  equipment_income_claim
+  equipment_purchase_request
+  manual_expense
+  adjustment
+
+  @@map("cash_transaction_source_type")
+}
+
+/// Master kategori kas, dikelola sendiri oleh Divisi Alat.
+model EquipmentCashCategory {
+  id              Int                 @id @default(autoincrement())
+  categoryName    String              @map("category_name") @db.VarChar(150)
+  transactionType CashTransactionType @map("transaction_type")
+
+  /// Memetakan kategori ORDER pada purchase request (repair/maintenance/stock)
+  /// ke kategori kas ini. Saat Finance menyetujui order, cash-out-nya memakai
+  /// kategori hasil pemetaan ini — tidak dipilih manual, jadi tidak bisa
+  /// bertentangan dengan isi ordernya.
+  /// NULL untuk kategori yang tidak berasal dari order: seluruh cash-in,
+  /// koreksi, dan operasional divisi.
+  /// Unique supaya satu kategori order tidak menunjuk dua kategori kas.
+  orderCategory PurchaseOrderCategory? @unique @map("order_category")
+
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  transactions EquipmentCashTransaction[]
+
+  @@unique([categoryName, transactionType])
+  @@map("equipment_cash_category")
+}
+
+/// Catatan uang masuk dan keluar Kas Alat.
+///
+/// Saldo TIDAK disimpan per baris, melainkan dihitung saat dibaca:
+/// SUM(cash_in) - SUM(cash_out) atas baris yang tidak dibatalkan. Konsekuensinya
+/// baris manual boleh diperbaiki dan dibatalkan tanpa merusak apa pun — beda
+/// dengan buku besar yang menyimpan saldo berjalan, di mana satu perubahan di
+/// tengah membuat saldo seluruh baris sesudahnya salah.
+///
+/// Volume kas divisi ini ratusan baris per tahun, jadi menjumlahkannya saat
+/// dibaca tidak terasa, dan sebagai gantinya tidak perlu penguncian baris
+/// maupun koreksi lewat baris lawan.
+model EquipmentCashTransaction {
+  id              Int                       @id @default(autoincrement())
+  transactionCode String                    @unique @map("transaction_code") @db.VarChar(50)
+  transactionDate DateTime                  @map("transaction_date") @db.Date
+  transactionType CashTransactionType       @map("transaction_type")
+  categoryId      Int                       @map("category_id")
+  amount          Decimal                   @db.Decimal(18, 2)
+  sourceType      CashTransactionSourceType @map("source_type")
+
+  /// Id dokumen sumber — referensi logis, bukan FK, karena tabel tujuannya
+  /// berbeda per sourceType (dan equipment_income_claim belum ada).
+  sourceId Int? @map("source_id")
+
+  description String @db.Text
+
+  /// Pembatalan tidak menghapus barisnya, supaya kalau ada yang bertanya
+  /// "kok catatan ini hilang" jejaknya masih ada beserta alasannya.
+  /// Baris yang dibatalkan tidak ikut dihitung ke saldo.
+  /// Boolean, bukan enum status — hanya ada dua keadaan, sama seperti
+  /// keputusan memakai `stops_operation` untuk damage log.
+  isVoided   Boolean   @default(false) @map("is_voided")
+  voidReason String?   @map("void_reason") @db.Text
+  voidedBy   Int?      @map("voided_by")
+  voidedAt   DateTime? @map("voided_at")
+
+  createdBy Int?     @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  category      EquipmentCashCategory @relation(fields: [categoryId], references: [id])
+  createdByUser User?                 @relation("CashCreatedBy", fields: [createdBy], references: [id])
+  voidedByUser  User?                 @relation("CashVoidedBy", fields: [voidedBy], references: [id])
+
+  @@index([transactionDate])
+  @@index([sourceType, sourceId])
+  @@index([categoryId])
+  @@index([isVoided])
+  @@map("equipment_cash_transaction")
 }

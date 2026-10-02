@@ -32,6 +32,10 @@ app.use('/api/permissions',        require('./modules/permission/permission.rout
 // app.use('/api/request-alat',       require('./modules/request-alat/request-alat.routes.js'));
 // app.use('/api/request-material',   require('./modules/request-material/request-material.routes.js'));
 // app.use('/api/approvals',          require('./modules/approval-center/approval.routes.js'));
+// Didaftarkan SEBELUM /api/equipment supaya jelas mana yang menangani
+// /purchase-requests — bukan bergantung pada fall-through router.
+app.use('/api/equipment/purchase-requests', require('./modules/divisi-alat/purchase-request.routes.js'));
+app.use('/api/equipment/cash',      require('./modules/divisi-alat/cash.routes.js'));
 app.use('/api/equipment',          require('./modules/divisi-alat/divisi-alat.routes.js'));
 // app.use('/api/income',             require('./modules/income/income.routes.js'));
 // app.use('/api/finance-field',      require('./modules/finance-field/finance-field.routes.js'));

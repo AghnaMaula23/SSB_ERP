@@ -412,8 +412,11 @@ router.put('/damage-logs/:id/resolve',
     body('performedBy').optional({ nullable: true }).trim()
       .isLength({ max: 150 }).withMessage('Nama pelaksana maksimal 150 karakter'),
     body('maintenanceDate').optional().isISO8601().withMessage('maintenanceDate harus format tanggal YYYY-MM-DD'),
-    body('maintenanceSettingId').optional({ nullable: true })
-      .isInt({ min: 1 }).withMessage('maintenanceSettingId harus angka').toInt(),
+    // Menyelesaikan kerusakan TIDAK boleh mereset jadwal servis: reset perawatan
+    // rutin adalah aksi manual terpisah, dan aspek perawatan tidak bisa menumpang
+    // order perbaikan karena kategori ordernya berbeda.
+    body('maintenanceSettingId').not().exists()
+      .withMessage('Reset jadwal servis dilakukan terpisah di halaman Maintenance, bukan lewat penyelesaian kerusakan'),
   ]),
   damage.resolve);
 

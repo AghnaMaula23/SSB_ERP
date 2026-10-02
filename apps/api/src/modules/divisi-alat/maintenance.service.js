@@ -1,25 +1,13 @@
 const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
+const { assertNotFuture } = require('../../utils/date.js');
+const { nextDocumentNumber } = require('../../utils/document-number.js');
 
 const MAINTENANCE_DOC_TYPE = 'MTN';
 const MAINTENANCE_DOC_PAD = 6;
 
 const toNumber = (value) => (value === null || value === undefined ? null : Number(value));
 const toDateOnly = (value) => (value ? new Date(value).toISOString().slice(0, 10) : null);
-
-/**
- * Nomor dokumen berurutan, mis. MTN-000001.
- * Increment-nya atomik di database supaya dua input bersamaan tidak kembar.
- * Period 'ALL' = deret tunggal tanpa reset periodik.
- */
-const nextDocumentNumber = async (tx, docType, { period = 'ALL', pad = 6 } = {}) => {
-  const sequence = await tx.documentSequence.upsert({
-    where: { docType_period: { docType, period } },
-    update: { lastSequence: { increment: 1 } },
-    create: { docType, period, lastSequence: 1 },
-  });
-  return `${docType}-${String(sequence.lastSequence).padStart(pad, '0')}`;
-};
 
 /**
  * Status dihitung dari SISA jam menuju jatuh tempo, bukan dari jam terpakai.
@@ -468,10 +456,7 @@ const createRecord = async (payload, userId) => {
 
   const item = await findItemOrFail(equipmentItemId);
 
-  const workDate = new Date(maintenanceDate);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (workDate > today) throw httpError('Tanggal maintenance tidak boleh di masa depan', 400);
+  const workDate = assertNotFuture(maintenanceDate, 'Tanggal maintenance');
 
   let setting = null;
   if (maintenanceSettingId) {
@@ -553,7 +538,7 @@ const cancelRecord = async (id, { notes }) => {
 };
 
 module.exports = {
-  computeStatus, applyWorkhourToSettings, nextDocumentNumber,
+  computeStatus, applyWorkhourToSettings,
   listAspects, getAspectById, createAspect, updateAspect, removeAspect,
   listSettings, listSettingsByItem, getSettingById, createSetting, updateSetting, removeSetting,
   listRecords, listRecordsByItem, getRecordById, createRecord, cancelRecord,
