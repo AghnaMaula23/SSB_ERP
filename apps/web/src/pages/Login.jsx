@@ -20,12 +20,12 @@ export default function Login({ onLoginSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [health, setHealth] = useState({ status: 'checking', label: 'Memeriksa koneksi API...' });
+  const [health, setHealth] = useState({ status: 'checking', label: 'Memeriksa koneksi server...' });
 
   useEffect(() => {
     getHealth()
-      .then(() => setHealth({ status: 'online', label: 'API terhubung' }))
-      .catch(() => setHealth({ status: 'offline', label: 'API belum dapat dihubungi' }));
+      .then(() => setHealth({ status: 'online', label: 'Server terhubung' }))
+      .catch(() => setHealth({ status: 'offline', label: 'Server belum dapat dihubungi' }));
   }, []);
 
   const handleSubmit = async (event) => {

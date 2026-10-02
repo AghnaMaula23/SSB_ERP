@@ -65,7 +65,7 @@ export async function getAllItems(filters = {}) {
     total = Number(result.total || 0);
     page += 1;
   } while (rows.length < total && page <= 1000);
-  if (rows.length < total) throw new Error('Data equipment melebihi batas pagination.');
+  if (rows.length < total) throw new Error('Data equipment terlalu banyak untuk dimuat sekaligus.');
   return { data: rows, total: rows.length };
 }
 
@@ -92,7 +92,7 @@ async function getAllPaginated(path) {
     total = Number(result.total || 0);
     page += 1;
   } while (rows.length < total && page <= 1000);
-  if (rows.length < total) throw new Error('Data equipment melebihi batas pagination.');
+  if (rows.length < total) throw new Error('Data equipment terlalu banyak untuk dimuat sekaligus.');
   return rows;
 }
 

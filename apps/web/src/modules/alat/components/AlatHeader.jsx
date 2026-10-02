@@ -125,7 +125,6 @@ export default function AlatHeader({ collapsed, onToggle, user: userProp }) {
                   <p className="px-4 py-8 text-center text-xs text-slate-500">Belum ada aktivitas tercatat.</p>
                 )}
               </div>
-              <p className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-[10px] text-slate-500">Log aktivitas disimpan di browser (endpoint activity belum tersedia).</p>
             </div>
           )}
         </div>

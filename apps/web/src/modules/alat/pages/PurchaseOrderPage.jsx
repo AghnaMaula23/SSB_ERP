@@ -4,27 +4,22 @@ import AlatSidebar from '../components/AlatSidebar.jsx';
 import StatCard from '../components/StatCard.jsx';
 import { downloadCsv } from '../../../utils/csv.js';
 import ActionButton from '../../../components/ActionButton.jsx';
+import { hasPermission } from '../../../services/permissions.js';
 import {
   getPurchaseOrders,
-  deletePurchaseOrder,
+  cancelPurchaseOrder,
+  isEditableStatus,
   categoryLabel,
   statusLabel,
   STATUS_OPTIONS,
+  STATUS_STYLES,
+  STATUS_ACCENTS,
 } from '../services/purchaseOrderService.js';
 
 const PAGE_SIZE = 8;
 
-const statusStyles = {
-  pending: 'bg-amber-50 text-amber-700 border-amber-200',
-  approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  rejected: 'bg-red-50 text-red-700 border-red-200',
-};
-
-const statusAccent = {
-  pending: 'bg-amber-400',
-  approved: 'bg-emerald-400',
-  rejected: 'bg-red-400',
-};
+const statusStyles = STATUS_STYLES;
+const statusAccent = STATUS_ACCENTS;
 
 function formatRupiah(num) {
   return new Intl.NumberFormat('id-ID').format(num);
@@ -46,19 +41,28 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDe
   const [page, setPage] = useState(1);
   const [notice, setNotice] = useState(() => sessionStorage.getItem('purchase-order-notice') || '');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback(async () => {
     try {
-      const data = getPurchaseOrders({ search, status: statusFilter, startDate, endDate });
+      setLoading(true);
+      const data = await getPurchaseOrders({
+        search,
+        status: statusFilter === 'all' ? '' : statusFilter,
+        startDate,
+        endDate,
+      });
       setRows(data);
       setError('');
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   }, [endDate, search, startDate, statusFilter]);
 
   useEffect(() => {
-    const timeout = window.setTimeout(loadData, 0);
+    const timeout = window.setTimeout(loadData, 300);
     return () => window.clearTimeout(timeout);
   }, [loadData]);
 
@@ -67,34 +71,36 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDe
   const navigate = (route) => { window.location.hash = `/${route}`; };
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const visibleRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const pendingCount = useMemo(() => rows.filter((row) => row.status === 'pending').length, [rows]);
+  const pendingCount = useMemo(() => rows.filter((row) => ['submitted', 'waiting_finance_approval'].includes(row.status)).length, [rows]);
   const approvedCount = useMemo(() => rows.filter((row) => row.status === 'approved').length, [rows]);
+  // Batalkan order butuh purchase-request:update (backend 403 tanpa izin).
+  const canCancel = hasPermission('purchase-request:update');
 
   const handleExport = () => {
-    downloadCsv('purchase-orders-demo.csv', rows, [
+    downloadCsv('purchase-orders.csv', rows, [
       { label: 'Order Code', value: (row) => row.orderCode },
       { label: 'Date', value: (row) => row.date },
-      { label: 'Category', value: (row) => categoryLabel(row.category) },
-      { label: 'Unit', value: (row) => row.unitAlat },
-      { label: 'Description', value: (row) => row.description },
-      { label: 'Quantity', value: (row) => row.quantity },
-      { label: 'Unit Price', value: (row) => row.unitPrice },
-      { label: 'Total', value: (row) => row.totalPrice },
+      { label: 'Kategori', value: (row) => categoryLabel(row.category) },
+      { label: 'Item', value: (row) => (row.items || []).map((item) => item.itemName).join(' | ') },
+      { label: 'Equipment', value: (row) => [...new Set((row.items || []).map((item) => item.equipmentAssetCode).filter(Boolean))].join(' | ') },
+      { label: 'Estimasi', value: (row) => row.totalEstimatedAmount },
+      { label: 'Disetujui', value: (row) => row.totalApprovedAmount },
       { label: 'Status', value: (row) => statusLabel(row.status) },
+      { label: 'Pengaju', value: (row) => row.submittedBy },
     ]);
     setNotice('Data PO berhasil di-export.');
   };
 
-  const handleDelete = (item) => {
-    if (item.status !== 'pending') {
-      setNotice('Purchase order yang sudah diproses tidak dapat dihapus dari Divisi Alat.');
+  const handleCancel = async (item) => {
+    if (!isEditableStatus(item.status)) {
+      setNotice(`Order ${item.orderCode} berstatus "${statusLabel(item.status)}" — hanya order yang masih "Diajukan" yang bisa dibatalkan oleh pengaju.`);
       return;
     }
-    if (!window.confirm(`Hapus purchase order ${item.orderCode}?`)) return;
+    if (!window.confirm(`Batalkan purchase order ${item.orderCode}?`)) return;
     try {
-      deletePurchaseOrder(item.id);
-      setNotice(`${item.orderCode} berhasil dihapus.`);
-      loadData();
+      await cancelPurchaseOrder(item.id);
+      setNotice(`${item.orderCode} berhasil dibatalkan.`);
+      await loadData();
       if (page > 1 && visibleRows.length === 1) setPage(page - 1);
     } catch (err) {
       setError(err.message);
@@ -132,7 +138,7 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDe
                 <span className="text-slate-900 font-semibold">Purchase Order</span>
               </nav>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Purchase Orders</h1>
-              <p className="mt-1 text-xs text-amber-700">Endpoint purchase request akan dipakai otomatis jika tersedia; fallback demo disimpan di browser.</p>
+              <p className="mt-1 text-xs text-slate-500">Pengajuan pembelian Divisi Alat · divalidasi Admin dan disetujui Finance.</p>
             </div>
             <div className="flex items-center gap-3">
               <button type="button" onClick={handleExport} className="btn btn-secondary text-xs">↓ Export</button>
@@ -142,8 +148,8 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDe
 
           <div className="mb-6 grid gap-4 sm:grid-cols-3">
             <StatCard label="Total Purchase Orders" value={rows.length} tone="blue" />
-            <StatCard label="Pending Approval" value={pendingCount} tone="amber" />
-            <StatCard label="Approved" value={approvedCount} tone="green" />
+            <StatCard label="Menunggu Proses" value={pendingCount} tone="amber" hint="Diajukan + menunggu Finance" />
+            <StatCard label="Disetujui" value={approvedCount} tone="green" hint="Dana sudah dicairkan ke Kas Alat" />
           </div>
 
           {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{notice}</div>}
@@ -178,6 +184,7 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDe
           </section>
 
           <div className="table-container">
+            {loading && <div className="px-4 py-3 text-xs text-slate-500">Memuat purchase order dari server...</div>}
             <table className="table-modern hidden md:table">
               <thead>
                 <tr>
@@ -198,17 +205,17 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDe
                     <td className="font-mono text-xs font-semibold text-slate-900 whitespace-nowrap">{row.orderCode}</td>
                     <td className="text-xs whitespace-nowrap">{formatDate(row.date)}</td>
                     <td className="text-xs">{categoryLabel(row.category)}</td>
-                    <td className="text-xs font-medium">{row.unitAlat}</td>
-                    <td className="text-xs">{row.description}</td>
-                    <td className="text-center text-xs">{row.quantity || '-'}</td>
-                    <td className="text-right text-xs font-medium">{formatRupiah(row.totalPrice)}</td>
+                    <td className="text-xs font-medium">{[...new Set((row.items || []).map((item) => item.equipmentAssetCode).filter(Boolean))].join(', ') || '-'}</td>
+                    <td className="text-xs">{(row.items || []).map((item) => item.itemName).join(', ')}</td>
+                    <td className="text-center text-xs">{(row.items || []).length}</td>
+                    <td className="text-right text-xs font-medium">{formatRupiah(row.totalEstimatedAmount)}</td>
                     <td className="text-center">
-                      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase ${statusStyles[row.status] || ''}`}>{statusLabel(row.status)}</span>
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusStyles[row.status] || ''}`}>{statusLabel(row.status)}</span>
                     </td>
                     <td className="text-center">
                       <div className="flex items-center justify-center gap-1">
                         <ActionButton kind="view" label={`Lihat detail ${row.orderCode}`} onClick={() => onViewDetails?.(row)} />
-                        {row.status === 'pending' && <ActionButton kind="delete" tone="danger" label={`Hapus ${row.orderCode}`} onClick={() => handleDelete(row)} />}
+                        {canCancel && isEditableStatus(row.status) && <ActionButton kind="cancel" tone="danger" label={`Batalkan ${row.orderCode}`} onClick={() => handleCancel(row)} />}
                       </div>
                     </td>
                   </tr>
@@ -244,7 +251,7 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDe
                     <td className="text-center">
                       <div className="flex items-center justify-center gap-1">
                         <ActionButton kind="view" label={`Lihat detail ${row.orderCode}`} onClick={() => onViewDetails?.(row)} />
-                        {row.status === 'pending' && <ActionButton kind="delete" tone="danger" label={`Hapus ${row.orderCode}`} onClick={() => handleDelete(row)} />}
+                        {canCancel && isEditableStatus(row.status) && <ActionButton kind="cancel" tone="danger" label={`Batalkan ${row.orderCode}`} onClick={() => handleCancel(row)} />}
                       </div>
                     </td>
                   </tr>

@@ -44,13 +44,39 @@ function getCustomAspects() {
   }
 }
 
-export function createMaintenanceAspect({ aspectCode, aspectName, defaultThresholdValue }) {
-  const rows = getCustomAspects();
+/**
+ * Aspek maintenance dibuat lewat endpoint yang sudah disiapkan
+ * (POST /maintenance/aspects). Store lokal hanya dipakai sebagai fallback saat
+ * request ditolak karena izin/koneksi, supaya halaman tetap bisa dipakai.
+ */
+export async function createMaintenanceAspect({ aspectCode, aspectName, defaultThresholdValue, warningLeadValue, description }) {
   const code = String(aspectCode || '').trim().toUpperCase();
   const name = String(aspectName || '').trim();
   if (!code || !name) throw new Error('Kode dan nama aspek wajib diisi.');
+
+  try {
+    const created = await apiRequest(`${API_PREFIX}/maintenance/aspects`, {
+      method: 'POST',
+      body: JSON.stringify({
+        aspectCode: code,
+        aspectName: name,
+        ...(defaultThresholdValue ? { defaultThresholdValue: Number(defaultThresholdValue) } : {}),
+        ...(warningLeadValue ? { warningLeadValue: Number(warningLeadValue) } : {}),
+        ...(description ? { description } : {}),
+      }),
+    });
+    if (created) return created;
+  } catch (error) {
+    if (error?.status === 401) throw error;
+    if (error?.status === 403) {
+      throw new Error('Anda tidak memiliki izin maintenance:create untuk menambah aspek baru.', { cause: error });
+    }
+    if (error?.status && error.status !== 0) throw error;
+  }
+
+  const rows = getCustomAspects();
   if (rows.some((row) => row.aspectCode === code)) throw new Error('Kode aspek sudah dipakai.');
-  const aspect = { id: `custom-${Date.now()}`, aspectCode: code, aspectName: name, defaultThresholdValue: Number(defaultThresholdValue) || null, warningLeadValue: 50, isActive: true, isDummy: true };
+  const aspect = { id: `custom-${code}`, aspectCode: code, aspectName: name, defaultThresholdValue: Number(defaultThresholdValue) || null, warningLeadValue: Number(warningLeadValue) || 50, isActive: true, isDummy: true };
   localStorage.setItem(CUSTOM_ASPECTS_KEY, JSON.stringify([...rows, aspect]));
   return aspect;
 }
@@ -65,7 +91,7 @@ export async function getMaintenanceAspects() {
     total = Number(result.total || 0);
     page += 1;
   } while (rows.length < total && page <= 1000);
-  if (rows.length < total) throw new Error('Data maintenance melebihi batas pagination.');
+  if (rows.length < total) throw new Error('Data maintenance terlalu banyak untuk dimuat sekaligus.');
   return [...rows, ...getCustomAspects().filter((aspect) => !rows.some((row) => row.aspectCode === aspect.aspectCode))];
 }
 
@@ -103,7 +129,7 @@ export async function getItemMaintenanceSettings(itemId) {
     total = Number(result.total || 0);
     page += 1;
   } while (rows.length < total && page <= 1000);
-  if (rows.length < total) throw new Error('Data maintenance melebihi batas pagination.');
+  if (rows.length < total) throw new Error('Data maintenance terlalu banyak untuk dimuat sekaligus.');
   return rows;
 }
 

@@ -8,14 +8,16 @@ export function saveSession(token, user) {
 export function clearSession() {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
-  // PO/Kas are demo-only while their backend modules are unavailable.
+  // Sisa store lokal yang masih dipakai karena endpoint-nya belum ada:
+  // - income_claims : modul income belum di-mount, klaim pendapatan masih lokal
+  // - maintenance_* : threshold per tipe & reset reference belum punya endpoint
   localStorage.removeItem('po_data');
   localStorage.removeItem('po_seq');
   localStorage.removeItem('kas_data');
   localStorage.removeItem('kas_seq');
+  localStorage.removeItem('maintenance_reset_purchase_refs');
   localStorage.removeItem('income_claims');
   localStorage.removeItem('income_claim_seq');
-  localStorage.removeItem('maintenance_reset_purchase_refs');
   localStorage.removeItem('maintenance_type_thresholds');
   localStorage.removeItem('maintenance_custom_aspects');
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ActionButton from '../../../components/ActionButton.jsx';
 import { recordActivity } from '../../../services/activityLogService.js';
 import DamageLogActionModal from '../information/components/DamageLogActionModal.jsx';
@@ -7,7 +7,16 @@ import { getPurchaseOrders, ordersForDamageLog } from '../services/purchaseOrder
 
 export default function ActiveIssuesCard({ issues = [], onFixed, onViewDetails }) {
   const [selectedIssue, setSelectedIssue] = useState(null);
+  const [approvedOrders, setApprovedOrders] = useState([]);
   const canUpdate = hasPermission('damage:update');
+
+  useEffect(() => {
+    let cancelled = false;
+    getPurchaseOrders({ status: 'approved' })
+      .then((orders) => { if (!cancelled) setApprovedOrders(orders); })
+      .catch(() => { if (!cancelled) setApprovedOrders([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <section className="card-panel" aria-labelledby="active-issues-title">
@@ -65,7 +74,7 @@ export default function ActiveIssuesCard({ issues = [], onFixed, onViewDetails }
         key={selectedIssue?.id || 'no-issue'}
         log={selectedIssue}
         action="resolve"
-        purchaseOrders={selectedIssue ? ordersForDamageLog(getPurchaseOrders({ status: 'approved' }), selectedIssue.id) : []}
+        purchaseOrders={selectedIssue ? ordersForDamageLog(approvedOrders, selectedIssue.id) : []}
         onClose={() => setSelectedIssue(null)}
         onSaved={() => {
           if (selectedIssue && onFixed) onFixed(selectedIssue.id);

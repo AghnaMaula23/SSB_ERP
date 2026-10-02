@@ -4,7 +4,7 @@ const API_PREFIX = import.meta.env.VITE_ALAT_API_PREFIX || '/api/equipment';
 
 export async function getDamageLogs({ page = 1, limit = 10, search, status, sparePartSource, mechanicTeam } = {}) {
   const query = new URLSearchParams({ page: String(page), limit: String(limit) });
-  if (search) query.set('search', search);
+  if (search && search.trim()) query.set('search', search.trim());
   if (status && status !== 'all') query.set('status', status);
   if (sparePartSource && sparePartSource !== 'all') query.set('sparePartSource', sparePartSource);
   if (mechanicTeam && mechanicTeam !== 'all') query.set('mechanicTeam', mechanicTeam);

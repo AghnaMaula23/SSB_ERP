@@ -6,6 +6,10 @@ const { nextDocumentNumber } = require('../../utils/document-number.js');
 const CASH_DOC_TYPE = 'KAS';
 const CASH_DOC_PAD = 6;
 
+// Sama seperti purchase-request: batas default transaksi interaktif Prisma 5
+// detik terlalu pendek untuk connection pooler Supabase.
+const TRANSACTION_OPTIONS = { maxWait: 15000, timeout: 30000 };
+
 /**
  * Baris bersumber dokumen WAJIB dibuat sistem lewat recordPurchaseRequest*().
  * Kalau boleh diketik manual, orang bisa mencatat cash-in klaim pendapatan
@@ -436,7 +440,7 @@ const createTransaction = async (payload, userId) => {
       },
       include: transactionInclude,
     });
-  });
+  }, TRANSACTION_OPTIONS);
 
   return shapeTransaction(row);
 };

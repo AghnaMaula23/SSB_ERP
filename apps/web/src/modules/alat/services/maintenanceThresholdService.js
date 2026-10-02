@@ -1,5 +1,12 @@
+/**
+ * Threshold default per (equipment type × maintenance aspect).
+ *
+ * Endpoint untuk threshold per TIPE belum ada di backend — yang tersedia baru
+ * `POST /items/:itemId/maintenance-settings` (threshold per unit). Karena itu
+ * konfigurasi per tipe ini masih disimpan di browser, sementara enactment per
+ * unit tetap lewat endpoint maintenance settings.
+ */
 const STORAGE_KEY = 'maintenance_type_thresholds';
-const RESET_REFERENCE_KEY = 'maintenance_reset_purchase_refs';
 
 function readAll() {
   try {
@@ -37,20 +44,4 @@ export function deleteTypeThreshold(equipmentTypeId, maintenanceAspectId) {
   writeAll(data);
 }
 
-export function getMaintenanceResetReferences() {
-  try {
-    const rows = JSON.parse(localStorage.getItem(RESET_REFERENCE_KEY) || '[]');
-    return Array.isArray(rows) ? rows : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveMaintenanceResetReference(reference) {
-  const rows = getMaintenanceResetReferences();
-  rows.push({ ...reference, resetAt: new Date().toISOString() });
-  localStorage.setItem(RESET_REFERENCE_KEY, JSON.stringify(rows));
-}
-
 export const MAINTENANCE_THRESHOLD_STORAGE_KEY = STORAGE_KEY;
-export const MAINTENANCE_RESET_REFERENCE_KEY = RESET_REFERENCE_KEY;

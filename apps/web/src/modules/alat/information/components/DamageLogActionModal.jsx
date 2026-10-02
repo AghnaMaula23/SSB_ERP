@@ -10,9 +10,14 @@ function todayDate() {
   return new Date(date.getTime() - offset * 60 * 1000).toISOString().slice(0, 10);
 }
 
+const rupiah = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value || 0));
+const itemEstimated = (items) => items.reduce((sum, item) => sum + Number(item.estimatedTotalPrice || 0), 0);
+
 /**
- * purchaseOrders: PO Perbaikan Alat approved yang merujuk damage log ini.
- * Resolve wajib memilih minimal satu PO tersebut.
+ * purchaseOrders: order kategori Repair / Service yang sudah approved dan
+ * merujuk damage log ini. Resolve wajib memilih minimal satu order tersebut —
+ * endpoint resolve tidak menerima field purchase request, jadi catatan
+ * order yang dipakai disimpan lokal untuk keperluan audit.
  */
 export default function DamageLogActionModal({ log, action, purchaseOrders = [], onClose, onSaved }) {
   const [form, setForm] = useState(initialResolve);
@@ -29,7 +34,7 @@ export default function DamageLogActionModal({ log, action, purchaseOrders = [],
   const submit = async (event) => {
     event.preventDefault();
     if (isResolve && !selectedOrderIds.length) {
-      setError('Pilih minimal satu purchase order Perbaikan Alat yang sudah approved.');
+      setError('Pilih minimal satu purchase order Repair / Service yang sudah approved.');
       return;
     }
     if (isResolve && !form.actionDescription.trim()) {
@@ -85,9 +90,9 @@ export default function DamageLogActionModal({ log, action, purchaseOrders = [],
           {isResolve ? (
             <>
               <div>
-                <p className="text-xs font-semibold text-slate-600">Purchase Order Perbaikan Alat (Approved) *</p>
+                <p className="text-xs font-semibold text-slate-600">Purchase Order Repair / Service (Approved) *</p>
                 {purchaseOrders.length === 0 ? (
-                  <p className="mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">Belum ada purchase order Perbaikan Alat approved untuk damage log ini. Ajukan purchase order terlebih dahulu dan tunggu sampai di-approve.</p>
+                  <p className="mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">Belum ada purchase order Repair / Service approved untuk damage log ini. Ajukan purchase order terlebih dahulu dan tunggu sampai di-approve.</p>
                 ) : (
                   <div className="mt-1 space-y-2">
                     {purchaseOrders.map((order) => {
@@ -99,7 +104,8 @@ export default function DamageLogActionModal({ log, action, purchaseOrders = [],
                           <input type="checkbox" checked={checked} onChange={() => toggleOrder(id)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600" />
                           <span className="min-w-0 text-slate-600">
                             <span className="block text-xs font-bold text-slate-900">{order.orderCode}</span>
-                            <span className="mt-0.5 block">{items.map((item) => `${item.itemName} (${item.quantity} ${item.unit})`).join(', ') || order.description}</span>
+                            <span className="mt-0.5 block truncate">{items.map((item) => item.relatedLabel || item.itemName).join(', ') || order.description}</span>
+                            <span className="mt-0.5 block">Estimasi {rupiah(itemEstimated(items))}</span>
                           </span>
                         </label>
                       );

@@ -12,7 +12,6 @@ import MaintenanceThresholdPage from './modules/alat/pages/MaintenanceThresholdP
 import ResetMaintenancePage from './modules/alat/pages/ResetMaintenancePage.jsx';
 import PurchaseOrderPage from './modules/alat/pages/PurchaseOrderPage.jsx';
 import PurchaseOrderCreatePage from './modules/alat/pages/PurchaseOrderCreatePage.jsx';
-import PurchaseOrderEditPage from './modules/alat/pages/PurchaseOrderEditPage.jsx';
 import PurchaseOrderDetailPage from './modules/alat/pages/PurchaseOrderDetailPage.jsx';
 import KasPage from './modules/alat/pages/KasPage.jsx';
 import KasClaimPendapatanPage from './modules/alat/pages/KasClaimPendapatanPage.jsx';
@@ -46,7 +45,6 @@ function isKnownRoute(route) {
     /^alat\/maintenance\/reset\/\d+\/?$/.test(route) ||
     route === 'alat/purchase-orders' ||
     route === 'alat/purchase-orders/create' ||
-    /^alat\/purchase-orders\/\d+\/edit\/?$/.test(route) ||
     /^alat\/purchase-orders\/\d+\/?$/.test(route) ||
     route === 'alat/kas' ||
     route === 'alat/kas/claim-pendapatan' ||
@@ -188,10 +186,6 @@ export default function App() {
     return <PurchaseOrderPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} onViewDetails={(order) => navigate(`alat/purchase-orders/${order.id}`)} />;
   if (route === 'alat/purchase-orders/create')
     return <PurchaseOrderCreatePage key={route} onBackToModules={() => navigate('modules')} onBackToPurchaseOrders={() => navigate('alat/purchase-orders')} onSignOut={signOut} />;
-  if (route.startsWith('alat/purchase-orders/') && route.endsWith('/edit')) {
-    const poId = route.split('/')[2];
-    return <PurchaseOrderEditPage key={route} poId={poId} onBackToModules={() => navigate('modules')} onBackToPurchaseOrders={() => navigate('alat/purchase-orders')} onSignOut={signOut} />;
-  }
   if (route.startsWith('alat/purchase-orders/')) {
     const poId = route.split('/')[2];
     return <PurchaseOrderDetailPage key={route} orderId={poId} onBack={() => navigate('alat/purchase-orders')} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;

@@ -22,15 +22,21 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
   const [statuses, setStatuses] = useState(() => getActionStatuses());
   const canUpdate = hasPermission('damage:update');
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     setLoading(true);
-    getDamageLogById(logId)
-      .then((result) => {
-        setLog(result);
-        setRelatedOrders(ordersForDamageLog(getPurchaseOrders(), logId));
-      })
-      .catch((requestError) => setError(requestError.message))
-      .finally(() => setLoading(false));
+    try {
+      const [detail, orders] = await Promise.allSettled([
+        getDamageLogById(logId),
+        getPurchaseOrders(),
+      ]);
+      if (detail.status === 'rejected') throw detail.reason;
+      setLog(detail.value);
+      setRelatedOrders(orders.status === 'fulfilled' ? ordersForDamageLog(orders.value, logId) : []);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
   }, [logId]);
 
   useEffect(() => {

@@ -4,7 +4,6 @@ import AlatSidebar from '../components/AlatSidebar.jsx';
 import { getItemById } from '../services/alatService.js';
 import { createMaintenanceRecord, getItemMaintenanceSettings, getMaintenanceRecords } from '../services/maintenanceService.js';
 import { getPurchaseOrders, maintenanceAspectsForUnit, maintenanceSettingIdsForUnit } from '../services/purchaseOrderService.js';
-import { getMaintenanceResetReferences, saveMaintenanceResetReference } from '../services/maintenanceThresholdService.js';
 import { recordActivity } from '../../../services/activityLogService.js';
 import { hasPermission } from '../../../services/permissions.js';
 import ActionButton from '../../../components/ActionButton.jsx';
@@ -18,16 +17,18 @@ const statusBadgeStyles = {
 };
 const statusLabels = { normal: 'Normal', warning: 'Scheduled', due: 'Due Soon', overdue: 'Alert', inactive: 'Inactive' };
 
-// Halaman maintenance hanya memakai PO Servis Rutin approved; PO Perbaikan Alat dipakai di damage log.
+// Halaman maintenance hanya memakai PO Maintenance approved; PO Repair dipakai di damage log.
 function isEligibleOrder(order, unitId) {
-  return order.status === 'approved' && order.category === 'servis_rutin' && maintenanceSettingIdsForUnit(order, unitId).length > 0;
+  return order.status === 'approved' && order.category === 'maintenance' && maintenanceSettingIdsForUnit(order, unitId).length > 0;
 }
 
 // Setting yang sudah pernah di-reset memakai PO ini untuk unit yang sama.
-function usedSettingIdsFor(order, unitId) {
-  return getMaintenanceResetReferences()
-    .filter((reference) => String(reference.purchaseOrderId) === String(order.id) && String(reference.equipmentItemId) === String(unitId))
-    .flatMap((reference) => (reference.settingIds || []).map(String));
+// Diturunkan dari maintenance record di server (purchaseRequestId tersimpan di
+// sana), bukan dari catatan lokal browser.
+function usedSettingIdsFor(order, unitId, records) {
+  return records
+    .filter((record) => String(record.purchaseRequestId) === String(order.id) && String(record.equipmentItemId) === String(unitId))
+    .map((record) => String(record.maintenanceSettingId));
 }
 
 function todayDate() {
@@ -60,19 +61,21 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
       try {
         setLoading(true);
         setError('');
-        const [unitData, settingsData, recordResult] = await Promise.allSettled([
+        const [unitData, settingsData, recordResult, orderResult] = await Promise.allSettled([
           getItemById(unitId),
           getItemMaintenanceSettings(unitId),
           getMaintenanceRecords({ equipmentItemId: unitId, limit: 20 }),
+          getPurchaseOrders({ status: 'approved' }),
         ]);
-        const eligiblePurchaseOrders = getPurchaseOrders().filter((order) => isEligibleOrder(order, unitId));
         if (cancelled) return;
         if (unitData.status === 'rejected') throw unitData.reason;
         if (settingsData.status === 'rejected') throw settingsData.reason;
+        if (recordResult.status === 'rejected') throw recordResult.reason;
+        if (orderResult.status === 'rejected') throw orderResult.reason;
         setUnit(unitData.value);
         setSettings(settingsData.value || []);
-        setPreviousRecords(recordResult.status === 'fulfilled' ? recordResult.value || [] : []);
-        setPurchaseOrders(eligiblePurchaseOrders);
+        setPreviousRecords(recordResult.value || []);
+        setPurchaseOrders((orderResult.value || []).filter((order) => isEligibleOrder(order, unitId)));
         setSelectedSettingIds([]);
       } catch (requestError) {
         if (!cancelled) setError(requestError.message || 'Failed to load maintenance settings');
@@ -85,7 +88,7 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
   }, [unitId]);
 
   const selectedOrders = useMemo(() => purchaseOrders.filter((order) => selectedPurchaseOrderIds.includes(String(order.id))), [purchaseOrders, selectedPurchaseOrderIds]);
-  const usedByOrder = useMemo(() => Object.fromEntries(purchaseOrders.map((order) => [order.id, usedSettingIdsFor(order, unitId)])), [purchaseOrders, unitId]);
+  const usedByOrder = useMemo(() => Object.fromEntries(purchaseOrders.map((order) => [order.id, usedSettingIdsFor(order, unitId, previousRecords)])), [purchaseOrders, unitId, previousRecords]);
   // Aspek unit ini yang dicakup PO dan belum pernah di-reset memakai PO tersebut.
   const availableFor = (order) => {
     const covered = maintenanceSettingIdsForUnit(order, unitId);
@@ -110,7 +113,7 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!selectedOrders.length) { setError('Pilih minimal satu purchase order Servis Rutin yang sudah approved sebelum reset threshold.'); return; }
+    if (!selectedOrders.length) { setError('Pilih minimal satu purchase order Maintenance yang sudah approved sebelum reset threshold.'); return; }
     if (!selectedSettingIds.length) { setError('Please select at least one maintenance parameter to reset.'); return; }
     if (selectedSettingIds.some((id) => !isAllowed(id))) { setError('Ada aspek yang tidak termasuk dalam purchase order terpilih.'); return; }
     if (!actionDescription.trim()) { setError('Action description is required.'); return; }
@@ -118,7 +121,6 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
     setSubmitting(true);
     setError('');
     let completed = 0;
-    const settingIdsByOrder = new Map();
     try {
       for (const settingId of selectedSettingIds) {
         const order = orderForSetting(settingId);
@@ -129,24 +131,14 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
           maintenanceDate,
           actionDescription: actionDescription.trim(),
           performedBy: performedBy || undefined,
-          // Kaitan ke order pembelian BELUM dikirim.
-          //
-          // Backend menamai field ini `purchaseRequestId` dan menjaganya dengan
-          // foreign key ke equipment_purchase_requests. Sementara daftar PO di
-          // halaman ini masih berasal dari mock localStorage, `selectedPurchaseOrderId`
-          // bukan id purchase request sungguhan — mengirimnya membuat request
-          // ditolak 409, atau lebih buruk, menaut ke PR lain yang kebetulan ber-id sama.
-          //
-          // Nama lama `purchaseOrderId` tidak dikenali backend dan diabaikan diam-diam,
-          // jadi kaitannya memang tidak pernah tersimpan sejak awal.
-          //
-          // TODO: aktifkan `purchaseRequestId: Number(selectedPurchaseOrderId)`
-          // begitu purchaseOrderService.js memakai GET /api/equipment/purchase-requests.
+          // Sekarang daftar PO di halaman ini berasal dari
+          // GET /api/equipment/purchase-requests, jadi id-nya benar-benar id
+          // purchase request dan aman dischronickan lewat FK ke
+          // equipment_purchase_requests.
+          ...(order ? { purchaseRequestId: Number(order.id) } : {}),
         });
-        if (order) settingIdsByOrder.set(order, [...(settingIdsByOrder.get(order) || []), settingId]);
         completed += 1;
       }
-      settingIdsByOrder.forEach((settingIds, order) => saveMaintenanceResetReference({ equipmentItemId: Number(unitId), purchaseOrderId: Number(order.id), purchaseOrderCode: order.orderCode, settingIds }));
       recordActivity({
         module: 'Maintenance',
         action: 'Reset maintenance berhasil',
@@ -184,10 +176,10 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
               </div>
 
               <div className="card-panel space-y-4 p-6">
-                <div><h3 className="text-base font-bold text-slate-900">1. Purchase Order Servis Rutin (Approved)</h3><p className="mt-1 text-xs text-slate-500">Reset threshold hanya dapat dilakukan setelah memilih purchase order Servis Rutin yang sudah approved untuk unit ini. PO Perbaikan Alat dipakai untuk menyelesaikan damage log di halaman Information.</p></div>
+                <div><h3 className="text-base font-bold text-slate-900">1. Purchase Order Maintenance (Approved)</h3><p className="mt-1 text-xs text-slate-500">Reset threshold hanya dapat dilakukan setelah memilih purchase order kategori Maintenance yang sudah approved untuk unit ini. Order Repair / Service dipakai untuk menyelesaikan damage log di halaman Information.</p></div>
                 <div>
                   <p className="text-xs font-semibold text-slate-600">Purchase Order terkait * <span className="font-normal text-slate-400">(bisa pilih lebih dari satu · {selectedOrders.length} dipilih)</span></p>
-                  {purchaseOrders.length === 0 ? <p className="mt-2 text-xs text-amber-700">Belum ada purchase order Servis Rutin approved untuk unit ini. Ajukan purchase order Servis Rutin terlebih dahulu, lalu lakukan reset setelah di-approve.</p> : (
+                  {purchaseOrders.length === 0 ? <p className="mt-2 text-xs text-amber-700">Belum ada purchase order Maintenance approved untuk unit ini. Ajukan purchase order Maintenance terlebih dahulu, lalu lakukan reset setelah di-approve.</p> : (
                     <div className="mt-2 grid gap-2 sm:grid-cols-2">{purchaseOrders.map((order) => {
                       const id = String(order.id);
                       const checked = selectedPurchaseOrderIds.includes(id);
@@ -207,7 +199,7 @@ export default function ResetMaintenancePage({ unitId, onBack, onBackToModules, 
               </div>
 
               <div className="card-panel space-y-4 p-6">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-3"><div><h3 className="text-base font-bold text-slate-900">2. Select Maintenance Parameters to Reset</h3><p className="text-xs text-slate-500">{!selectedOrders.length ? 'Pilih purchase order Servis Rutin approved terlebih dahulu untuk membuka pilihan parameter.' : 'Hanya aspek yang tercantum di purchase order terpilih yang dapat di-reset ke 0 hrs.'}</p></div><button type="button" onClick={toggleSelectAll} disabled={!allowedSettingIds.length} className="btn btn-secondary text-xs">{allowedSettingIds.length > 0 && selectedSettingIds.length === allowedSettingIds.length ? 'Deselect All' : 'Select All'}</button></div>
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3"><div><h3 className="text-base font-bold text-slate-900">2. Select Maintenance Parameters to Reset</h3><p className="text-xs text-slate-500">{!selectedOrders.length ? 'Pilih purchase order Maintenance approved terlebih dahulu untuk membuka pilihan parameter.' : 'Hanya aspek yang tercantum di purchase order terpilih yang dapat di-reset ke 0 hrs.'}</p></div><button type="button" onClick={toggleSelectAll} disabled={!allowedSettingIds.length} className="btn btn-secondary text-xs">{allowedSettingIds.length > 0 && selectedSettingIds.length === allowedSettingIds.length ? 'Deselect All' : 'Select All'}</button></div>
                 {settings.length === 0 ? <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-xs text-slate-500">No configured maintenance settings found.</div> : <div className="grid gap-4 sm:grid-cols-2">{settings.map((setting) => { const isSelected = selectedSettingIds.includes(setting.id); const allowed = isAllowed(setting.id); const alreadyReset = selectedOrders.some((order) => maintenanceSettingIdsForUnit(order, unitId).includes(String(setting.id)) && (usedByOrder[order.id] || []).includes(String(setting.id))); const aspectName = setting.maintenanceAspect?.aspectName || 'Maintenance Aspect'; const current = Number(setting.currentValueSinceReset || 0); const threshold = Number(setting.thresholdValue || 1); const percent = Math.min(Math.round((current / threshold) * 100), 100); const status = setting.status || 'normal'; return <div key={setting.id} onClick={() => toggleSelect(setting.id)} aria-disabled={!allowed} className={`rounded-xl border p-4 transition ${!allowed ? 'cursor-not-allowed border-slate-200 bg-slate-50 opacity-60' : isSelected ? 'cursor-pointer border-teal-500 bg-teal-50/40 shadow-sm ring-1 ring-teal-500' : 'cursor-pointer border-slate-200 bg-white hover:border-slate-300'}`}><div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><input type="checkbox" checked={isSelected} disabled={!allowed} onChange={() => toggleSelect(setting.id)} onClick={(event) => event.stopPropagation()} className="h-4 w-4 rounded border-slate-300 text-teal-600" /><div><h4 className="text-sm font-bold text-slate-900">{aspectName}</h4><p className="font-mono text-xs text-slate-500">Current: {current} / {threshold} hrs</p>{selectedOrders.length > 0 && !allowed && <p className="mt-0.5 text-[10px] text-slate-400">{alreadyReset ? 'Sudah di-reset dengan PO terpilih' : 'Tidak termasuk PO terpilih'}</p>}</div></div><span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeStyles[status] || statusBadgeStyles.normal}`}>{statusLabels[status] || status}</span></div><div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100"><div className={`h-full transition-all ${percent >= 100 ? 'bg-red-500' : percent >= 80 ? 'bg-amber-500' : 'bg-teal-500'}`} style={{ width: `${percent}%` }} /></div></div>; })}</div>}
               </div>
 

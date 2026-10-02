@@ -1,6 +1,12 @@
 const service = require('./cash.service.js');
 const { success, created, paginated } = require('../../utils/response.js');
 
+// Query boolean arrives as string ("true"/"false"). express-validator's
+// .toBoolean() sanitizes req.query, which is read-only on Express 5, so the
+// coercion has to dilakukan di sini — kalau tidak, Prisma menolak string
+// untuk kolom Boolean.
+const boolQuery = (value) => (value === undefined ? undefined : value === 'true');
+
 // ---------- Saldo ----------
 
 const balance = async (req, res, next) => {
@@ -20,8 +26,8 @@ const summary = async (req, res, next) => {
 
 const listCategories = async (req, res, next) => {
   try {
-    const { transactionType, isActive, orderCategory } = req.query;
-    return success(res, await service.listCategories({ transactionType, isActive, orderCategory }));
+    const { transactionType, orderCategory } = req.query;
+    return success(res, await service.listCategories({ transactionType, isActive: boolQuery(req.query.isActive), orderCategory }));
   } catch (err) { next(err); }
 };
 
@@ -51,7 +57,7 @@ const listTransactions = async (req, res, next) => {
   try {
     const {
       page = 1, limit = 20, transactionType, categoryId,
-      sourceType, dateFrom, dateTo, includeVoided, search,
+      sourceType, dateFrom, dateTo, search,
     } = req.query;
 
     const result = await service.listTransactions({
@@ -62,7 +68,7 @@ const listTransactions = async (req, res, next) => {
       sourceType,
       dateFrom,
       dateTo,
-      includeVoided,
+      includeVoided: boolQuery(req.query.includeVoided),
       search,
     });
     return paginated(res, result);

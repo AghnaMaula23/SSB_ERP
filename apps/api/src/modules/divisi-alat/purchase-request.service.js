@@ -7,6 +7,12 @@ const cash = require('./cash.service.js');
 const PR_DOC_TYPE = 'PRQ';
 const PR_DOC_PAD = 6;
 
+// Batas default Prisma untuk transaksi interaktif hanya 5 detik. Lewat
+// connection pooler (Supabase) satu putaran bisa lewat dari itu, sehingga create
+// order gagal dengan "Transaction already closed" padahal tidak ada konflik
+// data. Dinaikkan supaya tidak bergantung pada latensi.
+const TRANSACTION_OPTIONS = { maxWait: 15000, timeout: 30000 };
+
 // Aspek yang belum mendekati jatuh tempo tidak boleh diajukan servisnya —
 // kalau dibuka, anggaran perawatan bisa dipakai kapan saja tanpa pemicu.
 const SERVICEABLE_SETTING_STATUSES = ['warning', 'due', 'overdue'];
@@ -312,6 +318,14 @@ const sumEstimated = (orderCategory, prepared) => {
 // QUERY
 // ============================================================
 
+/**
+ * Daftar order harus ikut membawa item-nya: sisi alat memakai daftar ini untuk
+ * mencari order yang terhubung ke sebuah damage log (repair) maupun ke setting
+ * maintenance (maintenance) — tanpa item, kedua relasi itu tidak terlihat dan
+ * halaman harus mengambil detail satu per satu.
+ * Bentuk itemnya sama persis dengan detail, jadi shapeRequest bisa dipakai
+ * tanpa cabang tambahan.
+ */
 const list = async ({ page = 1, limit = 20, orderCategory, status, search }) => {
   const where = {
     ...(orderCategory && { orderCategory }),
@@ -322,7 +336,7 @@ const list = async ({ page = 1, limit = 20, orderCategory, status, search }) => 
   const [rows, total] = await Promise.all([
     prisma.equipmentPurchaseRequest.findMany({
       where,
-      include: requestInclude,
+      include: detailInclude,
       orderBy: [{ requestDate: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * limit,
       take: limit,
@@ -398,7 +412,7 @@ const create = async (payload, userId) => {
       },
       include: detailInclude,
     });
-  });
+  }, TRANSACTION_OPTIONS);
 
   return { ...shapeRequest(created), balanceWarning: await buildBalanceWarning(totalEstimatedAmount) };
 };
@@ -473,7 +487,7 @@ const update = async (id, payload, userId) => {
       },
       include: detailInclude,
     });
-  });
+  }, TRANSACTION_OPTIONS);
 
   return {
     ...shapeRequest(updated),
@@ -677,7 +691,7 @@ const approve = async (id, payload, userId) => {
       : null;
 
     return { updated: row, cashTransaction: created };
-  });
+  }, TRANSACTION_OPTIONS);
 
   return {
     ...shapeRequest(updated),
