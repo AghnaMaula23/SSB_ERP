@@ -350,11 +350,11 @@ const swaggerSpec = {
       },
       post: {
         tags: ['Construction Projects'], summary: 'Buat construction project baru',
-        description: 'Role: admin',
+        description: 'Permission: project:create. `projectCode` DIBUAT SISTEM (PRJ-000001) lewat counter atomik document_sequences — mengirimnya ditolak 403 kecuali super_admin (dipakai memigrasi project lama dengan kode aslinya). `status` ditolak 400 kalau dikirim: project baru selalu `planned`.',
         requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['projectCode', 'projectName'],
+          type: 'object', required: ['projectName'],
           properties: {
-            projectCode: { type: 'string', example: 'PRJ-001' },
+            projectCode: { type: 'string', example: 'LEGACY-2019-007', description: 'HANYA super_admin. Kosongkan supaya sistem membuatnya.' },
             projectName: { type: 'string', example: 'Jalan Tol Semarang' },
             clientName: { type: 'string', example: 'PT ABC' },
             location: { type: 'string', example: 'Semarang, Jawa Tengah' },
@@ -377,10 +377,17 @@ const swaggerSpec = {
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
         responses: { 200: { description: 'Updated' } }
       },
-      delete: {
-        tags: ['Construction Projects'], summary: 'Cancel construction project', description: 'Role: admin',
+    },
+    '/projects/construction/{id}/status': {
+      put: {
+        tags: ['Construction Projects'], summary: 'Ubah status project',
+        description: 'Permission: project:update. Status diubah lewat endpoint SENDIRI supaya tidak pernah jadi efek samping edit data biasa. Transisi sah: planned→active|cancelled, active→planned|completed|cancelled. `completed` dan `cancelled` FINAL. Menutup project DITOLAK 409 kalau masih ada sub-project berstatus planned/active.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
-        responses: { 200: { description: 'Cancelled' } }
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['status'],
+          properties: { status: { type: 'string', enum: ['planned','active','completed','cancelled'] } }
+        }}}},
+        responses: { 200: { description: 'Status diubah' }, 409: { description: 'Transisi tidak sah / masih ada tahapan terbuka' } }
       }
     },
 
@@ -445,13 +452,38 @@ const swaggerSpec = {
           type: 'object', properties: {
             success: { type: 'boolean' },
             data: { type: 'object', properties: {
-              subProjectId: { type: 'integer' }, targetVolume: { type: 'number' },
-              realizedVolume: { type: 'number' }, progressPercentage: { type: 'number' },
-              contractValue: { type: 'number' }, billedAmount: { type: 'number' },
-              paidAmount: { type: 'number' }, remainingAmount: { type: 'number' }
+              subProjectId: { type: 'integer' }, subProjectType: { type: 'string' }, status: { type: 'string' },
+              targetVolume: { type: 'number' }, volumeUnit: { type: 'string' },
+              contractValue: { type: 'number' },
+              validatedVolume: { type: 'number', description: 'HANYA baris status=validated' },
+              billableProgress: { type: 'number', description: 'Persen dari validatedVolume. Inilah yang dibaca modul Income.' },
+              billableAmount: { type: 'number', description: 'billableProgress/100 × contractValue' },
+              pendingVolume: { type: 'number', description: 'status=submitted, BELUM diperiksa Admin' },
+              pendingProgress: { type: 'number', description: 'Sengaja dipisah — tidak pernah ikut menghitung uang' },
+              rejectedVolume: { type: 'number' },
+              remainingVolume: { type: 'number' },
+              logCount: { type: 'object', properties: { validated: { type: 'integer' }, submitted: { type: 'integer' }, rejected: { type: 'integer' } } },
+              paidAmount: { type: 'number', nullable: true, description: 'Selalu null sampai modul Income ada. null, bukan 0 — 0 terbaca \"sudah ditagih, belum dibayar\".' }
             }}
           }
         }}}}}
+      }
+    },
+
+    '/projects/construction/{projectId}/sub-projects/{id}/status': {
+      put: {
+        tags: ['Sub-Projects'], summary: 'Ubah status tahapan',
+        description: 'Permission: sub-project:update. Mengaktifkan tahapan yang pendahulunya belum selesai BERHASIL, tapi response memuat `sequenceWarning` berisi daftar tahapan pendahulu yang masih terbuka — urutan tidak diblokir karena ERD menyebut "atau berdasarkan kesepakatan kontrak baru". Menutup tahapan DITOLAK 409 kalau masih ada alat teralokasi.',
+        parameters: [
+          { in: 'path', name: 'projectId', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['status'],
+          properties: { status: { type: 'string', enum: ['planned','active','completed','cancelled'] } }
+        }}}},
+        responses: { 200: { description: 'Status diubah. Berisi `sequenceWarning` (null kalau urutannya benar).' },
+          409: { description: 'Transisi tidak sah / masih ada alat teralokasi' } }
       }
     },
 
@@ -484,7 +516,56 @@ const swaggerSpec = {
             }}
           }
         }}}},
-        responses: { 201: { description: 'Created' } }
+        responses: {
+          201: { description: 'Created. Response memuat `subProjectProgress` supaya lapangan langsung lihat dampaknya ke progress tahapan.' },
+          409: { description: 'Tahapan belum aktif / tanggal itu sudah dicatat' }
+        }
+      }
+    },
+    '/projects/sub-projects/{subProjectId}/progress-logs/{id}': {
+      get: {
+        tags: ['Daily Progress'], summary: 'Detail satu progress harian',
+        parameters: [
+          { in: 'path', name: 'subProjectId', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } }
+        ],
+        responses: { 200: { description: 'Detail + fieldCondition' } }
+      },
+      put: {
+        tags: ['Daily Progress'], summary: 'Ubah progress harian',
+        description: 'Permission: progress:create. DITOLAK 409 kalau log sudah `validated` — angkanya sudah jadi dasar tagihan. Admin harus mencabut validasinya dulu. `progressDate` tidak bisa diubah (bagian identitas unique barisnya).',
+        parameters: [
+          { in: 'path', name: 'subProjectId', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object',
+          properties: {
+            realizedVolume: { type: 'number' }, notes: { type: 'string' },
+            fieldCondition: { type: 'object', description: 'Di-upsert — boleh dilengkapi belakangan' }
+          }
+        }}}},
+        responses: { 200: { description: 'Updated' }, 409: { description: 'Log sudah divalidasi' } }
+      }
+    },
+    '/projects/sub-projects/{subProjectId}/progress-logs/{id}/validate': {
+      put: {
+        tags: ['Daily Progress'], summary: 'Validasi / tolak progress harian (GERBANG TAGIHAN)',
+        description: 'Permission: progress:validate — DIPEGANG ADMIN, sengaja TIDAK diberikan ke role lapangan: yang mencatat tidak memvalidasi catatannya sendiri. Inilah gerbang yang memisahkan catatan lapangan dari angka yang boleh menagih klien: hanya baris `validated` yang masuk `billableAmount`. Transisi sah: submitted→validated|rejected, validated→submitted (cabut validasi), rejected→submitted. Field `notes` DITOLAK 400 — alasan penolakan menunggu Approval Center (lihat backlog C6).',
+        parameters: [
+          { in: 'path', name: 'subProjectId', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['status'],
+          properties: { status: { type: 'string', enum: ['submitted','validated','rejected'] } }
+        }}}},
+        responses: {
+          200: { description: 'Status diubah. Response memuat `subProjectProgress` — dampak langsung ke angka tagihan.' },
+          400: { description: '`notes` dikirim (belum didukung) / status tidak valid' },
+          403: { description: 'Role lapangan — pencatat tidak boleh memvalidasi' },
+          409: { description: 'Transisi tidak sah' }
+        }
       }
     },
 
@@ -496,9 +577,10 @@ const swaggerSpec = {
       post: {
         tags: ['External Rental'], summary: 'Buat external rental project', description: 'Role: admin',
         requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['rentalProjectCode', 'rentalProjectName'],
+          type: 'object', required: ['rentalProjectName'],
           properties: {
-            rentalProjectCode: { type: 'string' }, rentalProjectName: { type: 'string' },
+            rentalProjectCode: { type: 'string', description: 'HANYA super_admin — sistem membuat RNT-000001' },
+            rentalProjectName: { type: 'string' },
             clientName: { type: 'string' }, contractNo: { type: 'string' },
             billingMethod: { type: 'string', enum: ['hourly','daily','monthly','contract'] },
             contractStartDate: { type: 'string', format: 'date' }, contractEndDate: { type: 'string', format: 'date' }
@@ -510,7 +592,16 @@ const swaggerSpec = {
     '/projects/external-rental/{id}': {
       get: { tags: ['External Rental'], summary: 'Detail', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
       put: { tags: ['External Rental'], summary: 'Update', description: 'Role: admin', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object' } } } }, responses: { 200: { description: 'Updated' } } },
-      delete: { tags: ['External Rental'], summary: 'Cancel', description: 'Role: admin', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Cancelled' } } }
+    },
+    '/projects/external-rental/{id}/status': {
+      put: {
+        tags: ['External Rental'], summary: 'Ubah status project', description: 'Permission: project:update. Tidak ada hard delete — project dibatalkan lewat status `cancelled`, yang bersifat FINAL.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['status'],
+          properties: { status: { type: 'string', enum: ['planned','active','completed','cancelled'] } } } }}},
+        responses: { 200: { description: 'Status diubah' }, 409: { description: 'Transisi tidak sah' } }
+      }
     },
 
     // ========================================
@@ -521,9 +612,10 @@ const swaggerSpec = {
       post: {
         tags: ['External Supply'], summary: 'Buat external supply project', description: 'Role: admin',
         requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['supplyProjectCode', 'supplyProjectName'],
+          type: 'object', required: ['supplyProjectName'],
           properties: {
-            supplyProjectCode: { type: 'string' }, supplyProjectName: { type: 'string' },
+            supplyProjectCode: { type: 'string', description: 'HANYA super_admin — sistem membuat SPL-000001' },
+            supplyProjectName: { type: 'string' },
             clientName: { type: 'string' }, contractNo: { type: 'string' },
             contractStartDate: { type: 'string', format: 'date' }, contractEndDate: { type: 'string', format: 'date' }
           }
@@ -534,7 +626,16 @@ const swaggerSpec = {
     '/projects/external-supply/{id}': {
       get: { tags: ['External Supply'], summary: 'Detail', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
       put: { tags: ['External Supply'], summary: 'Update', description: 'Role: admin', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object' } } } }, responses: { 200: { description: 'Updated' } } },
-      delete: { tags: ['External Supply'], summary: 'Cancel', description: 'Role: admin', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Cancelled' } } }
+    },
+    '/projects/external-supply/{id}/status': {
+      put: {
+        tags: ['External Supply'], summary: 'Ubah status project', description: 'Permission: project:update. Tidak ada hard delete — project dibatalkan lewat status `cancelled`, yang bersifat FINAL.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['status'],
+          properties: { status: { type: 'string', enum: ['planned','active','completed','cancelled'] } } } }}},
+        responses: { 200: { description: 'Status diubah' }, 409: { description: 'Transisi tidak sah' } }
+      }
     },
 
     // ========================================

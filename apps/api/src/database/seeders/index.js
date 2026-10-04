@@ -27,6 +27,19 @@ const PERMISSIONS = [
   { module: 'permission', action: 'read',   label: 'Lihat daftar permission' },
   { module: 'permission', action: 'create', label: 'Tambah permission' },
   { module: 'permission', action: 'delete', label: 'Hapus permission' },
+  // MODUL PROJECT — fondasi hampir semua modul lain.
+  // Dipisah tiga modul permission karena aktornya beda: Admin memiliki header
+  // project dan kontrak tahapan, Lapangan mencatat realisasi harian, dan
+  // validasi progress adalah wewenang Admin yang TIDAK boleh dipegang pencatatnya.
+  { module: 'project',     action: 'read',     label: 'Lihat project (construction, rental, supply)' },
+  { module: 'project',     action: 'create',   label: 'Buat project baru' },
+  { module: 'project',     action: 'update',   label: 'Ubah data dan status project' },
+  { module: 'sub-project', action: 'read',     label: 'Lihat tahapan dan progress billing' },
+  { module: 'sub-project', action: 'create',   label: 'Buat tahapan beserta kontraknya' },
+  { module: 'sub-project', action: 'update',   label: 'Ubah kontrak dan status tahapan' },
+  { module: 'progress',    action: 'read',     label: 'Lihat progress harian' },
+  { module: 'progress',    action: 'create',   label: 'Catat dan ubah progress harian' },
+  { module: 'progress',    action: 'validate', label: 'Validasi progress harian (Admin) — dasar tagihan klien' },
   { module: 'equipment',  action: 'read',   label: 'Lihat master alat' },
   { module: 'equipment',  action: 'create', label: 'Tambah jenis/unit alat' },
   { module: 'equipment',  action: 'update', label: 'Ubah data dan status alat' },
@@ -89,11 +102,20 @@ const ROLE_PERMISSIONS = {
     'equipment:read', 'workhour:read', 'maintenance:read', 'damage:read',
     'purchase-request:read', 'purchase-request:validate',
     'cash:read',
+    // Admin pemilik project dan kontrak tahapan, dan satu-satunya yang boleh
+    // memvalidasi progress — sengaja TANPA progress:create supaya pemeriksa
+    // tidak bisa mengarang angka yang dia periksa sendiri.
+    'project:read', 'project:create', 'project:update',
+    'sub-project:read', 'sub-project:create', 'sub-project:update',
+    'progress:read', 'progress:validate',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
   // pencairan. Finance tidak mencatat kas manual — itu milik Divisi Alat.
-  finance: ['purchase-request:read', 'purchase-request:approve', 'equipment:read', 'cash:read'],
+  // Finance perlu membaca kontrak dan progress karena keduanya dasar tagihan
+  // klien yang akan dia proses di modul Income (Build Order langkah 6).
+  finance: ['purchase-request:read', 'purchase-request:approve', 'equipment:read', 'cash:read',
+    'project:read', 'sub-project:read', 'progress:read'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
@@ -105,11 +127,17 @@ const ROLE_PERMISSIONS = {
     // Divisi Alat pemilik Kas Alat: mencatat pengeluaran tak terduga, membuka
     // saldo, dan mengoreksi. Prerogatifnya, tanpa approval — keputusan 25 Sep.
     'cash:read', 'cash:create', 'cash:update', 'cash:delete',
+    // Divisi Alat perlu melihat project dan tahapannya untuk menempatkan alat
+    'project:read', 'sub-project:read',
   ],
   // Lapangan boleh melihat jadwal servis alat yang mereka pakai, tapi tidak mengelolanya
   // Lapangan belum boleh mencatat kerusakan — laporan masuk lewat telepon ke
   // Divisi Alat. Membuka aksesnya nanti cukup menambah 'damage:create' di sini.
-  lapangan: ['equipment:read', 'workhour:read', 'workhour:create', 'maintenance:read', 'damage:read'],
+  // Lapangan pencatat realisasi harian — TANPA progress:validate. Yang mencatat
+  // tidak memvalidasi; pemisahan yang sama dengan pengaju purchase request yang
+  // tidak boleh menyetujui pengajuannya sendiri.
+  lapangan: ['equipment:read', 'workhour:read', 'workhour:create', 'maintenance:read', 'damage:read',
+    'project:read', 'sub-project:read', 'progress:read', 'progress:create'],
 };
 
 async function main() {

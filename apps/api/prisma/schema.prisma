@@ -35,6 +35,18 @@ model User {
   cashTransactionsCreated EquipmentCashTransaction[] @relation("CashCreatedBy")
   cashTransactionsVoided  EquipmentCashTransaction[] @relation("CashVoidedBy")
 
+  constructionProjectsCreated ConstructionProject[]   @relation("ConstructionProjectCreatedBy")
+  rentalProjectsCreated       ExternalRentalProject[] @relation("RentalProjectCreatedBy")
+  supplyProjectsCreated       ExternalSupplyProject[] @relation("SupplyProjectCreatedBy")
+  subProjectsCreated          SubProject[]            @relation("SubProjectCreatedBy")
+  progressLogsCreated         DailyProgressLog[]      @relation("ProgressCreatedBy")
+  progressLogsValidated       DailyProgressLog[]      @relation("ProgressValidatedBy")
+  fieldConditionsCreated      FieldConditionLog[]     @relation("FieldConditionCreatedBy")
+  equipmentPoolsCreated       EquipmentPool[]         @relation("EquipmentPoolCreatedBy")
+
+  allocationsAllocated SubProjectEquipmentAllocation[] @relation("AllocationAllocatedBy")
+  allocationsReceived  SubProjectEquipmentAllocation[] @relation("AllocationReceivedBy")
+
   @@map("users")
 }
 
@@ -112,17 +124,18 @@ enum WorkhourSourceType {
 }
 
 model EquipmentType {
-  id           Int             @id @default(autoincrement())
-  typeCode     String          @unique @map("type_code") @db.VarChar(50)
-  typeName     String          @map("type_name") @db.VarChar(150)
-  description  String?         @db.Text
-  isActive     Boolean         @default(true) @map("is_active")
+  id           Int                 @id @default(autoincrement())
+  typeCode     String              @unique @map("type_code") @db.VarChar(50)
+  typeName     String              @map("type_name") @db.VarChar(150)
+  description  String?             @db.Text
+  isActive     Boolean             @default(true) @map("is_active")
   // Counter asset code per jenis alat. Di-increment atomik saat unit baru
   // didaftarkan dan tidak pernah mundur, supaya nomor tidak pernah dipakai ulang.
-  lastSequence Int             @default(0) @map("last_sequence")
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
+  lastSequence Int                 @default(0) @map("last_sequence")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
   items        EquipmentItem[]
+  poolItems    EquipmentPoolItem[]
 
   @@map("equipment_types")
 }
@@ -148,12 +161,14 @@ model EquipmentItem {
   createdAt         DateTime            @default(now()) @map("created_at")
   updatedAt         DateTime            @updatedAt @map("updated_at")
 
-  equipmentType       EquipmentType                 @relation(fields: [equipmentTypeId], references: [id])
+  equipmentType       EquipmentType                   @relation(fields: [equipmentTypeId], references: [id])
   statusLogs          EquipmentStatusLog[]
   workhourLogs        EquipmentWorkhourLog[]
   maintenanceSettings EquipmentMaintenanceSetting[]
   maintenanceRecords  MaintenanceRecord[]
   damageLogs          DamageLog[]
+  poolItems           EquipmentPoolItem[]
+  allocations         SubProjectEquipmentAllocation[]
 
   @@index([equipmentTypeId])
   @@index([currentStatus])
@@ -179,27 +194,58 @@ model EquipmentStatusLog {
   @@map("equipment_status_logs")
 }
 
+/// Konteks pekerjaan dibaca dari ALOKASI (internal project) atau POOL ITEM
+/// (external rental), mengikuti ERD Project — bukan project_id/sub_project_id
+/// seperti ERD Divisi Alat yang ditulis sebelum Request Alat jadi entitas utuh.
+/// Ini juga yang membuat penggantian unit bekerja benar: jam kerja terikat ke
+/// alokasi, jadi unit lama dan penggantinya punya angka masing-masing.
+///
+/// `equipment_item_id` TETAP ADA meski ERD Project tidak mencantumkannya:
+/// source_type `manual_adjustment` tidak lewat alokasi maupun pool sehingga tidak
+/// punya jalan lain menyebut unitnya, akumulator equipment_items.total_workhour
+/// perlu tahu unitnya di dalam transaksi, dan ERD Divisi Alat (pemilik tabel ini)
+/// punya FK-nya secara eksplisit. Untuk internal_project/external_rental kolom ini
+/// KOLOM TERKELOLA SISTEM — service membacanya dari alokasi/pool item dan menolak
+/// kiriman klien yang tidak cocok, jadi dua sumber ini tidak bisa bertentangan.
+///
+/// FASE EXPAND: project_id dan sub_project_id masih hidup di sini supaya kode
+/// lama tetap jalan. Keduanya di-DROP di migrasi contract (P4) bersama pemasangan
+/// CHECK constraint per source_type.
 model EquipmentWorkhourLog {
-  id              Int                @id @default(autoincrement())
-  equipmentItemId Int                @map("equipment_item_id")
-  // FK ke projects/sub_projects menyusul saat modul Project dibangun
-  projectId       Int?               @map("project_id")
-  subProjectId    Int?               @map("sub_project_id")
-  workDate        DateTime           @map("work_date") @db.Date
-  startedAt       DateTime?          @map("started_at")
-  stoppedAt       DateTime?          @map("stopped_at")
-  totalWorkhour   Decimal            @map("total_workhour") @db.Decimal(10, 2)
-  sourceType      WorkhourSourceType @map("source_type")
-  description     String?            @db.Text
-  createdBy       Int?               @map("created_by")
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  id              Int  @id @default(autoincrement())
+  equipmentItemId Int  @map("equipment_item_id")
+  /// @deprecated Dibuang di migrasi contract P4 — dipakai kode lama saja.
+  projectId       Int? @map("project_id")
+  /// @deprecated Dibuang di migrasi contract P4 — dipakai kode lama saja.
+  subProjectId    Int? @map("sub_project_id")
+
+  subProjectEquipmentAllocationId Int? @map("sub_project_equipment_allocation_id")
+  equipmentPoolItemId             Int? @map("equipment_pool_item_id")
+
+  workDate              DateTime           @map("work_date") @db.Date
+  startedAt             DateTime?          @map("started_at")
+  stoppedAt             DateTime?          @map("stopped_at")
+  // Jeda yang tidak dihitung sebagai jam kerja. Ada di ERD Project, tidak ada
+  // di ERD Divisi Alat — utang C2, ditutup bersama migrasi ini.
+  pausedDurationMinutes Int                @default(0) @map("paused_duration_minutes")
+  totalWorkhour         Decimal            @map("total_workhour") @db.Decimal(10, 2)
+  sourceType            WorkhourSourceType @map("source_type")
+  description           String?            @db.Text
+  createdBy             Int?               @map("created_by")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
 
   equipmentItem EquipmentItem @relation(fields: [equipmentItemId], references: [id])
   createdByUser User?         @relation(fields: [createdBy], references: [id])
 
+  subProjectEquipmentAllocation SubProjectEquipmentAllocation? @relation(fields: [subProjectEquipmentAllocationId], references: [id], onDelete: Restrict)
+  equipmentPoolItem             EquipmentPoolItem?             @relation(fields: [equipmentPoolItemId], references: [id], onDelete: Restrict)
+
   @@index([equipmentItemId, workDate])
   @@index([workDate])
+  @@index([subProjectEquipmentAllocationId, workDate])
+  @@index([equipmentPoolItemId, workDate])
+  @@index([sourceType, workDate])
   @@map("equipment_workhour_logs")
 }
 
@@ -665,4 +711,367 @@ model EquipmentCashTransaction {
   @@index([categoryId])
   @@index([isVoided])
   @@map("equipment_cash_transaction")
+}
+
+// ============================================================
+// PROJECT — Batch 1: Header project, sub-project, progress, pool alat
+// ============================================================
+// Acuan: docs/claude_knowledge/ERD/MD File/Dokumentasi_ERD_Project.md
+// (docx 11 Sep 2026, Revisi Progress Billing v2).
+//
+// JANGAN pakai DBML_Project_SubProject_Final_Terintegrasi_Request_Alat_FIXED.dbml
+// sebagai acuan — file itu versi SEBELUM Revisi Progress Billing v2: masih punya
+// contract_volume_targets, sub_projects-nya tanpa contract_value/target_volume,
+// dan daily_progress_logs-nya FK ke contract_volume_target_id. Tanggal file-nya
+// lebih baru, isinya lebih lama.
+
+/// Dipakai ketiga tipe project. Tiga tipe project sengaja dipisah fisik
+/// (keputusan PM), jadi enum inilah satu-satunya yang mereka bagi.
+enum ProjectStatus {
+  planned
+  active
+  completed
+  cancelled
+
+  @@map("project_status")
+}
+
+/// Tahapan pekerjaan konstruksi. Berjalan berurutan mengikuti sequence_order,
+/// dan perusahaan tidak wajib mengerjakan semuanya — bisa hanya dapat kontrak
+/// satu atau beberapa tahapan.
+enum SubProjectType {
+  galian
+  timbunan
+  line_clearing
+  aspal
+
+  @@map("sub_project_type")
+}
+
+enum SubProjectStatus {
+  planned
+  active
+  completed
+  cancelled
+
+  @@map("sub_project_status")
+}
+
+/// `validated` adalah satu-satunya status yang menjadi dasar tagihan klien —
+/// angka progress adalah pengali langsung atas sub_projects.contract_value.
+/// Baris `submitted` dilaporkan terpisah sebagai pendingVolume supaya lapangan
+/// tahu mana yang belum diperiksa, tapi tidak pernah ikut menghitung uang.
+enum DailyProgressStatus {
+  submitted
+  validated
+  rejected
+
+  @@map("daily_progress_status")
+}
+
+enum PoolStatus {
+  draft
+  active
+  closed
+  cancelled
+
+  @@map("pool_status")
+}
+
+enum EquipmentPoolOwnerType {
+  construction_project
+  external_rental_project
+
+  @@map("equipment_pool_owner_type")
+}
+
+/// `pending` dan `rejected` BELUM BISA TERCAPAI sampai modul Request Alat ada
+/// (Build Order langkah 4) — keduanya lahir dari approval equipment_request_items.
+/// Pool item yang dibuat langsung mulai dari `available`. Nilainya tetap dibuat
+/// sesuai ERD karena Request Alat memang akan memakainya.
+enum EquipmentPoolItemStatus {
+  pending
+  available
+  assigned
+  completed
+  rejected
+  cancelled
+
+  @@map("equipment_pool_item_status")
+}
+
+/// Diciutkan dari 6 nilai ERD menjadi 4 (keputusan 1 Oktober 2026).
+/// `received_at_site` dibuang: kapan dan siapa yang menerima sudah terekam
+/// penuh di received_at/received_by — alasan yang sama dengan dibuangnya
+/// damage_status.reviewed. `in_use` dibuang: "sudah diterima DAN ada workhour
+/// log" sudah berarti sedang dipakai, tidak ada keputusan yang berubah karenanya.
+/// Arah ini dipilih karena MENAMBAH nilai enum itu migrasi aditif yang aman,
+/// sementara MENGHAPUS-nya destruktif di database yang dipakai bersama.
+enum EquipmentAllocationStatus {
+  assigned
+  completed
+  returned
+  cancelled
+
+  @@map("equipment_allocation_status")
+}
+
+/// Project konstruksi = CONTAINER/lokasi. Pekerjaan dan kontraknya ada di
+/// sub_projects, bukan di sini — tidak ada contract_value di level ini.
+model ConstructionProject {
+  id          Int           @id @default(autoincrement())
+  projectCode String        @unique @map("project_code") @db.VarChar(50)
+  projectName String        @map("project_name") @db.VarChar(255)
+  clientName  String?       @map("client_name") @db.VarChar(255)
+  location    String?       @db.Text
+  startDate   DateTime?     @map("start_date") @db.Date
+  endDate     DateTime?     @map("end_date") @db.Date
+  status      ProjectStatus @default(planned)
+  createdBy   Int?          @map("created_by")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  createdByUser  User?           @relation("ConstructionProjectCreatedBy", fields: [createdBy], references: [id])
+  subProjects    SubProject[]
+  equipmentPools EquipmentPool[]
+
+  @@index([status])
+  @@map("construction_projects")
+}
+
+/// Kontrak rental alat ke klien eksternal. Tidak punya sub-project: alatnya
+/// dikumpulkan lewat equipment_pools dan jam kerjanya dicatat langsung pada
+/// equipment_pool_items.
+model ExternalRentalProject {
+  id                Int           @id @default(autoincrement())
+  rentalProjectCode String        @unique @map("rental_project_code") @db.VarChar(50)
+  rentalProjectName String        @map("rental_project_name") @db.VarChar(255)
+  clientName        String?       @map("client_name") @db.VarChar(255)
+  location          String?       @db.Text
+  contractNo        String?       @map("contract_no") @db.VarChar(100)
+  contractStartDate DateTime?     @map("contract_start_date") @db.Date
+  contractEndDate   DateTime?     @map("contract_end_date") @db.Date
+  // hourly | daily | monthly | contract — varchar mengikuti ERD, belum enum
+  // karena daftar metode tagihan rental belum dikunci PM.
+  billingMethod     String?       @map("billing_method") @db.VarChar(50)
+  status            ProjectStatus @default(planned)
+  createdBy         Int?          @map("created_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  createdByUser  User?           @relation("RentalProjectCreatedBy", fields: [createdBy], references: [id])
+  equipmentPools EquipmentPool[]
+
+  @@index([status])
+  @@map("external_rental_projects")
+}
+
+/// Kontrak supply material ke klien eksternal. material_pools menyusul bersama
+/// modul Request Material (Build Order langkah 4) — belum dibuat di batch ini.
+model ExternalSupplyProject {
+  id                Int           @id @default(autoincrement())
+  supplyProjectCode String        @unique @map("supply_project_code") @db.VarChar(50)
+  supplyProjectName String        @map("supply_project_name") @db.VarChar(255)
+  clientName        String?       @map("client_name") @db.VarChar(255)
+  location          String?       @db.Text
+  contractNo        String?       @map("contract_no") @db.VarChar(100)
+  contractStartDate DateTime?     @map("contract_start_date") @db.Date
+  contractEndDate   DateTime?     @map("contract_end_date") @db.Date
+  status            ProjectStatus @default(planned)
+  createdBy         Int?          @map("created_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  createdByUser User? @relation("SupplyProjectCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([status])
+  @@map("external_supply_projects")
+}
+
+/// Satu tahapan pekerjaan dengan KONTRAK SENDIRI. contract_value dan
+/// target_volume hidup di sini, bukan di construction_projects — dasar progress
+/// billing: progress % × contract_value.
+/// Revisi Progress Billing v2 menghapus tabel contract_volume_targets dan
+/// memindahkan kolom volume ke sini.
+model SubProject {
+  id                    Int              @id @default(autoincrement())
+  constructionProjectId Int              @map("construction_project_id")
+  subProjectType        SubProjectType   @map("sub_project_type")
+  status                SubProjectStatus @default(planned)
+  // Urutan tahapan: galian(1) → timbunan(2) → line_clearing(3) → aspal(4).
+  // Ditegakkan sebagai PERINGATAN saat aktivasi, bukan blokir — pengecualian
+  // kontrak ("atau berdasarkan kesepakatan kontrak baru") nyata terjadi.
+  sequenceOrder         Int              @default(1) @map("sequence_order")
+
+  targetVolume      Decimal  @map("target_volume") @db.Decimal(18, 2)
+  dailyTargetVolume Decimal? @map("daily_target_volume") @db.Decimal(18, 2)
+  volumeUnit        String   @map("volume_unit") @db.VarChar(30)
+
+  contractValue     Decimal   @default(0) @map("contract_value") @db.Decimal(18, 2)
+  contractNo        String?   @map("contract_no") @db.VarChar(100)
+  contractDate      DateTime? @map("contract_date") @db.Date
+  contractStartDate DateTime? @map("contract_start_date") @db.Date
+  contractEndDate   DateTime? @map("contract_end_date") @db.Date
+
+  createdBy Int?     @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  constructionProject  ConstructionProject             @relation(fields: [constructionProjectId], references: [id])
+  createdByUser        User?                           @relation("SubProjectCreatedBy", fields: [createdBy], references: [id])
+  progressLogs         DailyProgressLog[]
+  equipmentAllocations SubProjectEquipmentAllocation[]
+
+  // Satu construction project hanya boleh punya satu tahapan per tipe
+  @@unique([constructionProjectId, subProjectType])
+  @@index([status])
+  @@map("sub_projects")
+}
+
+/// Realisasi volume harian. SUM(realized_volume) baris `validated` dibagi
+/// sub_projects.target_volume adalah progress yang menjadi dasar tagihan klien.
+///
+/// Baris `validated` TIDAK BISA DIEDIT — Admin harus mencabut validasinya dulu
+/// (kembali ke `submitted`). Sekali sudah ditagihkan ke klien, mengeditnya
+/// mengubah angka yang sudah pernah dikirim keluar. Pola kunci ini mengikuti
+/// `daily_labor_logs.locked_at` pada ERD Finance Field.
+///
+/// Alasan penolakan belum bisa disimpan — menunggu Approval Center, sejalan
+/// dengan keputusan B1 pada purchase request. Lihat backlog bagian C.
+model DailyProgressLog {
+  id             Int                 @id @default(autoincrement())
+  subProjectId   Int                 @map("sub_project_id")
+  progressDate   DateTime            @map("progress_date") @db.Date
+  realizedVolume Decimal             @map("realized_volume") @db.Decimal(18, 2)
+  notes          String?             @db.Text
+  status         DailyProgressStatus @default(submitted)
+  // Jejak siapa yang memeriksa. Di luar ERD, alasannya sama dengan
+  // admin_validated_by pada purchase request: perubahan status tanpa aktor
+  // tidak bisa ditelusuri. Ikut tercatat saat validasi DICABUT.
+  validatedBy    Int?                @map("validated_by")
+  validatedAt    DateTime?           @map("validated_at")
+  createdBy      Int?                @map("created_by")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  subProject      SubProject         @relation(fields: [subProjectId], references: [id])
+  createdByUser   User?              @relation("ProgressCreatedBy", fields: [createdBy], references: [id])
+  validatedByUser User?              @relation("ProgressValidatedBy", fields: [validatedBy], references: [id])
+  fieldCondition  FieldConditionLog?
+
+  @@unique([subProjectId, progressDate])
+  @@index([subProjectId, status])
+  @@map("daily_progress_logs")
+}
+
+/// Cuaca dan kondisi lapangan untuk satu progress harian. 1:1 — dipisah dari
+/// progress log supaya angka volume tidak bercampur dengan catatan naratif.
+model FieldConditionLog {
+  id                  Int      @id @default(autoincrement())
+  dailyProgressLogId  Int      @unique @map("daily_progress_log_id")
+  weatherMorning      String?  @map("weather_morning") @db.VarChar(50)
+  weatherAfternoon    String?  @map("weather_afternoon") @db.VarChar(50)
+  fieldConditionNotes String?  @map("field_condition_notes") @db.Text
+  incidentNotes       String?  @map("incident_notes") @db.Text
+  createdBy           Int?     @map("created_by")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  dailyProgressLog DailyProgressLog @relation(fields: [dailyProgressLogId], references: [id], onDelete: Cascade)
+  createdByUser    User?            @relation("FieldConditionCreatedBy", fields: [createdBy], references: [id])
+
+  @@map("field_condition_logs")
+}
+
+/// Wadah alat di level project, generic untuk construction DAN external rental.
+/// owner_type adalah diskriminator; FK yang sah dijaga CHECK constraint di
+/// migrasi (Prisma tidak bisa menyatakan CHECK).
+model EquipmentPool {
+  id                      Int                    @id @default(autoincrement())
+  ownerType               EquipmentPoolOwnerType @map("owner_type")
+  constructionProjectId   Int?                   @map("construction_project_id")
+  externalRentalProjectId Int?                   @map("external_rental_project_id")
+  poolCode                String                 @unique @map("pool_code") @db.VarChar(50)
+  status                  PoolStatus             @default(active)
+  createdBy               Int?                   @map("created_by")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+
+  constructionProject   ConstructionProject?   @relation(fields: [constructionProjectId], references: [id])
+  externalRentalProject ExternalRentalProject? @relation(fields: [externalRentalProjectId], references: [id])
+  createdByUser         User?                  @relation("EquipmentPoolCreatedBy", fields: [createdBy], references: [id])
+  items                 EquipmentPoolItem[]
+
+  @@index([ownerType, constructionProjectId])
+  @@index([ownerType, externalRentalProjectId])
+  @@map("equipment_pools")
+}
+
+/// Isi pool: jenis alat yang diminta, dan unit spesifik begitu ditentukan.
+///
+/// `total_used_hours` dari ERD TIDAK DIBUAT (keputusan 1 Oktober 2026) — angkanya
+/// persis SUM(equipment_workhour_logs.total_workhour) dan dihitung saat dibaca.
+/// Alasannya sama dengan saldo Kas Alat: counter tersimpan bisa menyimpang dari
+/// lognya tanpa meninggalkan jejak, dan tidak ada satu modul pun di 9 ERD yang
+/// membacanya (Income membaca equipment_workhour_log_id langsung).
+///
+/// `equipment_request_item_id` dari ERD belum dibuat: tabel equipment_request_items
+/// baru ada di Build Order langkah 4, dan kolom FK tanpa tabel tujuan hanya
+/// perancah. Ditambahkan bersama modul Request Alat, lengkap dengan FK-nya.
+model EquipmentPoolItem {
+  id                Int                     @id @default(autoincrement())
+  equipmentPoolId   Int                     @map("equipment_pool_id")
+  equipmentTypeId   Int                     @map("equipment_type_id")
+  equipmentItemId   Int?                    @map("equipment_item_id")
+  requestedQuantity Int                     @default(1) @map("requested_quantity")
+  approvedQuantity  Int                     @default(0) @map("approved_quantity")
+  status            EquipmentPoolItemStatus @default(pending)
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+
+  equipmentPool EquipmentPool                   @relation(fields: [equipmentPoolId], references: [id])
+  equipmentType EquipmentType                   @relation(fields: [equipmentTypeId], references: [id])
+  equipmentItem EquipmentItem?                  @relation(fields: [equipmentItemId], references: [id])
+  allocations   SubProjectEquipmentAllocation[]
+  workhourLogs  EquipmentWorkhourLog[]
+
+  @@index([equipmentPoolId])
+  @@index([equipmentItemId])
+  @@index([status])
+  @@map("equipment_pool_items")
+}
+
+/// SUMBER KEBENARAN PENUGASAN ALAT. Pertanyaan "unit ini sedang dipakai proyek
+/// mana" dijawab tabel ini, bukan equipment_items.current_status — kolom itu
+/// murni KONDISI alat (operational/maintenance/retired).
+///
+/// Alat rusak TIDAK ditarik ke gudang (dikonfirmasi PM 17 Sep 2026): mekanik
+/// datang ke alat, jadi alokasi tetap hidup selama perbaikan.
+///
+/// `total_used_hours` dari ERD tidak dibuat — alasannya sama dengan
+/// EquipmentPoolItem di atas.
+model SubProjectEquipmentAllocation {
+  id                  Int                       @id @default(autoincrement())
+  subProjectId        Int                       @map("sub_project_id")
+  equipmentPoolItemId Int                       @map("equipment_pool_item_id")
+  equipmentItemId     Int?                      @map("equipment_item_id")
+  allocatedBy         Int?                      @map("allocated_by")
+  allocatedAt         DateTime?                 @map("allocated_at")
+  receivedBy          Int?                      @map("received_by")
+  receivedAt          DateTime?                 @map("received_at")
+  status              EquipmentAllocationStatus @default(assigned)
+  createdAt           DateTime                  @default(now()) @map("created_at")
+  updatedAt           DateTime                  @updatedAt @map("updated_at")
+
+  subProject        SubProject             @relation(fields: [subProjectId], references: [id])
+  equipmentPoolItem EquipmentPoolItem      @relation(fields: [equipmentPoolItemId], references: [id])
+  equipmentItem     EquipmentItem?         @relation(fields: [equipmentItemId], references: [id])
+  allocatedByUser   User?                  @relation("AllocationAllocatedBy", fields: [allocatedBy], references: [id])
+  receivedByUser    User?                  @relation("AllocationReceivedBy", fields: [receivedBy], references: [id])
+  workhourLogs      EquipmentWorkhourLog[]
+
+  @@index([subProjectId, status])
+  @@index([equipmentItemId, status])
+  @@index([equipmentPoolItemId])
+  @@map("sub_project_equipment_allocations")
 }
