@@ -3,12 +3,11 @@ const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const maintenance = require('./maintenance.service.js');
+const { toNumber, toDateOnly } = require('../../utils/shape.js');
 
 const DAMAGE_DOC_TYPE = 'DMG';
 const DAMAGE_DOC_PAD = 6;
 
-const toNumber = (value) => (value === null || value === undefined ? null : Number(value));
-const toDateOnly = (value) => (value ? new Date(value).toISOString().slice(0, 10) : null);
 
 const damageInclude = {
   equipmentItem: { select: { id: true, assetCode: true, currentStatus: true } },

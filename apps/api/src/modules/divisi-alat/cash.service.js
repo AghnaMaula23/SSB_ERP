@@ -2,6 +2,7 @@ const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
+const { toNumber, toDateOnly } = require('../../utils/shape.js');
 
 const CASH_DOC_TYPE = 'KAS';
 const CASH_DOC_PAD = 6;
@@ -30,8 +31,6 @@ const ALLOWED_TYPES_BY_SOURCE = {
   adjustment: ['cash_in', 'cash_out'],
 };
 
-const toNumber = (value) => (value === null || value === undefined ? null : Number(value));
-const toDateOnly = (value) => (value ? new Date(value).toISOString().slice(0, 10) : null);
 
 const shapeUser = (user) =>
   user ? { id: user.id, username: user.username, fullName: user.fullName } : null;

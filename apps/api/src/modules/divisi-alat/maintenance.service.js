@@ -2,12 +2,11 @@ const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
+const { toNumber, toDateOnly } = require('../../utils/shape.js');
 
 const MAINTENANCE_DOC_TYPE = 'MTN';
 const MAINTENANCE_DOC_PAD = 6;
 
-const toNumber = (value) => (value === null || value === undefined ? null : Number(value));
-const toDateOnly = (value) => (value ? new Date(value).toISOString().slice(0, 10) : null);
 
 /**
  * Status dihitung dari SISA jam menuju jatuh tempo, bukan dari jam terpakai.

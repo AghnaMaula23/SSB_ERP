@@ -3,6 +3,7 @@ const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const cash = require('./cash.service.js');
+const { toNumber, toDateOnly } = require('../../utils/shape.js');
 
 const PR_DOC_TYPE = 'PRQ';
 const PR_DOC_PAD = 6;
@@ -17,8 +18,6 @@ const TRANSACTION_OPTIONS = { maxWait: 15000, timeout: 30000 };
 // kalau dibuka, anggaran perawatan bisa dipakai kapan saja tanpa pemicu.
 const SERVICEABLE_SETTING_STATUSES = ['warning', 'due', 'overdue'];
 
-const toNumber = (value) => (value === null || value === undefined ? null : Number(value));
-const toDateOnly = (value) => (value ? new Date(value).toISOString().slice(0, 10) : null);
 
 const ITEM_RELATION_BY_CATEGORY = {
   repair: 'repairItems',

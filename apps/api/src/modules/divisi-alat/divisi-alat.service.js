@@ -2,6 +2,7 @@ const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const maintenance = require('./maintenance.service.js');
+const { toNumber, toDateOnly, pickWritable } = require('../../utils/shape.js');
 
 const MAX_WORKHOUR_PER_DAY = 24;
 
@@ -54,8 +55,6 @@ const NON_ARCHIVABLE_STATUSES = ['maintenance'];
 // Alat pada status ini tidak menghasilkan jam operasi
 const NON_OPERATIONAL_STATUSES = ['maintenance', 'retired'];
 
-const toNumber = (value) => (value === null || value === undefined ? null : Number(value));
-const toDateOnly = (value) => (value ? new Date(value).toISOString().slice(0, 10) : null);
 
 // ============================================================
 // EQUIPMENT TYPES
@@ -264,9 +263,6 @@ const getItemById = async (id) => {
 const ITEM_WRITABLE_FIELDS = [
   'plateNumber', 'brand', 'model', 'serialNumber', 'manufactureYear', 'rateNotes', 'notes',
 ];
-
-const pickWritable = (payload, fields) =>
-  Object.fromEntries(fields.filter((f) => payload[f] !== undefined).map((f) => [f, payload[f]]));
 
 const createItem = async (payload, user) => {
   const { equipmentTypeId, assetCode: manualAssetCode, defaultHourlyRate } = payload;
