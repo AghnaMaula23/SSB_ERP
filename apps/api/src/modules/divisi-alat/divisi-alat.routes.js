@@ -142,17 +142,32 @@ router.delete('/items/:id', authorize('equipment:delete'), validate([idParam]), 
 router.post('/workhour-logs',
   authorize('workhour:create'),
   validate([
-    body('equipmentItemId').isInt({ min: 1 }).withMessage('equipmentItemId wajib diisi dan harus angka').toInt(),
+    // equipmentItemId HANYA untuk manual_adjustment. Untuk internal_project dan
+    // external_rental dia diturunkan sistem dari alokasi/pool item — service
+    // menolak kalau dikirim dan tidak cocok. Di sini cuma dicek bentuknya,
+    // kebijakannya hidup di satu tempat (service).
+    body('equipmentItemId').optional({ nullable: true }).isInt({ min: 1 })
+      .withMessage('equipmentItemId harus angka').toInt(),
+    body('subProjectEquipmentAllocationId').optional({ nullable: true }).isInt({ min: 1 })
+      .withMessage('subProjectEquipmentAllocationId harus angka').toInt(),
+    body('equipmentPoolItemId').optional({ nullable: true }).isInt({ min: 1 })
+      .withMessage('equipmentPoolItemId harus angka').toInt(),
     body('workDate').notEmpty().withMessage('Tanggal kerja wajib diisi')
       .isISO8601().withMessage('workDate harus format tanggal YYYY-MM-DD'),
     body('startedAt').optional({ nullable: true }).isISO8601().withMessage('startedAt harus format tanggal-waktu ISO'),
     body('stoppedAt').optional({ nullable: true }).isISO8601().withMessage('stoppedAt harus format tanggal-waktu ISO'),
+    body('pausedDurationMinutes').optional().isInt({ min: 0 })
+      .withMessage('pausedDurationMinutes tidak boleh negatif').toInt(),
     body('totalWorkhour').notEmpty().withMessage('totalWorkhour wajib diisi')
       .isFloat({ gt: 0, max: 24 }).withMessage('totalWorkhour harus lebih dari 0 dan maksimal 24 jam').toFloat(),
     body('sourceType').notEmpty().withMessage('sourceType wajib diisi')
       .isIn(WORKHOUR_SOURCE_TYPES).withMessage(`sourceType harus salah satu dari: ${WORKHOUR_SOURCE_TYPES.join(', ')}`),
-    body('projectId').optional({ nullable: true }).isInt({ min: 1 }).withMessage('projectId harus angka').toInt(),
-    body('subProjectId').optional({ nullable: true }).isInt({ min: 1 }).withMessage('subProjectId harus angka').toInt(),
+    // Kolom lama sudah dibuang dari tabel (migrasi contract P4). Ditolak terbuka
+    // supaya klien lama tahu kontraknya berubah, bukan datanya diam-diam hilang.
+    body('projectId').not().exists()
+      .withMessage('projectId sudah tidak dipakai — kirim subProjectEquipmentAllocationId untuk internal_project'),
+    body('subProjectId').not().exists()
+      .withMessage('subProjectId sudah tidak dipakai — kirim subProjectEquipmentAllocationId untuk internal_project'),
     body('description').optional({ nullable: true }).trim(),
   ]),
   controller.createWorkhourLog);

@@ -48,8 +48,9 @@ const syncSequenceWithManualCode = async (tx, type, assetCode) => {
 };
 
 // Alat yang sedang ditangani tidak boleh diarsipkan. Penugasan proyek TIDAK
-// lagi tercermin di sini — saat modul Project ada, pengecekan "sedang bertugas"
-// harus ditambahkan dengan membaca sub_project_equipment_allocations.
+// tercermin di current_status — itu murni KONDISI alat — jadi "sedang bertugas"
+// dibaca langsung dari sub_project_equipment_allocations dan equipment_pool_items
+// lewat findActiveAssignment(). (Backlog C4, ditutup 4 Oktober 2026.)
 const NON_ARCHIVABLE_STATUSES = ['maintenance'];
 
 // Alat pada status ini tidak menghasilkan jam operasi
@@ -153,6 +154,92 @@ const removeType = async (id) => {
 // EQUIPMENT ITEMS
 // ============================================================
 
+/**
+ * C3 — "alat ini sedang ditugaskan ke mana?"
+ *
+ * Dijawab dari ALOKASI dan POOL ITEM, bukan dari equipment_items.current_status.
+ * current_status murni KONDISI (operational/maintenance/retired); penugasan
+ * milik sub_project_equipment_allocations. Aturan ini ditulis di CLAUDE.md:
+ * "alokasi adalah sumber kebenaran penugasan".
+ *
+ * Dibuat batch (satu query untuk sehalaman alat) supaya listItems tidak jadi
+ * N+1. Mengembalikan Map<equipmentItemId, assignment>.
+ */
+const findActiveAssignment = async (itemIds) => {
+  if (itemIds.length === 0) return new Map();
+
+  const [allocations, rentalPoolItems] = await Promise.all([
+    // Internal project: alokasi yang masih berjalan
+    prisma.subProjectEquipmentAllocation.findMany({
+      where: { equipmentItemId: { in: itemIds }, status: 'assigned' },
+      include: {
+        subProject: {
+          select: {
+            id: true, subProjectType: true, status: true,
+            constructionProject: { select: { id: true, projectCode: true, projectName: true } },
+          },
+        },
+      },
+    }),
+    // External rental: item pool milik rental project yang masih hidup
+    prisma.equipmentPoolItem.findMany({
+      where: {
+        equipmentItemId: { in: itemIds },
+        status: { in: ['available', 'assigned'] },
+        equipmentPool: { ownerType: 'external_rental_project', status: { in: ['draft', 'active'] } },
+      },
+      include: {
+        equipmentPool: {
+          select: {
+            id: true, poolCode: true,
+            externalRentalProject: { select: { id: true, rentalProjectCode: true, rentalProjectName: true } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const map = new Map();
+
+  for (const pi of rentalPoolItems) {
+    const rental = pi.equipmentPool.externalRentalProject;
+    map.set(pi.equipmentItemId, {
+      type: 'external_rental',
+      poolId: pi.equipmentPool.id,
+      poolCode: pi.equipmentPool.poolCode,
+      poolItemId: pi.id,
+      poolItemStatus: pi.status,
+      externalRentalProjectId: rental?.id ?? null,
+      projectCode: rental?.rentalProjectCode ?? null,
+      projectName: rental?.rentalProjectName ?? null,
+    });
+  }
+
+  // Alokasi internal ditulis BELAKANGAN supaya menang kalau sebuah unit
+  // (karena data lama yang tidak konsisten) terbaca di dua jalur sekaligus —
+  // alokasi adalah sumber kebenaran, pool item hanya wadahnya.
+  for (const a of allocations) {
+    const project = a.subProject.constructionProject;
+    map.set(a.equipmentItemId, {
+      type: 'internal_project',
+      allocationId: a.id,
+      allocationStatus: a.status,
+      subProjectId: a.subProject.id,
+      subProjectType: a.subProject.subProjectType,
+      subProjectStatus: a.subProject.status,
+      constructionProjectId: project.id,
+      projectCode: project.projectCode,
+      projectName: project.projectName,
+      allocatedAt: a.allocatedAt,
+      receivedAt: a.receivedAt,
+      // Alat sudah dialokasikan tapi belum dikonfirmasi sampai di lokasi
+      isReceived: Boolean(a.receivedAt),
+    });
+  }
+
+  return map;
+};
+
 const shapeItem = (item) => ({
   id: item.id,
   assetCode: item.assetCode,
@@ -221,7 +308,13 @@ const listItems = async ({ page = 1, limit = 20, typeId, status, search, isActiv
     prisma.equipmentItem.count({ where }),
   ]);
 
-  return { data: rows.map(shapeItem), total, page, limit };
+  // C3 — satu query untuk sehalaman alat, bukan satu per baris
+  const assignments = await findActiveAssignment(rows.map((r) => r.id));
+
+  return {
+    data: rows.map((r) => ({ ...shapeItem(r), assignment: assignments.get(r.id) ?? null })),
+    total, page, limit,
+  };
 };
 
 /** Detail alat + riwayat status terakhir + ringkasan workhour */
@@ -247,8 +340,12 @@ const getItemById = async (id) => {
     }),
   ]);
 
+  const assignments = await findActiveAssignment([id]);
+
   return {
     ...shapeItem(item),
+    // C3 — penugasan dibaca dari alokasi, bukan dari current_status
+    assignment: assignments.get(id) ?? null,
     statusHistory: statusLogs.map(shapeStatusLog),
     workhourSummary: {
       totalLogs: workhourAgg._count,
@@ -424,6 +521,20 @@ const removeItem = async (id) => {
     throw httpError(`Alat sedang berstatus "${item.currentStatus}" dan tidak bisa dinonaktifkan`, 409);
   }
 
+  // C4 — alat yang sedang dipakai proyek tidak boleh diarsipkan. Tanpa ini,
+  // unit yang sedang bertugas bisa hilang dari daftar aktif sementara
+  // alokasinya masih hidup dan jam kerjanya masih dicatat.
+  const assignment = (await findActiveAssignment([id])).get(id);
+  if (assignment) {
+    const where = assignment.type === 'internal_project'
+      ? `tahapan "${assignment.subProjectType}" pada ${assignment.projectCode}`
+      : `rental project ${assignment.projectCode ?? assignment.poolCode}`;
+    throw httpError(
+      `Alat "${item.assetCode}" sedang ditugaskan ke ${where}. Selesaikan atau kembalikan alokasinya dulu.`,
+      409
+    );
+  }
+
   const updated = await prisma.equipmentItem.update({
     where: { id },
     data: { isActive: false },
@@ -442,11 +553,14 @@ const shapeWorkhourLog = (log) => ({
   equipmentItem: log.equipmentItem
     ? { id: log.equipmentItem.id, assetCode: log.equipmentItem.assetCode }
     : undefined,
-  projectId: log.projectId,
-  subProjectId: log.subProjectId,
+  // Konteks pekerjaan — salah satunya terisi sesuai sourceType, atau dua-duanya
+  // null untuk manual_adjustment. Lihat CONTEXT_BY_SOURCE di bawah.
+  subProjectEquipmentAllocationId: log.subProjectEquipmentAllocationId,
+  equipmentPoolItemId: log.equipmentPoolItemId,
   workDate: toDateOnly(log.workDate),
   startedAt: log.startedAt,
   stoppedAt: log.stoppedAt,
+  pausedDurationMinutes: log.pausedDurationMinutes,
   totalWorkhour: toNumber(log.totalWorkhour),
   sourceType: log.sourceType,
   description: log.description,
@@ -456,11 +570,127 @@ const shapeWorkhourLog = (log) => ({
     : null,
 });
 
-const WORKHOUR_WRITABLE_FIELDS = ['projectId', 'subProjectId', 'description'];
+// Hanya `description` dan `pausedDurationMinutes` yang bebas ditulis klien.
+// Konteks (allocation/pool item) divalidasi sendiri karena menentukan
+// equipment_item_id, dan equipment_item_id TIDAK boleh datang dari request
+// untuk dua sourceType yang punya konteks.
+const WORKHOUR_WRITABLE_FIELDS = ['description', 'pausedDurationMinutes'];
+
+/**
+ * Konteks wajib per sourceType — cerminan CHECK constraint di database.
+ * Ditegakkan DUA KALI dengan sengaja: di sini supaya pesannya bisa dimengerti
+ * manusia, dan di database supaya tidak ada jalan masuk lain yang melanggarnya.
+ */
+const CONTEXT_BY_SOURCE = {
+  internal_project: {
+    required: 'subProjectEquipmentAllocationId',
+    forbidden: 'equipmentPoolItemId',
+    label: 'alokasi alat ke sub-project',
+  },
+  external_rental: {
+    required: 'equipmentPoolItemId',
+    forbidden: 'subProjectEquipmentAllocationId',
+    label: 'item pool alat rental',
+  },
+  manual_adjustment: { required: null, forbidden: null, label: 'koreksi manual' },
+};
+
+/**
+ * Menentukan unit alat dari konteksnya. Untuk internal_project dan
+ * external_rental, equipment_item_id adalah KOLOM TERKELOLA SISTEM — dibaca
+ * dari alokasi/pool item, bukan dari request body. Kiriman klien yang tidak
+ * cocok ditolak daripada diam-diam ditimpa, supaya salah input ketahuan
+ * pengirimnya, bukan terkubur.
+ */
+const resolveWorkhourContext = async (payload) => {
+  const { sourceType, equipmentItemId: claimedItemId } = payload;
+  const rule = CONTEXT_BY_SOURCE[sourceType];
+
+  if (rule.forbidden && payload[rule.forbidden] !== undefined && payload[rule.forbidden] !== null) {
+    throw httpError(
+      `sourceType "${sourceType}" tidak boleh mengirim ${rule.forbidden} — konteksnya ${rule.label}`,
+      400
+    );
+  }
+
+  // manual_adjustment: tidak lewat proyek manapun, jadi unitnya memang harus
+  // disebut klien. Ini satu-satunya jalur yang boleh begitu.
+  if (!rule.required) {
+    if (payload.subProjectEquipmentAllocationId || payload.equipmentPoolItemId) {
+      throw httpError('manual_adjustment tidak terikat alokasi maupun pool item', 400);
+    }
+    if (!claimedItemId) throw httpError('equipmentItemId wajib diisi untuk manual_adjustment', 400);
+    return { equipmentItemId: claimedItemId, subProjectEquipmentAllocationId: null, equipmentPoolItemId: null };
+  }
+
+  const contextId = payload[rule.required];
+  if (!contextId) {
+    throw httpError(`sourceType "${sourceType}" wajib mengirim ${rule.required} (${rule.label})`, 400);
+  }
+
+  let derivedItemId;
+  let context;
+
+  if (sourceType === 'internal_project') {
+    context = await prisma.subProjectEquipmentAllocation.findUnique({
+      where: { id: contextId },
+      include: { subProject: { select: { id: true, subProjectType: true, status: true } } },
+    });
+    if (!context) throw httpError(`Alokasi alat dengan ID ${contextId} tidak ditemukan`, 404);
+    if (context.status !== 'assigned') {
+      throw httpError(
+        `Alokasi berstatus "${context.status}" — jam kerja hanya bisa dicatat pada alokasi yang masih berjalan`,
+        409
+      );
+    }
+    derivedItemId = context.equipmentItemId;
+  } else {
+    context = await prisma.equipmentPoolItem.findUnique({
+      where: { id: contextId },
+      include: { equipmentPool: { select: { id: true, ownerType: true, status: true } } },
+    });
+    if (!context) throw httpError(`Pool item dengan ID ${contextId} tidak ditemukan`, 404);
+    // sourceType dan pemilik pool harus searah. Pool milik construction project
+    // jam kerjanya dicatat lewat alokasi, bukan lewat pool item.
+    if (context.equipmentPool.ownerType !== 'external_rental_project') {
+      throw httpError(
+        'Pool item ini milik construction project. Jam kerja internal dicatat lewat alokasi ke sub-project, ' +
+        'bukan langsung ke pool item.',
+        400
+      );
+    }
+    derivedItemId = context.equipmentItemId;
+  }
+
+  if (!derivedItemId) {
+    throw httpError(
+      `${rule.label} ini belum terikat unit alat spesifik. Tentukan unitnya dulu sebelum mencatat jam kerja.`,
+      409
+    );
+  }
+  if (claimedItemId && Number(claimedItemId) !== derivedItemId) {
+    throw httpError(
+      `equipmentItemId (${claimedItemId}) tidak cocok dengan unit pada ${rule.label} (${derivedItemId}). ` +
+      'Kolom ini ditentukan sistem dari konteksnya — kosongkan saja.',
+      400
+    );
+  }
+
+  return {
+    equipmentItemId: derivedItemId,
+    subProjectEquipmentAllocationId: sourceType === 'internal_project' ? contextId : null,
+    equipmentPoolItemId: sourceType === 'external_rental' ? contextId : null,
+  };
+};
 
 const createWorkhourLog = async (payload, userId) => {
-  const { equipmentItemId, workDate, startedAt, stoppedAt, totalWorkhour, sourceType } = payload;
+  const { workDate, startedAt, stoppedAt, totalWorkhour, sourceType } = payload;
   const writable = pickWritable(payload, WORKHOUR_WRITABLE_FIELDS);
+
+  // Konteks diselesaikan DULU: dia yang menentukan unit alatnya untuk
+  // internal_project dan external_rental.
+  const context = await resolveWorkhourContext(payload);
+  const { equipmentItemId } = context;
 
   const item = await prisma.equipmentItem.findUnique({ where: { id: equipmentItemId } });
   if (!item) throw httpError(`Unit alat dengan ID ${equipmentItemId} tidak ditemukan`, 404);
@@ -481,6 +711,20 @@ const createWorkhourLog = async (payload, userId) => {
     throw httpError('stoppedAt harus lebih besar dari startedAt', 400);
   }
 
+  // Jeda tidak boleh lebih panjang dari rentang kerjanya sendiri. Tanpa ini,
+  // paused_duration_minutes bisa diisi angka yang membuat jam kerja bersih
+  // menjadi negatif tanpa ada yang menolak.
+  const paused = Number(writable.pausedDurationMinutes ?? 0);
+  if (startedAt && stoppedAt && paused > 0) {
+    const spanMinutes = (new Date(stoppedAt) - new Date(startedAt)) / 60000;
+    if (paused > spanMinutes) {
+      throw httpError(
+        `Jeda ${paused} menit melebihi rentang kerja ${Math.round(spanMinutes)} menit (startedAt sampai stoppedAt)`,
+        400
+      );
+    }
+  }
+
   // Total jam kerja per alat per hari tidak boleh melebihi 24 jam
   const existing = await prisma.equipmentWorkhourLog.aggregate({
     where: { equipmentItemId, workDate: work },
@@ -498,7 +742,9 @@ const createWorkhourLog = async (payload, userId) => {
   const log = await prisma.$transaction(async (tx) => {
     const created = await tx.equipmentWorkhourLog.create({
       data: {
-        equipmentItemId,
+        // Seluruh konteks (equipmentItemId + FK alokasi/pool item) berasal dari
+        // resolveWorkhourContext, bukan dari request body.
+        ...context,
         workDate: work,
         startedAt: startedAt ? new Date(startedAt) : null,
         stoppedAt: stoppedAt ? new Date(stoppedAt) : null,

@@ -177,6 +177,200 @@ jadi ini bukan nilai mati, hanya belum terjangkau.
 
 ---
 
+## P3 — Equipment pool & alokasi (4 Oktober 2026)
+
+### Pool item TIDAK melacak status sendiri secara independen
+
+Enum `equipment_pool_item_status` dari ERD punya 6 nilai termasuk `assigned`.
+Pembacaannya bisa salah: kalau `status` kolom ini bebas ditulis klien, dia bisa
+BERTENTANGAN dengan keadaan alokasi yang sebenarnya — pool item mengaku
+`available` padahal ada alokasi `assigned` yang menunjuknya, atau sebaliknya.
+
+**Keputusan: pool item TIDAK PERNAH diubah langsung oleh endpoint "ubah status".**
+Transisi `available ↔ assigned` HANYA terjadi sebagai efek samping sistem dari
+transaksi alokasi:
+
+- `POST .../allocations` → pool item `available → assigned`, dalam TRANSAKSI
+  YANG SAMA dengan pembuatan baris alokasi
+- `PUT .../allocations/{id}/status` (completed/returned/cancelled) → pool item
+  `assigned → available`, dalam transaksi yang sama
+
+Endpoint `PUT .../items/{itemId}/close` (menuju `completed`/`cancelled`) hanya
+boleh dipanggil saat pool item **sedang `available`** — mustahil menutup item
+yang masih terikat alokasi aktif. Ini menjaga **satu fakta hidup di satu
+tempat**: alokasi adalah sumber kebenaran "sedang dipakai atau tidak", pool item
+hanya mencerminkannya.
+
+**Konsekuensi yang diterima sadar:** `pending` dan `rejected` pada enum pool item
+tetap tidak tercapai sampai Request Alat ada (sudah dicatat di P1). `requestedQuantity`
+vs `approvedQuantity` — tanpa alur approval terpisah, `approvedQuantity` disamakan
+dengan `requestedQuantity` saat pool item dibuat. Ini standin, bukan keputusan akhir;
+Request Alat (langkah 4) akan memberi approvedQuantity makna yang sebenarnya.
+
+### Satu pool item bisa dipakai beberapa alokasi berurutan — diuji, bukan diasumsikan
+
+ERD menyatakan relasi `equipment_pool_items → sub_project_equipment_allocations`
+sebagai 1:N. Diuji langsung: pool item yang alokasinya sudah `completed` berhasil
+dialokasikan lagi ke tahapan yang sama, menghasilkan baris alokasi kedua yang
+independen. Ini yang membuat penggantian unit bekerja benar (lihat CLAUDE.md
+"Utang Desain" poin 1) — unit lama dan penggantinya tetap punya baris alokasi
+masing-masing dengan jam kerja masing-masing (disambungkan penuh di P4).
+
+### `allocation:receive` dipisah dari `allocation:create`
+
+Yang mengalokasikan (Divisi Alat, keputusan administratif) dan yang menerima
+fisik unit di lokasi (Lapangan, konfirmasi lapangan) adalah dua wewenang
+berbeda — pola yang sama dengan pemisahan pengaju/penyetuju di purchase
+request. `receive` BUKAN transisi status: `status` tetap `assigned` sebelum dan
+sesudah, hanya `receivedAt`/`receivedBy` yang terisi. Ini menggantikan nilai
+enum `received_at_site` yang sudah dihapus di P1 — kapan dan siapa yang
+menerima sudah terjawab penuh oleh dua kolom timestamp ini.
+
+### Guard unit alat dipakai dari pola yang sudah ada
+
+Unit yang boleh masuk pool (lewat `addItem` atau `bindItemUnit`) tunduk pada
+pemeriksaan yang SAMA dengan `createWorkhourLog`: tidak boleh `maintenance`
+atau `retired`. Alasannya identik — merencanakan alat yang sedang ditangani
+untuk pekerjaan baru tidak masuk akal, sama seperti mencatat jam kerja untuknya
+tidak masuk akal. Ditambah satu guard baru yang tidak ada presedennya: satu unit
+fisik tidak boleh terikat ke pool item lain yang masih hidup
+(`available`/`assigned`) di pool manapun — dua pool aktif tidak boleh mengklaim
+unit yang sama.
+
+### C3/C4 — SENGAJA BELUM dikerjakan di P3
+
+Tabel dan endpoint alokasi sudah hidup dan teruji penuh, tapi:
+- **C3** (field turunan `assignment` pada `GET /equipment/items`) dan
+- **C4** (cek alokasi aktif sebelum arsip alat di `divisi-alat.service.js`)
+
+keduanya menyentuh modul Divisi Alat yang sudah stabil, dan ditahan sampai **P4**
+supaya perubahannya satu paket dengan migrasi *contract* `equipment_workhour_logs`
+— menghindari menyentuh file yang sama dua kali di dua commit terpisah untuk
+alasan yang sebenarnya satu.
+
+---
+
+## P4 — Rework workhour & penutupan backlog C (4 Oktober 2026)
+
+### Aturan konteks ditegakkan DUA KALI, sengaja
+
+`CONTEXT_BY_SOURCE` di `divisi-alat.service.js` menolak lebih dulu dengan pesan
+yang menyebut apa yang kurang dan kenapa. CHECK constraint di database menjaga
+tidak ada jalan masuk lain yang melanggarnya — seeder, skrip migrasi data, atau
+query manual sekalipun.
+
+Ini bukan duplikasi yang dilarang prinsip "satu fakta hidup di satu tempat".
+Yang diduplikasi bukan FAKTA melainkan PENJAGAANNYA, dan keduanya menjaga pada
+lapisan berbeda: service menjaga pengalaman pengguna API, CHECK menjaga
+integritas tabel dari semua penulis.
+
+### `equipment_item_id` jadi kolom terkelola sistem
+
+Untuk `internal_project` dan `external_rental`, unit alat dibaca DARI
+alokasi/pool item. Kiriman klien yang tidak cocok **ditolak 400**, bukan
+diam-diam ditimpa — supaya salah input ketahuan pengirimnya, bukan terkubur.
+
+`manual_adjustment` tetap menerima `equipmentItemId` dari klien karena memang
+tidak lewat proyek manapun. Inilah yang membuat kolom ini tidak bisa dihapus
+(sudah dijelaskan di bagian P1), dan sekarang terbukti terpakai: 45 dari 47 baris
+di database adalah `manual_adjustment`.
+
+### Guard tambahan di luar ERD
+
+- **Alokasi harus masih `assigned`.** Mencatat jam kerja pada alokasi yang sudah
+  `completed`/`returned` berarti menambah angka ke pekerjaan yang sudah ditutup.
+- **Konteks harus terikat unit spesifik.** Pool item "TBD" (belum ditentukan
+  unitnya) ditolak 409 — tidak mungkin mencatat jam kerja alat yang belum
+  diketahui alatnya yang mana.
+- **`sourceType` dan pemilik pool harus searah.** Pool item milik construction
+  project ditolak untuk `external_rental` dengan pesan yang mengarahkan ke
+  alokasi. Tanpa ini, satu pekerjaan bisa tercatat lewat dua jalur berbeda.
+- **Jeda tidak boleh melebihi rentang kerjanya.** Tanpa guard ini
+  `paused_duration_minutes` bisa diisi angka yang membuat jam kerja bersih
+  negatif tanpa ada yang menolak.
+
+### `assignment` dibuat batch, bukan per baris
+
+`findActiveAssignment(itemIds)` mengambil satu query untuk sehalaman alat dan
+mengembalikan Map. Kalau dibuat per baris, `GET /equipment/items` dengan limit 20
+akan menembak 40 query. Alokasi internal ditulis belakangan ke Map supaya menang
+atas pool item kalau sebuah unit terbaca di dua jalur — konsisten dengan aturan
+"alokasi adalah sumber kebenaran penugasan".
+
+### Bug P3 yang ketahuan saat pengujian P4
+
+Pool yang sudah `closed` masih menahan unitnya: item-nya tertinggal berstatus
+`available` di dalam pool mati, dan karena satu unit fisik tidak boleh dipegang
+dua pool item hidup sekaligus, unitnya **terkunci selamanya**.
+
+Lolos dari pengujian P3 karena penutupan pool diuji sebagai langkah terakhir —
+tidak pernah dicoba memakai lagi unitnya sesudah itu. Diperbaiki dua sisi:
+menutup pool sekarang meng-cascade item `available` menjadi
+`completed`/`cancelled`, dan pemeriksaan "dipegang pool lain" hanya menghitung
+pool berstatus `draft`/`active`. Dua baris yang terlanjur tertinggal dirapikan.
+
+### Migrasi contract — dijalankan 5 Oktober 2026
+
+`DROP COLUMN project_id, sub_project_id` + 2 CHECK constraint per `source_type`.
+Sempat ditahan sehari di luar `prisma/migrations/` menunggu konfirmasi developer
+lain yang memakai database dev bersama — bukan karena ragu desainnya, tapi karena
+`DROP COLUMN` tidak bisa dibatalkan dan cabang kerja orang lain bisa ikut rusak.
+
+**Keputusan desainnya sendiri sudah bulat jauh sebelumnya.** Ditelusuri ke
+`AIsession/1-session.md`: pembahasannya berevolusi tiga kali, dari "simpan
+ketiganya" menjadi "cukup alokasi saja", dengan alasan paling konkret berupa
+contoh inkonsistensi yang mungkin terjadi — alokasi menunjuk Excavator EXC-001
+sementara `equipment_item_id` menunjuk Dump Truck DT-001. `session1.md` bahkan
+sudah menyebut eksplisit: *"project_id/sub_project_id lama dihapus total, bukan
+dibiarkan nganggur"*.
+
+Satu hal berevolusi di tengah jalan: sesi sempat menyebut
+`external_rental_project_item_id`, lalu diganti `equipment_pool_item_id` saat
+pool dibuat generic. Yang dipakai adalah yang kedua.
+
+**Diverifikasi sebelum dijalankan** (49 baris: 46 `manual_adjustment`,
+3 `internal_project`): 0 baris memakai kolom lama, 0 melanggar kedua CHECK.
+**Diverifikasi sesudahnya:** kolom hilang, 2 CHECK terpasang, 49 baris utuh,
+drift schema↔database nol, dan CHECK terbukti menolak pelanggaran lewat SQL
+mentah yang menembus service.
+
+---
+
+## Jebakan Express 5 — `.toInt()` pada query tidak berfungsi (4 Oktober 2026)
+
+Ditemukan saat menguji `sandbox/api-tester`, bukan saat menulis kode.
+
+Express 5 menjadikan `req.query` **getter read-only**. Sanitizer express-validator
+seperti `.toInt()` pada `query('limit')` karena itu **tidak bisa menulis balik** —
+tidak melempar error, tidak ada peringatan, nilainya tetap string. Prisma lalu
+menolaknya di kedalaman:
+
+```
+Argument `take`: Invalid value provided. Expected Int, provided String.
+```
+
+**Kenapa lolos dari seluruh pengujian P2–P5:** saya tidak pernah mengirim
+`?limit=` ke endpoint modul Project. Default `limit = 20` dari destructuring
+adalah angka sungguhan, jadi semuanya terlihat benar. Yang pertama mengirim
+`?limit=50` adalah tester — dan langsung gagal.
+
+Modul Divisi Alat tidak kena karena sejak awal mengkonversi di controller
+(`pageParams(req)`), tidak mengandalkan sanitizer. Pola itu benar; modul Project
+yang menyimpang.
+
+**Perbaikannya di akar, bukan di tempat kejadian:**
+- `utils/query.js` berisi `pageParams`, `numQuery`, `boolQuery` dengan jebakannya
+  ditulis panjang di komentar
+- Tiga salinan `pageParams`/`boolQuery` di controller Divisi Alat disatukan ke sana
+- **`.toInt()` dihapus dari semua `query(...)`** — membiarkannya lebih buruk
+  daripada tidak ada, karena menipu pembaca berikutnya seolah konversi sudah ditangani
+- `param(...)` dan `body(...)` tetap memakai `.toInt()`: `req.params` dan
+  `req.body` objek biasa yang bisa ditulis, jadi di sana sanitizernya sungguhan jalan
+- Dicatat di `CLAUDE.md` bagian Coding Conventions supaya modul berikutnya tidak
+  mengulanginya
+
+---
+
 ## Dokumen terkait
 
 - **`../skema-tenaga-kerja-harian.md`** — spesifikasi tenaga kerja harian untuk

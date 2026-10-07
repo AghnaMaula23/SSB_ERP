@@ -208,17 +208,15 @@ model EquipmentStatusLog {
 /// KOLOM TERKELOLA SISTEM — service membacanya dari alokasi/pool item dan menolak
 /// kiriman klien yang tidak cocok, jadi dua sumber ini tidak bisa bertentangan.
 ///
-/// FASE EXPAND: project_id dan sub_project_id masih hidup di sini supaya kode
-/// lama tetap jalan. Keduanya di-DROP di migrasi contract (P4) bersama pemasangan
-/// CHECK constraint per source_type.
+/// FASE CONTRACT SELESAI (P4, 4 Okt 2026): project_id dan sub_project_id sudah
+/// di-DROP, dan CHECK constraint per source_type terpasang di database:
+///   source_type='internal_project' => sub_project_equipment_allocation_id NOT NULL
+///   source_type='external_rental'  => equipment_pool_item_id NOT NULL
+/// Aturan yang sama ditegakkan service lebih dulu (CONTEXT_BY_SOURCE) supaya
+/// pesan errornya bisa dimengerti manusia; CHECK menjaga tidak ada jalan masuk lain.
 model EquipmentWorkhourLog {
-  id              Int  @id @default(autoincrement())
-  equipmentItemId Int  @map("equipment_item_id")
-  /// @deprecated Dibuang di migrasi contract P4 — dipakai kode lama saja.
-  projectId       Int? @map("project_id")
-  /// @deprecated Dibuang di migrasi contract P4 — dipakai kode lama saja.
-  subProjectId    Int? @map("sub_project_id")
-
+  id                              Int  @id @default(autoincrement())
+  equipmentItemId                 Int  @map("equipment_item_id")
   subProjectEquipmentAllocationId Int? @map("sub_project_equipment_allocation_id")
   equipmentPoolItemId             Int? @map("equipment_pool_item_id")
 
