@@ -18,9 +18,12 @@ const idParam = param('id').isInt({ min: 1 }).withMessage('ID tidak valid').toIn
 const projectIdParam = param('projectId').isInt({ min: 1 }).withMessage('projectId tidak valid').toInt();
 const subProjectIdParam = param('subProjectId').isInt({ min: 1 }).withMessage('subProjectId tidak valid').toInt();
 
+// TANPA .toInt() — sanitizer itu tidak berfungsi pada req.query di Express 5
+// dan hanya menyesatkan pembaca. Konversinya di controller (utils/query.js).
+// Validator di sini murni MEMERIKSA bentuknya, tidak mengubah apa pun.
 const pageRules = [
-  query('page').optional().isInt({ min: 1 }).withMessage('page harus angka >= 1').toInt(),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('limit 1-100').toInt(),
+  query('page').optional().isInt({ min: 1 }).withMessage('page harus angka >= 1'),
+  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('limit 1-100'),
 ];
 
 const statusBodyRule = (allowed) =>
@@ -193,6 +196,12 @@ router.put(`${SUB}/:id/status`, authorize('sub-project:update'),
 // Tidak bersarang di bawah /construction/:projectId: lapangan mengakses lewat
 // tahapan yang sedang mereka kerjakan, dan sub-project id sudah unik global.
 
+// Detail tahapan lewat id-nya sendiri. Didaftarkan di sini (bukan di bawah
+// /construction/:projectId) karena id sub-project sudah unik global — klien
+// yang datang dari tautan langsung tidak selalu memegang project id-nya.
+router.get('/sub-projects/:id', authorize('sub-project:read'),
+  validate([idParam]), controller.detailSubProjectDirect);
+
 const LOGS = '/sub-projects/:subProjectId/progress-logs';
 
 const fieldConditionRules = [
@@ -250,5 +259,87 @@ router.put(`${LOGS}/:id/validate`, authorize('progress:validate'),
       'Alasan validasi/penolakan belum bisa disimpan — menunggu modul Approval Center. ' +
       'Sampaikan alasannya di luar sistem dulu.')]),
   controller.validateProgressLog);
+
+// ============================================================
+// EQUIPMENT POOL — /api/projects/equipment-pools
+// ============================================================
+
+const OWNER_TYPES = ['construction_project', 'external_rental_project'];
+const POOL_STATUSES = ['draft', 'active', 'closed', 'cancelled'];
+const POOL_ITEM_STATUSES = ['pending', 'available', 'assigned', 'completed', 'rejected', 'cancelled'];
+const ALLOCATION_STATUSES = ['assigned', 'completed', 'returned', 'cancelled'];
+
+const poolIdParam = param('id').isInt({ min: 1 }).withMessage('id tidak valid').toInt();
+const poolItemIdParam = param('itemId').isInt({ min: 1 }).withMessage('itemId tidak valid').toInt();
+
+router.get('/equipment-pools', authorize('equipment-pool:read'),
+  validate([...pageRules,
+    query('ownerType').optional().isIn(OWNER_TYPES).withMessage(`ownerType harus salah satu dari: ${OWNER_TYPES.join(', ')}`),
+    query('constructionProjectId').optional().isInt({ min: 1 }).withMessage('constructionProjectId harus angka'),
+    query('externalRentalProjectId').optional().isInt({ min: 1 }).withMessage('externalRentalProjectId harus angka'),
+    query('status').optional().isIn(POOL_STATUSES).withMessage(`status harus salah satu dari: ${POOL_STATUSES.join(', ')}`)]),
+  controller.listPools);
+
+router.get('/equipment-pools/:id', authorize('equipment-pool:read'),
+  validate([poolIdParam]), controller.detailPool);
+
+router.post('/equipment-pools', authorize('equipment-pool:create'),
+  validate([
+    body('ownerType').isIn(OWNER_TYPES).withMessage(`ownerType wajib diisi, salah satu dari: ${OWNER_TYPES.join(', ')}`),
+    body('constructionProjectId').optional().isInt({ min: 1 }).toInt(),
+    body('externalRentalProjectId').optional().isInt({ min: 1 }).toInt(),
+    ...rejectSystemManaged('poolCode', 'status', 'createdBy')]),
+  controller.createPool);
+
+router.put('/equipment-pools/:id/status', authorize('equipment-pool:update'),
+  validate([poolIdParam, statusBodyRule(POOL_STATUSES)]), controller.changePoolStatus);
+
+router.post('/equipment-pools/:id/items', authorize('equipment-pool:update'),
+  validate([poolIdParam,
+    body('equipmentTypeId').isInt({ min: 1 }).withMessage('equipmentTypeId wajib diisi').toInt(),
+    body('equipmentItemId').optional({ nullable: true }).isInt({ min: 1 }).withMessage('equipmentItemId harus angka').toInt(),
+    body('requestedQuantity').optional().isInt({ min: 1 }).withMessage('requestedQuantity minimal 1').toInt(),
+    ...rejectSystemManaged('approvedQuantity', 'status')]),
+  controller.addPoolItem);
+
+router.put('/equipment-pools/:id/items/:itemId/bind-unit', authorize('equipment-pool:update'),
+  validate([poolIdParam, poolItemIdParam,
+    body('equipmentItemId').isInt({ min: 1 }).withMessage('equipmentItemId wajib diisi').toInt()]),
+  controller.bindPoolItemUnit);
+
+router.put('/equipment-pools/:id/items/:itemId/close', authorize('equipment-pool:update'),
+  validate([poolIdParam, poolItemIdParam,
+    body('status').isIn(['completed', 'cancelled']).withMessage('status harus "completed" atau "cancelled"')]),
+  controller.closePoolItem);
+
+// ============================================================
+// EQUIPMENT ALLOCATIONS — /api/projects/sub-projects/:subProjectId/allocations
+// ============================================================
+
+const ALLOC = '/sub-projects/:subProjectId/allocations';
+
+router.get(ALLOC, authorize('allocation:read'),
+  validate([subProjectIdParam,
+    query('status').optional().isIn(ALLOCATION_STATUSES).withMessage(`status harus salah satu dari: ${ALLOCATION_STATUSES.join(', ')}`)]),
+  controller.listAllocations);
+
+router.get(`${ALLOC}/:id`, authorize('allocation:read'),
+  validate([subProjectIdParam, idParam]), controller.detailAllocation);
+
+router.post(ALLOC, authorize('allocation:create'),
+  validate([subProjectIdParam,
+    body('equipmentPoolItemId').isInt({ min: 1 }).withMessage('equipmentPoolItemId wajib diisi').toInt(),
+    ...rejectSystemManaged('equipmentItemId', 'status', 'allocatedBy', 'allocatedAt', 'receivedBy', 'receivedAt')]),
+  controller.createAllocation);
+
+// Lapangan yang menerima unit di lokasi — permission TERPISAH dari
+// allocation:create (Divisi Alat yang mengalokasikan) supaya yang menugaskan
+// dan yang menerima bukan wewenang yang sama.
+router.put(`${ALLOC}/:id/receive`, authorize('allocation:receive'),
+  validate([subProjectIdParam, idParam]), controller.receiveAllocation);
+
+router.put(`${ALLOC}/:id/status`, authorize('allocation:update'),
+  validate([subProjectIdParam, idParam, statusBodyRule(ALLOCATION_STATUSES)]),
+  controller.changeAllocationStatus);
 
 module.exports = router;

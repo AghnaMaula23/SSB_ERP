@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 const { seedDivisiAlatDemo } = require('./divisi-alat.seed.js');
+const { seedProjectDemo } = require('./project.seed.js');
 // divisi-alat.seed.js jalan lewat service module, yang memakai singleton
 // Prisma di src/config/database.js — koneksi terpisah dari `prisma` di atas,
 // jadi ikut ditutup manual saat proses seed selesai (lihat main().finally di bawah).
@@ -40,6 +41,13 @@ const PERMISSIONS = [
   { module: 'progress',    action: 'read',     label: 'Lihat progress harian' },
   { module: 'progress',    action: 'create',   label: 'Catat dan ubah progress harian' },
   { module: 'progress',    action: 'validate', label: 'Validasi progress harian (Admin) — dasar tagihan klien' },
+  { module: 'equipment-pool', action: 'read',    label: 'Lihat pool alat dan isinya' },
+  { module: 'equipment-pool', action: 'create',  label: 'Buat pool alat baru' },
+  { module: 'equipment-pool', action: 'update',  label: 'Ubah status pool, tambah/ikat/tutup item pool' },
+  { module: 'allocation',     action: 'read',    label: 'Lihat alokasi alat ke tahapan' },
+  { module: 'allocation',     action: 'create',  label: 'Alokasikan alat ke tahapan (Divisi Alat)' },
+  { module: 'allocation',     action: 'receive', label: 'Konfirmasi alat diterima di lokasi (Lapangan)' },
+  { module: 'allocation',     action: 'update',  label: 'Tutup alokasi: completed, returned, atau cancelled' },
   { module: 'equipment',  action: 'read',   label: 'Lihat master alat' },
   { module: 'equipment',  action: 'create', label: 'Tambah jenis/unit alat' },
   { module: 'equipment',  action: 'update', label: 'Ubah data dan status alat' },
@@ -108,6 +116,7 @@ const ROLE_PERMISSIONS = {
     'project:read', 'project:create', 'project:update',
     'sub-project:read', 'sub-project:create', 'sub-project:update',
     'progress:read', 'progress:validate',
+    'equipment-pool:read', 'allocation:read',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
@@ -129,6 +138,11 @@ const ROLE_PERMISSIONS = {
     'cash:read', 'cash:create', 'cash:update', 'cash:delete',
     // Divisi Alat perlu melihat project dan tahapannya untuk menempatkan alat
     'project:read', 'sub-project:read',
+    // Divisi Alat pemilik equipment pool dan yang mengalokasikan ke tahapan —
+    // sengaja TANPA allocation:receive, itu wewenang Lapangan yang menerima
+    // fisik unitnya di lokasi.
+    'equipment-pool:read', 'equipment-pool:create', 'equipment-pool:update',
+    'allocation:read', 'allocation:create', 'allocation:update',
   ],
   // Lapangan boleh melihat jadwal servis alat yang mereka pakai, tapi tidak mengelolanya
   // Lapangan belum boleh mencatat kerusakan — laporan masuk lewat telepon ke
@@ -137,7 +151,10 @@ const ROLE_PERMISSIONS = {
   // tidak memvalidasi; pemisahan yang sama dengan pengaju purchase request yang
   // tidak boleh menyetujui pengajuannya sendiri.
   lapangan: ['equipment:read', 'workhour:read', 'workhour:create', 'maintenance:read', 'damage:read',
-    'project:read', 'sub-project:read', 'progress:read', 'progress:create'],
+    'project:read', 'sub-project:read', 'progress:read', 'progress:create',
+    // Lapangan yang menerima unit di lokasi — sengaja TANPA allocation:create,
+    // yang mengalokasikan adalah Divisi Alat.
+    'equipment-pool:read', 'allocation:read', 'allocation:receive'],
 };
 
 async function main() {
@@ -238,6 +255,10 @@ async function main() {
 
   console.log('Seeding demo data Divisi Alat...');
   await seedDivisiAlatDemo(admin.id);
+
+  // Dijalankan SETELAH Divisi Alat: seeder Project memasukkan unit alat ke pool
+  // dan mencatat jam kerjanya, jadi butuh master alat sudah ada.
+  await seedProjectDemo(admin.id);
 
   console.log('Seed complete.');
 }

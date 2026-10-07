@@ -639,6 +639,140 @@ const swaggerSpec = {
     },
 
     // ========================================
+    // 2.6 EQUIPMENT POOL & ALLOCATIONS
+    // ========================================
+    '/projects/equipment-pools': {
+      get: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'List equipment pool', description: 'Permission: equipment-pool:read',
+        parameters: [
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'ownerType', schema: { type: 'string', enum: ['construction_project','external_rental_project'] } },
+          { in: 'query', name: 'constructionProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'externalRentalProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['draft','active','closed','cancelled'] } }
+        ],
+        responses: { 200: { description: 'Paginated list' } }
+      },
+      post: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Buat equipment pool',
+        description: 'Permission: equipment-pool:create (Divisi Alat). `poolCode` DIBUAT SISTEM (POOL-000001). Generic untuk construction_project ATAU external_rental_project — isi FK yang sesuai owner_type, CHECK constraint database menolak kombinasi lain.',
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['ownerType'],
+          properties: {
+            ownerType: { type: 'string', enum: ['construction_project','external_rental_project'] },
+            constructionProjectId: { type: 'integer' }, externalRentalProjectId: { type: 'integer' }
+          }
+        }}}},
+        responses: { 201: { description: 'Created' }, 400: { description: 'FK owner tidak diisi sesuai ownerType' } }
+      }
+    },
+    '/projects/equipment-pools/{id}': {
+      get: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Detail pool + daftar item',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Detail dengan array items' } }
+      }
+    },
+    '/projects/equipment-pools/{id}/status': {
+      put: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Ubah status pool', description: 'Permission: equipment-pool:update. Menutup/membatalkan DITOLAK 409 kalau masih ada item berstatus assigned.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['draft','active','closed','cancelled'] } }
+        }}}},
+        responses: { 200: { description: 'Status diubah' }, 409: { description: 'Transisi tidak sah / masih ada item assigned' } }
+      }
+    },
+    '/projects/equipment-pools/{id}/items': {
+      post: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Tambah item ke pool',
+        description: 'Permission: equipment-pool:update (Divisi Alat). Tanpa modul Request Alat, item lahir langsung dari keputusan Divisi Alat — status awal `available`, MELEWATI `pending` dari enum ERD. `equipmentItemId` opsional: boleh "TBD" (unit ditentukan belakangan lewat bind-unit). Unit yang dikirim wajib aktif, tidak maintenance/retired, dan tidak sedang terikat pool item lain.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['equipmentTypeId'],
+          properties: {
+            equipmentTypeId: { type: 'integer' },
+            equipmentItemId: { type: 'integer', description: 'Opsional — kosongkan untuk unit TBD' },
+            requestedQuantity: { type: 'integer', default: 1 }
+          }
+        }}}},
+        responses: { 201: { description: 'Created' }, 409: { description: 'Unit tidak aktif / maintenance / retired / sudah terikat pool item lain' } }
+      }
+    },
+    '/projects/equipment-pools/{id}/items/{itemId}/bind-unit': {
+      put: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Ikat unit spesifik ke pool item TBD',
+        description: 'Permission: equipment-pool:update. Hanya untuk pool item yang belum punya equipmentItemId dan masih berstatus available.',
+        parameters: [
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['equipmentItemId'], properties: { equipmentItemId: { type: 'integer' } }
+        }}}},
+        responses: { 200: { description: 'Updated' }, 409: { description: 'Sudah terikat unit / status bukan available' } }
+      }
+    },
+    '/projects/equipment-pools/{id}/items/{itemId}/close': {
+      put: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Tutup pool item manual (completed/cancelled)',
+        description: 'Permission: equipment-pool:update. DITOLAK 409 kecuali status saat ini "available" — item yang "assigned" harus diselesaikan lewat alokasinya dulu, bukan ditutup langsung.',
+        parameters: [
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['completed','cancelled'] } }
+        }}}},
+        responses: { 200: { description: 'Updated' }, 409: { description: 'Status bukan available' } }
+      }
+    },
+    '/projects/sub-projects/{subProjectId}/allocations': {
+      get: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'List alokasi alat pada satu tahapan', description: 'Permission: allocation:read',
+        parameters: [
+          { in: 'path', name: 'subProjectId', required: true, schema: { type: 'integer' } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['assigned','completed','returned','cancelled'] } }
+        ],
+        responses: { 200: { description: 'Array alokasi' } }
+      },
+      post: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Alokasikan pool item ke tahapan (SUMBER KEBENARAN PENUGASAN)',
+        description: 'Permission: allocation:create (Divisi Alat). Pool item WAJIB berstatus available, tahapan WAJIB active. Pool item dan alokasi bergerak BERSAMA dalam satu transaksi — pool item langsung jadi `assigned` di saat yang sama. `equipmentItemId` KOLOM TERKELOLA SISTEM, diturunkan dari pool item.',
+        parameters: [{ in: 'path', name: 'subProjectId', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['equipmentPoolItemId'], properties: { equipmentPoolItemId: { type: 'integer' } }
+        }}}},
+        responses: { 201: { description: 'Created' }, 409: { description: 'Pool item bukan available / tahapan tidak active' } }
+      }
+    },
+    '/projects/sub-projects/{subProjectId}/allocations/{id}/receive': {
+      put: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Konfirmasi unit diterima di lokasi',
+        description: 'Permission: allocation:receive — DIPEGANG LAPANGAN, terpisah dari allocation:create (Divisi Alat) yang mengalokasikan. BUKAN perubahan status (tetap `assigned`) — hanya mengisi receivedAt/receivedBy, menggantikan nilai enum `received_at_site` yang dihapus dari ERD.',
+        parameters: [
+          { in: 'path', name: 'subProjectId', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } }
+        ],
+        responses: { 200: { description: 'Updated' }, 409: { description: 'Status bukan assigned / sudah pernah dikonfirmasi' } }
+      }
+    },
+    '/projects/sub-projects/{subProjectId}/allocations/{id}/status': {
+      put: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Tutup alokasi: completed, returned, atau cancelled',
+        description: 'Permission: allocation:update (Divisi Alat). Pool item dibebaskan kembali ke `available` dalam transaksi yang SAMA, pada ketiga status tujuan — satu pool item bisa dipakai beberapa alokasi berurutan (1:N pada ERD). Semua tiga status bersifat FINAL untuk alokasi tersebut.',
+        parameters: [
+          { in: 'path', name: 'subProjectId', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['completed','returned','cancelled'] } }
+        }}}},
+        responses: { 200: { description: 'Updated' }, 409: { description: 'Transisi tidak sah' } }
+      }
+    },
+
+    // ========================================
     // 3. DIVISI ALAT
     // ========================================
     '/equipment/types': {
@@ -686,7 +820,7 @@ const swaggerSpec = {
     },
     '/equipment/items': {
       get: {
-        tags: ['Equipment Items'], summary: 'List unit alat', description: 'Permission: equipment:read',
+        tags: ['Equipment Items'], summary: 'List unit alat', description: 'Permission: equipment:read. Setiap baris memuat field turunan `assignment` (backlog C3): penugasan alat dibaca dari sub_project_equipment_allocations / equipment_pool_items, BUKAN dari current_status — current_status murni KONDISI alat. Bernilai null kalau alat sedang tidak ditugaskan.', description: 'Permission: equipment:read',
         parameters: [
           { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
           { in: 'query', name: 'typeId', schema: { type: 'integer' } },
@@ -768,24 +902,26 @@ const swaggerSpec = {
     },
     '/equipment/workhour-logs': {
       post: {
-        tags: ['Workhour Logs'], summary: 'Catat jam kerja alat', description: 'Role: lapangan. Permission: workhour:create. Menambah total_workhour alat DAN menggerakkan hitung mundur semua maintenance setting aktif milik alat itu, dalam satu transaksi. Response memuat `maintenanceImpact`. DITOLAK kalau alat berstatus `maintenance` atau `retired` — alat di bengkel tidak menghasilkan jam operasi.',
+        tags: ['Workhour Logs'], summary: 'Catat jam kerja alat', description: 'Role: lapangan. Permission: workhour:create. Menambah total_workhour alat DAN menggerakkan hitung mundur maintenance setting aktif, dalam satu transaksi. Response memuat `maintenanceImpact`. DITOLAK kalau alat berstatus `maintenance` atau `retired`. KONTEKS WAJIB per sourceType (backlog C1, berubah 4 Okt 2026 — `projectId`/`subProjectId` SUDAH TIDAK DIPAKAI dan ditolak 400): `internal_project` wajib `subProjectEquipmentAllocationId` dan dilarang mengirim `equipmentPoolItemId`; `external_rental` wajib `equipmentPoolItemId` dari pool milik external rental project dan dilarang mengirim allocation id; `manual_adjustment` tanpa konteks, dan HANYA di sini `equipmentItemId` wajib diisi. Untuk dua sourceType pertama `equipmentItemId` adalah KOLOM TERKELOLA SISTEM yang diturunkan dari alokasi/pool item — mengirimnya dengan nilai tidak cocok ditolak 400, kosongkan saja. Konteks yang belum terikat unit spesifik ditolak 409.',
         requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['equipmentItemId', 'workDate', 'totalWorkhour', 'sourceType'],
+          type: 'object', required: ['workDate', 'totalWorkhour', 'sourceType'],
           properties: {
-            equipmentItemId: { type: 'integer' },
-            projectId: { type: 'integer', description: 'Diisi untuk sourceType internal_project. FK menyusul saat modul Project dibangun.' },
-            subProjectId: { type: 'integer' },
-            workDate: { type: 'string', format: 'date', example: '2026-09-11' },
-            startedAt: { type: 'string', format: 'date-time' }, stoppedAt: { type: 'string', format: 'date-time' },
-            totalWorkhour: { type: 'number', example: 8, description: 'Lebih dari 0, maksimal 24. Akumulasi per alat per hari juga dibatasi 24 jam.' },
             sourceType: { type: 'string', enum: ['internal_project', 'external_rental', 'manual_adjustment'] },
+            subProjectEquipmentAllocationId: { type: 'integer', description: 'WAJIB untuk sourceType internal_project' },
+            equipmentPoolItemId: { type: 'integer', description: 'WAJIB untuk sourceType external_rental' },
+            equipmentItemId: { type: 'integer', description: 'WAJIB untuk manual_adjustment. Untuk sourceType lain diturunkan sistem — kosongkan.' },
+            workDate: { type: 'string', format: 'date', example: '2026-10-03' },
+            startedAt: { type: 'string', format: 'date-time' }, stoppedAt: { type: 'string', format: 'date-time' },
+            pausedDurationMinutes: { type: 'integer', default: 0, description: 'Jeda yang tidak dihitung jam kerja. Tidak boleh melebihi rentang startedAt-stoppedAt.' },
+            totalWorkhour: { type: 'number', example: 8, description: 'Lebih dari 0, maksimal 24. Akumulasi per alat per hari juga dibatasi 24 jam.' },
             description: { type: 'string' }
           }
         }}}},
         responses: {
           201: { description: 'Created. Response berisi data log + `maintenanceImpact`: array setting yang counternya bergerak, masing-masing dengan settingId, aspectCode, remainingValue, status, dan statusChanged.' },
-          400: { description: 'Validasi gagal / tanggal di masa depan' },
-          404: { description: 'Unit alat tidak ditemukan' }, 409: { description: 'Alat nonaktif / berstatus maintenance atau retired / total jam per hari melebihi 24' }
+          400: { description: 'Validasi gagal / tanggal di masa depan / konteks tidak sesuai sourceType / equipmentItemId tidak cocok konteksnya / projectId-subProjectId dikirim (sudah tidak dipakai)' },
+          404: { description: 'Unit alat, alokasi, atau pool item tidak ditemukan' },
+          409: { description: 'Alat nonaktif / maintenance / retired / total jam melebihi 24 / alokasi sudah tidak berjalan / konteks belum terikat unit spesifik' }
         }
       }
     },

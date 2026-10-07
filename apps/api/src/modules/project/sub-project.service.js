@@ -174,6 +174,29 @@ const getById = async (projectId, id) => {
   return shapeSubProject(row, await calculateProgress(row));
 };
 
+/**
+ * Detail tahapan TANPA perlu tahu project-nya lebih dulu.
+ *
+ * Ditambahkan 5 Okt 2026: UI mengakses tahapan lewat pohon navigasi dan lewat
+ * tautan langsung, di mana project id tidak selalu ada di tangan. Tanpa ini,
+ * klien terpaksa menelusuri seluruh daftar project untuk menemukan satu
+ * tahapan — N+1 yang lahir dari lubang di API, bukan dari kebutuhan.
+ *
+ * Project induknya ikut dikembalikan supaya klien bisa membangun breadcrumb
+ * tanpa permintaan kedua.
+ */
+const getByIdDirect = async (id) => {
+  const row = await prisma.subProject.findUnique({
+    where: { id },
+    include: {
+      constructionProject: true,
+      createdByUser: { select: ACTOR_SELECT },
+    },
+  });
+  if (!row) throw httpError('Sub-project tidak ditemukan', 404);
+  return shapeSubProject(row, await calculateProgress(row));
+};
+
 const getProgress = async (projectId, id) => {
   const row = await findOrFail(projectId, id);
   return {
@@ -343,5 +366,5 @@ const changeStatus = async (projectId, id, status) => {
 
 module.exports = {
   STAGE_ORDER, calculateProgress, findOrFail, findProjectOrFail,
-  list, getById, getProgress, create, update, changeStatus,
+  list, getById, getByIdDirect, getProgress, create, update, changeStatus,
 };
