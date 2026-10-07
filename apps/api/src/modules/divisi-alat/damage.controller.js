@@ -1,7 +1,6 @@
 const service = require('./damage.service.js');
 const { success, created, paginated } = require('../../utils/response.js');
-
-const boolQuery = (value) => (value === undefined ? undefined : value === 'true');
+const { boolQuery } = require('../../utils/query.js');
 
 const filters = (req) => ({
   page: Number(req.query.page) || 1,

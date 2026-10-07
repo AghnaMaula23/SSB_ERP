@@ -1,12 +1,6 @@
 const service = require('./maintenance.service.js');
 const { success, created, paginated } = require('../../utils/response.js');
-
-const pageParams = (req) => ({
-  page: Number(req.query.page) || 1,
-  limit: Math.min(Number(req.query.limit) || 20, 100),
-});
-
-const boolQuery = (value) => (value === undefined ? undefined : value === 'true');
+const { pageParams, boolQuery } = require('../../utils/query.js');
 
 // --- Maintenance Aspects ---
 
