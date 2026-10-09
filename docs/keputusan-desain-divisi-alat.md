@@ -228,27 +228,36 @@ lewat `damage_log_id` / `maintenance_setting_id` yang sama.
    lain, dan `total_used_hours` per pool item tidak akan pernah bercampur antar
    unit. Ambiguitas yang sempat dikhawatirkan tidak ada.
 
-## Utang desain — dibereskan di awal modul Project
+## Utang desain modul Project — SELURUHNYA TERTUTUP (5 Oktober 2026)
 
-1. **Kolom konteks `equipment_workhour_logs` — jawabannya sudah jelas, tinggal
-   dieksekusi.** Terbangun memakai `project_id` + `sub_project_id` (mengikuti ERD
-   Divisi Alat). ERD Project memakai `sub_project_equipment_allocation_id` +
-   `equipment_pool_item_id` dengan CHECK constraint eksplisit:
+Tiga butir di bawah dulu ditandai "wajib dibereskan di awal modul Project".
+Semuanya sudah selesai di branch `module/project` Batch P4. Dicatat sebagai
+riwayat, bukan sebagai pekerjaan tertunda.
 
-   ```
-   source_type = 'internal_project' => sub_project_equipment_allocation_id IS NOT NULL
-   source_type = 'external_rental'  => equipment_pool_item_id IS NOT NULL
-   ```
+1. **Kolom konteks `equipment_workhour_logs` — SELESAI.** `project_id` dan
+   `sub_project_id` sudah di-DROP lewat migrasi
+   `20261004160000_contract_workhour_context`. Penggantinya
+   `sub_project_equipment_allocation_id` (internal) dan `equipment_pool_item_id`
+   (external rental), dengan dua CHECK constraint per `source_type` yang sudah
+   terpasang di database dan terbukti menolak pelanggaran lewat SQL mentah.
 
-   **Versi ERD Project yang dipakai**, karena ERD Divisi Alat ditulis saat Request
-   Alat belum menjadi entitas lengkap. Ini juga yang membuat penggantian unit
-   bekerja benar: jam kerja terikat ke alokasi, sehingga unit lama dan
-   penggantinya punya angka masing-masing.
+   Alasannya — selain menghapus FK yang redundant — adalah risiko inkonsisten
+   yang dicatat di `AIsession/1-session.md`: alokasi bisa menunjuk Excavator
+   EXC-001 sementara `equipment_item_id` menunjuk Dump Truck DT-001. Ditutup
+   dengan menjadikan `equipment_item_id` kolom terkelola sistem yang dibaca
+   DARI alokasi, bukan dari request body.
 
-2. **`paused_duration_minutes` belum dibangun.** Ada di ERD Project dan kontrak
-   swagger awal, tidak ada di ERD Divisi Alat. Ditambahkan saat migrasi poin 1.
+2. **`paused_duration_minutes` — SELESAI.** Ditambahkan di migrasi expand
+   `20261001004500_add_project_batch1` dan disambungkan ke service di P4.
+   Ditambah satu guard di luar ERD: jeda tidak boleh melebihi rentang
+   `startedAt`–`stoppedAt`, karena tanpa itu jam kerja bersih bisa negatif.
 
-3. **Batas `equipment_items.current_status` vs
-   `sub_project_equipment_allocations.status`.** Sudah jauh berkurang setelah enum
-   diciutkan, tapi `assigned_to_location` tetap cermin dari alokasi. Aturan:
-   alokasi adalah sumber kebenaran penugasan.
+3. **Batas `equipment_items.current_status` vs alokasi — SELESAI, dan
+   pemisahannya kini terlihat di API.** `current_status` murni KONDISI alat;
+   penugasan dijawab field turunan `assignment` pada `GET /equipment/items`,
+   dibaca dari `sub_project_equipment_allocations`. Alat yang sedang bertugas
+   juga tidak bisa diarsipkan lagi.
+
+Rinciannya ada di `keputusan-desain-project.md`; status backlog-nya di
+`claude_knowledge/backlog-divisi-alat.md` bagian C.
+
