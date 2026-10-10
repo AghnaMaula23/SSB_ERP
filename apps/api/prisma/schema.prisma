@@ -47,6 +47,11 @@ model User {
   allocationsAllocated SubProjectEquipmentAllocation[] @relation("AllocationAllocatedBy")
   allocationsReceived  SubProjectEquipmentAllocation[] @relation("AllocationReceivedBy")
 
+  equipmentRequestsCreated           EquipmentRequest[] @relation("EqRequestRequestedBy")
+  equipmentRequestsAdminReviewed     EquipmentRequest[] @relation("EqRequestAdminReviewedBy")
+  equipmentRequestsEquipmentReviewed EquipmentRequest[] @relation("EqRequestEquipmentReviewedBy")
+  equipmentRequestsCancelled         EquipmentRequest[] @relation("EqRequestCancelledBy")
+
   @@map("users")
 }
 
@@ -124,18 +129,19 @@ enum WorkhourSourceType {
 }
 
 model EquipmentType {
-  id           Int                 @id @default(autoincrement())
-  typeCode     String              @unique @map("type_code") @db.VarChar(50)
-  typeName     String              @map("type_name") @db.VarChar(150)
-  description  String?             @db.Text
-  isActive     Boolean             @default(true) @map("is_active")
+  id           Int                    @id @default(autoincrement())
+  typeCode     String                 @unique @map("type_code") @db.VarChar(50)
+  typeName     String                 @map("type_name") @db.VarChar(150)
+  description  String?                @db.Text
+  isActive     Boolean                @default(true) @map("is_active")
   // Counter asset code per jenis alat. Di-increment atomik saat unit baru
   // didaftarkan dan tidak pernah mundur, supaya nomor tidak pernah dipakai ulang.
-  lastSequence Int                 @default(0) @map("last_sequence")
-  createdAt    DateTime            @default(now()) @map("created_at")
-  updatedAt    DateTime            @updatedAt @map("updated_at")
+  lastSequence Int                    @default(0) @map("last_sequence")
+  createdAt    DateTime               @default(now()) @map("created_at")
+  updatedAt    DateTime               @updatedAt @map("updated_at")
   items        EquipmentItem[]
   poolItems    EquipmentPoolItem[]
+  requestItems EquipmentRequestItem[]
 
   @@map("equipment_types")
 }
@@ -783,10 +789,10 @@ enum EquipmentPoolOwnerType {
   @@map("equipment_pool_owner_type")
 }
 
-/// `pending` dan `rejected` BELUM BISA TERCAPAI sampai modul Request Alat ada
-/// (Build Order langkah 4) — keduanya lahir dari approval equipment_request_items.
-/// Pool item yang dibuat langsung mulai dari `available`. Nilainya tetap dibuat
-/// sesuai ERD karena Request Alat memang akan memakainya.
+/// `pending` dan `rejected` TIDAK AKAN PERNAH TERJANGKAU: pool item lahir sesudah
+/// approval Request Alat (atau langsung dari Divisi Alat), selalu `available`.
+/// Unit yang ditolak tercatat di equipment_request_items, bukan di sini.
+/// Dijadwalkan dibuang di tahap contract — lihat keputusan-desain-request-alat.md.
 enum EquipmentPoolItemStatus {
   pending
   available
@@ -857,8 +863,9 @@ model ExternalRentalProject {
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
 
-  createdByUser  User?           @relation("RentalProjectCreatedBy", fields: [createdBy], references: [id])
-  equipmentPools EquipmentPool[]
+  createdByUser     User?              @relation("RentalProjectCreatedBy", fields: [createdBy], references: [id])
+  equipmentPools    EquipmentPool[]
+  equipmentRequests EquipmentRequest[]
 
   @@index([status])
   @@map("external_rental_projects")
@@ -919,6 +926,7 @@ model SubProject {
   createdByUser        User?                           @relation("SubProjectCreatedBy", fields: [createdBy], references: [id])
   progressLogs         DailyProgressLog[]
   equipmentAllocations SubProjectEquipmentAllocation[]
+  equipmentRequests    EquipmentRequest[]
 
   // Satu construction project hanya boleh punya satu tahapan per tipe
   @@unique([constructionProjectId, subProjectType])
@@ -1013,27 +1021,36 @@ model EquipmentPool {
 /// lognya tanpa meninggalkan jejak, dan tidak ada satu modul pun di 9 ERD yang
 /// membacanya (Income membaca equipment_workhour_log_id langsung).
 ///
-/// `equipment_request_item_id` dari ERD belum dibuat: tabel equipment_request_items
-/// baru ada di Build Order langkah 4, dan kolom FK tanpa tabel tujuan hanya
-/// perancah. Ditambahkan bersama modul Request Alat, lengkap dengan FK-nya.
+/// Satu pool item = SATU slot unit: ia memegang satu equipment_item_id dan satu
+/// alokasi menghabiskannya. Request yang disetujui 3 unit melahirkan 3 pool item.
+///
+/// `equipment_request_item_id` terisi kalau pool item lahir dari approval Request
+/// Alat; null kalau dimasukkan langsung oleh Divisi Alat.
+///
+/// `requested_quantity`/`approved_quantity` di sini SISA ERD — keputusan
+/// kuantitas hidup di equipment_request_items. Dijadwalkan di-drop di tahap
+/// contract (menunggu konfirmasi tim), lihat keputusan-desain-request-alat.md.
 model EquipmentPoolItem {
-  id                Int                     @id @default(autoincrement())
-  equipmentPoolId   Int                     @map("equipment_pool_id")
-  equipmentTypeId   Int                     @map("equipment_type_id")
-  equipmentItemId   Int?                    @map("equipment_item_id")
-  requestedQuantity Int                     @default(1) @map("requested_quantity")
-  approvedQuantity  Int                     @default(0) @map("approved_quantity")
-  status            EquipmentPoolItemStatus @default(pending)
-  createdAt         DateTime                @default(now()) @map("created_at")
-  updatedAt         DateTime                @updatedAt @map("updated_at")
+  id                     Int                     @id @default(autoincrement())
+  equipmentPoolId        Int                     @map("equipment_pool_id")
+  equipmentRequestItemId Int?                    @map("equipment_request_item_id")
+  equipmentTypeId        Int                     @map("equipment_type_id")
+  equipmentItemId        Int?                    @map("equipment_item_id")
+  requestedQuantity      Int                     @default(1) @map("requested_quantity")
+  approvedQuantity       Int                     @default(0) @map("approved_quantity")
+  status                 EquipmentPoolItemStatus @default(pending)
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
 
-  equipmentPool EquipmentPool                   @relation(fields: [equipmentPoolId], references: [id])
-  equipmentType EquipmentType                   @relation(fields: [equipmentTypeId], references: [id])
-  equipmentItem EquipmentItem?                  @relation(fields: [equipmentItemId], references: [id])
-  allocations   SubProjectEquipmentAllocation[]
-  workhourLogs  EquipmentWorkhourLog[]
+  equipmentPool        EquipmentPool                   @relation(fields: [equipmentPoolId], references: [id])
+  equipmentRequestItem EquipmentRequestItem?           @relation(fields: [equipmentRequestItemId], references: [id])
+  equipmentType        EquipmentType                   @relation(fields: [equipmentTypeId], references: [id])
+  equipmentItem        EquipmentItem?                  @relation(fields: [equipmentItemId], references: [id])
+  allocations          SubProjectEquipmentAllocation[]
+  workhourLogs         EquipmentWorkhourLog[]
 
   @@index([equipmentPoolId])
+  @@index([equipmentRequestItemId])
   @@index([equipmentItemId])
   @@index([status])
   @@map("equipment_pool_items")
@@ -1072,4 +1089,102 @@ model SubProjectEquipmentAllocation {
   @@index([equipmentItemId, status])
   @@index([equipmentPoolItemId])
   @@map("sub_project_equipment_allocations")
+}
+
+// ============================================================
+// REQUEST ALAT (Build Order langkah 4) — lihat docs/keputusan-desain-request-alat.md
+// ============================================================
+
+enum EquipmentRequestType {
+  internal_project
+  external_rental
+
+  @@map("equipment_request_type")
+}
+
+/// Diciutkan dari 9 nilai ERD menjadi 5 (keputusan 10 Oktober 2026).
+/// - `admin_review` dibuang: "Admin sedang membuka" tidak mengubah antrean siapa pun
+/// - `partially_approved` dibuang: diturunkan dari kuantitas item (approvalOutcome)
+/// - `rejected_by_admin`/`rejected_by_equipment_division` disatukan: siapa yang
+///   menolak terjawab dari kolom reviewer mana yang terisi
+/// - `fulfilled` dibuang: pool item dibuat dalam transaksi yang sama dengan
+///   approval, jadi status itu tidak pernah mengendap
+enum EquipmentRequestStatus {
+  submitted
+  equipment_review
+  approved
+  rejected
+  cancelled
+
+  @@map("equipment_request_status")
+}
+
+/// Header permintaan alat. internal_project dibuat Lapangan dari sub-project dan
+/// melewati Admin; external_rental dibuat Admin dan langsung ke Divisi Alat.
+/// Diskriminator FK dijaga CHECK constraint di migrasi.
+///
+/// equipment_request_status_logs dari ERD TIDAK DIBUAT: alurnya linear dan tiap
+/// langkah terjadi paling banyak sekali, jadi kolom aktor di header sudah memuat
+/// seluruh riwayat — pola yang sama dengan purchase request.
+model EquipmentRequest {
+  id                      Int                    @id @default(autoincrement())
+  requestCode             String                 @unique @map("request_code") @db.VarChar(50)
+  requestType             EquipmentRequestType   @map("request_type")
+  subProjectId            Int?                   @map("sub_project_id")
+  externalRentalProjectId Int?                   @map("external_rental_project_id")
+  requestDate             DateTime               @map("request_date") @db.Date
+  neededDate              DateTime?              @map("needed_date") @db.Date
+  locationDetail          String?                @map("location_detail") @db.Text
+  requestNotes            String?                @map("request_notes") @db.Text
+  status                  EquipmentRequestStatus @default(submitted)
+
+  requestedBy         Int       @map("requested_by")
+  adminReviewedBy     Int?      @map("admin_reviewed_by")
+  adminReviewedAt     DateTime? @map("admin_reviewed_at")
+  adminNotes          String?   @map("admin_notes") @db.Text
+  equipmentReviewedBy Int?      @map("equipment_reviewed_by")
+  equipmentReviewedAt DateTime? @map("equipment_reviewed_at")
+  equipmentNotes      String?   @map("equipment_notes") @db.Text
+  cancelledBy         Int?      @map("cancelled_by")
+  cancelledAt         DateTime? @map("cancelled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subProject              SubProject?            @relation(fields: [subProjectId], references: [id])
+  externalRentalProject   ExternalRentalProject? @relation(fields: [externalRentalProjectId], references: [id])
+  requestedByUser         User                   @relation("EqRequestRequestedBy", fields: [requestedBy], references: [id])
+  adminReviewedByUser     User?                  @relation("EqRequestAdminReviewedBy", fields: [adminReviewedBy], references: [id])
+  equipmentReviewedByUser User?                  @relation("EqRequestEquipmentReviewedBy", fields: [equipmentReviewedBy], references: [id])
+  cancelledByUser         User?                  @relation("EqRequestCancelledBy", fields: [cancelledBy], references: [id])
+  items                   EquipmentRequestItem[]
+
+  @@index([requestType, status])
+  @@index([subProjectId, requestDate])
+  @@index([externalRentalProjectId, requestDate])
+  @@map("equipment_requests")
+}
+
+/// Detail jenis alat yang diminta. `approved_quantity` NULL = belum diputuskan,
+/// 0 = ditolak, < requested = parsial. Karena itu decision_status,
+/// rejected_quantity (= requested - approved), dan checked_by/_at dari ERD tidak
+/// dibuat — semuanya diturunkan atau sudah terekam di header.
+model EquipmentRequestItem {
+  id                 Int      @id @default(autoincrement())
+  equipmentRequestId Int      @map("equipment_request_id")
+  equipmentTypeId    Int      @map("equipment_type_id")
+  requestedQuantity  Int      @map("requested_quantity")
+  approvedQuantity   Int?     @map("approved_quantity")
+  estimatedWorkhours Decimal? @map("estimated_workhours") @db.Decimal(10, 2)
+  itemNotes          String?  @map("item_notes") @db.Text
+  decisionNotes      String?  @map("decision_notes") @db.Text
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  equipmentRequest EquipmentRequest    @relation(fields: [equipmentRequestId], references: [id])
+  equipmentType    EquipmentType       @relation(fields: [equipmentTypeId], references: [id])
+  poolItems        EquipmentPoolItem[]
+
+  @@index([equipmentRequestId, equipmentTypeId])
+  @@map("equipment_request_items")
 }

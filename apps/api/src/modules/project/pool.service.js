@@ -5,11 +5,9 @@ const { toNumber, pickWritable, shapeActor, ACTOR_SELECT } = require('../../util
 
 // ============================================================
 // EQUIPMENT POOL — wadah alat generic di level project (construction ATAU
-// external rental). Dipakai sebelum Request Alat ada: Divisi Alat memasukkan
-// alat langsung ke pool. Setelah modul Request Alat dibangun (langkah 4),
-// pool_item.equipment_request_item_id akan menautkan item yang lahir dari
-// approval permintaan — kolom itu BELUM dibuat di sini, lihat
-// keputusan-desain-project.md.
+// external rental). Pool item masuk lewat dua jalan: lahir dari approval
+// Request Alat (equipment_request_item_id terisi, lihat request-alat.service.js),
+// atau dimasukkan langsung oleh Divisi Alat lewat addItem (kolom itu null).
 // ============================================================
 
 const POOL_DOC_TYPE = 'POOL';
@@ -47,6 +45,7 @@ const shapePoolItem = (row) => ({
   equipmentType: row.equipmentType
     ? { id: row.equipmentType.id, typeCode: row.equipmentType.typeCode, typeName: row.equipmentType.typeName }
     : undefined,
+  equipmentRequestItemId: row.equipmentRequestItemId,
   equipmentItemId: row.equipmentItemId,
   equipmentItem: row.equipmentItem
     ? { id: row.equipmentItem.id, assetCode: row.equipmentItem.assetCode, currentStatus: row.equipmentItem.currentStatus }
@@ -117,21 +116,23 @@ const create = async ({ ownerType, constructionProjectId, externalRentalProjectI
   if (!ownerId) throw httpError(`${config.fkField} wajib diisi untuk ownerType "${ownerType}"`, 400);
   await findOwnerOrFail(ownerType, ownerId);
 
-  const pool = await prisma.$transaction(async (tx) => {
-    const poolCode = await nextDocumentNumber(tx, POOL_DOC_TYPE, { pad: POOL_DOC_PAD });
-    return tx.equipmentPool.create({
-      data: {
-        ownerType,
-        constructionProjectId: ownerType === 'construction_project' ? ownerId : null,
-        externalRentalProjectId: ownerType === 'external_rental_project' ? ownerId : null,
-        poolCode,
-        createdBy: userId,
-      },
-      include: { createdByUser: { select: ACTOR_SELECT }, _count: { select: { items: true } } },
-    });
-  });
-
+  const pool = await prisma.$transaction((tx) => createInTx(tx, ownerType, ownerId, userId));
   return shapePool(pool);
+};
+
+/** Dipisah supaya approval Request Alat bisa membuat pool di transaksinya sendiri. */
+const createInTx = async (tx, ownerType, ownerId, userId) => {
+  const poolCode = await nextDocumentNumber(tx, POOL_DOC_TYPE, { pad: POOL_DOC_PAD });
+  return tx.equipmentPool.create({
+    data: {
+      ownerType,
+      constructionProjectId: ownerType === 'construction_project' ? ownerId : null,
+      externalRentalProjectId: ownerType === 'external_rental_project' ? ownerId : null,
+      poolCode,
+      createdBy: userId,
+    },
+    include: { createdByUser: { select: ACTOR_SELECT }, _count: { select: { items: true } } },
+  });
 };
 
 const POOL_STATUS_TRANSITIONS = {
@@ -203,12 +204,11 @@ const findPoolItemOrFail = async (poolId, id) => {
 };
 
 /**
- * Tambah item ke pool. Tanpa Request Alat (belum dibangun), pool_item lahir
- * langsung dari keputusan Divisi Alat — bukan dari approval permintaan. Status
- * awal `available`, MELEWATI `pending` dari enum ERD, karena `pending` hanya
- * berarti sesuatu kalau ada permintaan yang menunggu disetujui.
- * `approvedQuantity` disamakan dengan `requestedQuantity` di titik ini sebagai
- * standin — belum ada alur persetujuan terpisah untuk menyetujuinya sendiri.
+ * Divisi Alat memasukkan item langsung, tanpa Request Alat. Status awal
+ * `available`: tidak ada permintaan yang menunggu disetujui.
+ * `requestedQuantity`/`approvedQuantity` kolom sisa ERD yang dijadwalkan
+ * di-drop (tahap contract) — keputusan kuantitas hidup di
+ * equipment_request_items. Sampai itu, keduanya disamakan.
  */
 const addItem = async (poolId, payload) => {
   const pool = await findPoolOrFail(poolId);
@@ -323,7 +323,7 @@ const closeItem = async (poolId, id, status) => {
 };
 
 module.exports = {
-  list, getById, create, changeStatus,
+  list, getById, create, createInTx, changeStatus,
   findPoolOrFail, findPoolItemOrFail, addItem, bindItemUnit, closeItem, assertItemAssignable,
   shapePoolItem,
 };

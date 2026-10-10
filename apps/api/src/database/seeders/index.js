@@ -48,6 +48,10 @@ const PERMISSIONS = [
   { module: 'allocation',     action: 'create',  label: 'Alokasikan alat ke tahapan (Divisi Alat)' },
   { module: 'allocation',     action: 'receive', label: 'Konfirmasi alat diterima di lokasi (Lapangan)' },
   { module: 'allocation',     action: 'update',  label: 'Tutup alokasi: completed, returned, atau cancelled' },
+  { module: 'equipment-request', action: 'read',    label: 'Lihat request alat' },
+  { module: 'equipment-request', action: 'create',  label: 'Ajukan dan batalkan request alat' },
+  { module: 'equipment-request', action: 'review',  label: 'Review Admin: teruskan atau tolak request alat internal' },
+  { module: 'equipment-request', action: 'approve', label: 'Putuskan kuantitas request alat (Divisi Alat)' },
   { module: 'equipment',  action: 'read',   label: 'Lihat master alat' },
   { module: 'equipment',  action: 'create', label: 'Tambah jenis/unit alat' },
   { module: 'equipment',  action: 'update', label: 'Ubah data dan status alat' },
@@ -117,6 +121,10 @@ const ROLE_PERMISSIONS = {
     'sub-project:read', 'sub-project:create', 'sub-project:update',
     'progress:read', 'progress:validate',
     'equipment-pool:read', 'allocation:read',
+    // Admin mereview request internal, dan membuat sendiri request external
+    // rental (yang karena itu melewati review Admin). Sengaja TANPA approve —
+    // keputusan kuantitas milik Divisi Alat yang tahu ketersediaan unit.
+    'equipment-request:read', 'equipment-request:create', 'equipment-request:review',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
@@ -143,6 +151,8 @@ const ROLE_PERMISSIONS = {
     // fisik unitnya di lokasi.
     'equipment-pool:read', 'equipment-pool:create', 'equipment-pool:update',
     'allocation:read', 'allocation:create', 'allocation:update',
+    // Divisi Alat memutuskan kuantitas; tidak mengajukan dan tidak mereview Admin
+    'equipment-request:read', 'equipment-request:approve',
   ],
   // Lapangan boleh melihat jadwal servis alat yang mereka pakai, tapi tidak mengelolanya
   // Lapangan belum boleh mencatat kerusakan — laporan masuk lewat telepon ke
@@ -154,7 +164,9 @@ const ROLE_PERMISSIONS = {
     'project:read', 'sub-project:read', 'progress:read', 'progress:create',
     // Lapangan yang menerima unit di lokasi — sengaja TANPA allocation:create,
     // yang mengalokasikan adalah Divisi Alat.
-    'equipment-pool:read', 'allocation:read', 'allocation:receive'],
+    'equipment-pool:read', 'allocation:read', 'allocation:receive',
+    // Lapangan pengaju request internal — tanpa review/approve
+    'equipment-request:read', 'equipment-request:create'],
 };
 
 async function main() {

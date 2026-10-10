@@ -686,7 +686,7 @@ const swaggerSpec = {
     '/projects/equipment-pools/{id}/items': {
       post: {
         tags: ['Equipment Pool & Material Pool'], summary: 'Tambah item ke pool',
-        description: 'Permission: equipment-pool:update (Divisi Alat). Tanpa modul Request Alat, item lahir langsung dari keputusan Divisi Alat — status awal `available`, MELEWATI `pending` dari enum ERD. `equipmentItemId` opsional: boleh "TBD" (unit ditentukan belakangan lewat bind-unit). Unit yang dikirim wajib aktif, tidak maintenance/retired, dan tidak sedang terikat pool item lain.',
+        description: 'Permission: equipment-pool:update (Divisi Alat). Jalur MANUAL, di luar Request Alat (item hasil approval Request Alat dibuat sistem, dengan `equipmentRequestItemId` terisi). Status awal `available`, MELEWATI `pending` dari enum ERD. `equipmentItemId` opsional: boleh "TBD" (unit ditentukan belakangan lewat bind-unit). Unit yang dikirim wajib aktif, tidak maintenance/retired, dan tidak sedang terikat pool item lain.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['equipmentTypeId'],
@@ -738,7 +738,7 @@ const swaggerSpec = {
       },
       post: {
         tags: ['Equipment Pool & Material Pool'], summary: 'Alokasikan pool item ke tahapan (SUMBER KEBENARAN PENUGASAN)',
-        description: 'Permission: allocation:create (Divisi Alat). Pool item WAJIB berstatus available, tahapan WAJIB active. Pool item dan alokasi bergerak BERSAMA dalam satu transaksi — pool item langsung jadi `assigned` di saat yang sama. `equipmentItemId` KOLOM TERKELOLA SISTEM, diturunkan dari pool item.',
+        description: 'Permission: allocation:create (Divisi Alat). Pool item WAJIB berstatus available DAN sudah terikat unit (409 kalau belum — alokasi tanpa unit tidak akan pernah bisa diikat, karena bind-unit hanya menerima pool item available), tahapan WAJIB active. Pool item dan alokasi bergerak BERSAMA dalam satu transaksi — pool item langsung jadi `assigned` di saat yang sama. `equipmentItemId` KOLOM TERKELOLA SISTEM, diturunkan dari pool item.',
         parameters: [{ in: 'path', name: 'subProjectId', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['equipmentPoolItemId'], properties: { equipmentPoolItemId: { type: 'integer' } }
@@ -1424,35 +1424,76 @@ const swaggerSpec = {
     // 4. REQUEST ALAT
     // ========================================
     '/request-alat': {
-      get: { tags: ['Request Alat'], summary: 'List request alat', parameters: [ { $ref: '#/components/parameters/PageParam' }, { in: 'query', name: 'status', schema: { type: 'string' } }, { in: 'query', name: 'requestType', schema: { type: 'string', enum: ['internal_project','external_rental'] } } ], responses: { 200: { description: 'Paginated list' } } },
+      get: {
+        tags: ['Request Alat'], summary: 'List request alat',
+        description: 'Permission: equipment-request:read. `approvalOutcome` (full/partial) dan `rejectedBy` (admin/equipment_division) adalah field TURUNAN — pengganti status `partially_approved` dan `rejected_by_*` dari ERD. `totalApprovedQuantity` null selama belum diputuskan.',
+        parameters: [
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'equipment_review', 'approved', 'rejected', 'cancelled'] } },
+          { in: 'query', name: 'requestType', schema: { type: 'string', enum: ['internal_project', 'external_rental'] } },
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'externalRentalProjectId', schema: { type: 'integer' } },
+        ],
+        responses: { 200: { description: 'Paginated list' } },
+      },
       post: {
-        tags: ['Request Alat'], summary: 'Buat request alat', description: 'Role: lapangan',
+        tags: ['Request Alat'], summary: 'Buat request alat',
+        description: 'Permission: equipment-request:create. `internal_project` (Lapangan, dari sub-project) mulai `submitted` dan melewati review Admin. `external_rental` langsung `equipment_review` karena dibuat Admin — karena itu hanya pemegang equipment-request:review yang boleh membuatnya (403 selain itu). Tepat satu konteks sesuai requestType (dijaga CHECK). Satu jenis alat sekali per request. Tahapan/project yang completed/cancelled ditolak 409. `requestCode` (RQA-NNNNNN), `status`, kolom aktor, dan `approvedQuantity`/`decisionNotes` dikelola sistem — ditolak 400 kalau dikirim.',
         requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['requestType', 'requestDate', 'items'],
+          type: 'object', required: ['requestType', 'items'],
           properties: {
             requestType: { type: 'string', enum: ['internal_project', 'external_rental'] },
-            subProjectId: { type: 'integer', description: 'Wajib untuk internal_project' },
-            externalRentalProjectId: { type: 'integer', description: 'Wajib untuk external_rental' },
-            requestDate: { type: 'string', format: 'date' }, neededDate: { type: 'string', format: 'date' },
+            subProjectId: { type: 'integer', description: 'Wajib untuk internal_project, dilarang untuk external_rental' },
+            externalRentalProjectId: { type: 'integer', description: 'Wajib untuk external_rental, dilarang untuk internal_project' },
+            requestDate: { type: 'string', format: 'date', description: 'Default hari ini; tidak boleh di masa depan' },
+            neededDate: { type: 'string', format: 'date', description: 'Tidak boleh sebelum requestDate' },
             locationDetail: { type: 'string' }, requestNotes: { type: 'string' },
-            items: { type: 'array', items: { type: 'object', required: ['equipmentTypeId', 'requestedQuantity'],
-              properties: { equipmentTypeId: { type: 'integer' }, requestedQuantity: { type: 'integer' }, estimatedWorkhours: { type: 'number' }, itemNotes: { type: 'string' } }
-            }}
-          }
-        }}}},
-        responses: { 201: { description: 'Created' } }
-      }
+            items: { type: 'array', minItems: 1, items: { type: 'object', required: ['equipmentTypeId', 'requestedQuantity'],
+              properties: { equipmentTypeId: { type: 'integer' }, requestedQuantity: { type: 'integer', minimum: 1, maximum: 100 }, estimatedWorkhours: { type: 'number' }, itemNotes: { type: 'string' } },
+            } },
+          },
+        } } } },
+        responses: { 201: { description: 'Created' }, 400: { description: 'Validasi gagal' }, 403: { description: 'external_rental tanpa wewenang review' }, 409: { description: 'Konteks sudah ditutup' } },
+      },
     },
-    '/request-alat/{id}': { get: { tags: ['Request Alat'], summary: 'Detail request + items', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } } },
+    '/request-alat/{id}': {
+      get: {
+        tags: ['Request Alat'], summary: 'Detail request + items',
+        description: 'Permission: equipment-request:read. Per item: `decision` (pending/approved/partially_approved/rejected) dan `rejectedQuantity` DITURUNKAN dari approvedQuantity (null = belum diputuskan), plus `poolItems` yang lahir dari item tersebut.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } },
+      },
+    },
     '/request-alat/{id}/admin-review': {
-      put: { tags: ['Request Alat'], summary: 'Admin review', description: 'Role: admin', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
-        requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ['forward', 'reject'] }, notes: { type: 'string' } } } } } },
-        responses: { 200: { description: 'Reviewed' } } }
+      put: {
+        tags: ['Request Alat'], summary: 'Review Admin (internal_project)',
+        description: 'Permission: equipment-request:review. Hanya request internal berstatus `submitted`. `forward` -> equipment_review, `reject` -> rejected (notes wajib). Pengaju tidak boleh mereview request sendiri (403). Dua aksi bersamaan: yang kalah 409.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ['forward', 'reject'] }, notes: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Reviewed' }, 409: { description: 'Bukan antrean Admin / external rental' } },
+      },
     },
     '/request-alat/{id}/equipment-review': {
-      put: { tags: ['Request Alat'], summary: 'Divisi Alat review', description: 'Role: divisi_alat', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
-        requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ['approve', 'partially_approve', 'reject'] }, items: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'integer' }, approvedQuantity: { type: 'integer' }, assignedEquipmentIds: { type: 'array', items: { type: 'integer' } } } } }, notes: { type: 'string' } } } } } },
-        responses: { 200: { description: 'Reviewed' } } }
+      put: {
+        tags: ['Request Alat'], summary: 'Keputusan Divisi Alat',
+        description: 'Permission: equipment-request:approve. Hanya status `equipment_review`. SEMUA item wajib diputuskan sekaligus, 0 <= approvedQuantity <= requestedQuantity. Tidak ada field `action`: total disetujui 0 -> `rejected` (notes wajib), selebihnya -> `approved`. Di transaksi yang sama, tiap unit yang disetujui menjadi SATU pool item `available` tanpa unit (pilih unitnya lewat bind-unit sebelum dialokasikan). Pool tujuan: pool draft/active milik project; dibuat otomatis kalau belum ada; kalau ada lebih dari satu, `equipmentPoolId` wajib. Keputusan bersamaan: yang kalah 409, pool item tidak terbuat ganda.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['items'],
+          properties: {
+            items: { type: 'array', items: { type: 'object', required: ['itemId', 'approvedQuantity'], properties: { itemId: { type: 'integer' }, approvedQuantity: { type: 'integer', minimum: 0 }, decisionNotes: { type: 'string' } } } },
+            notes: { type: 'string', description: 'Wajib kalau semua item ditolak' },
+            equipmentPoolId: { type: 'integer', description: 'Wajib hanya kalau project punya lebih dari satu pool aktif' },
+          },
+        } } } },
+        responses: { 200: { description: 'Diputuskan' }, 400: { description: 'Item tidak lengkap / kuantitas tidak sah' }, 409: { description: 'Bukan antrean Divisi Alat' } },
+      },
+    },
+    '/request-alat/{id}/cancel': {
+      put: {
+        tags: ['Request Alat'], summary: 'Batalkan request',
+        description: 'Permission: equipment-request:create. Hanya pengaju (403 selain itu), dan hanya selama `submitted`/`equipment_review`. Request approved tidak bisa dibatalkan — pool item-nya ditutup lewat endpoint pool.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Cancelled' }, 409: { description: 'Sudah diproses' } },
+      },
     },
 
     // ========================================

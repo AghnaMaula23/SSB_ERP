@@ -86,6 +86,13 @@ const create = async (subProjectId, { equipmentPoolItemId }, userId) => {
   if (poolItem.status !== 'available') {
     throw httpError(`Pool item berstatus "${poolItem.status}", tidak bisa dialokasikan. Harus "available".`, 409);
   }
+  // Unit harus sudah ditentukan. Alokasi mengubah pool item jadi `assigned`,
+  // sementara bindItemUnit hanya menerima pool item `available` — jadi alokasi
+  // tanpa unit TIDAK AKAN PERNAH bisa diikat, dan workhour-nya ditolak selamanya.
+  // Secara fisik pun tidak ada "unit belum ditentukan" yang bisa dikirim ke lokasi.
+  if (!poolItem.equipmentItemId) {
+    throw httpError('Pool item belum terikat unit alat. Tentukan unitnya dulu lewat bind-unit, baru alokasikan.', 409);
+  }
 
   const allocation = await prisma.$transaction(async (tx) => {
     const created = await tx.subProjectEquipmentAllocation.create({
@@ -93,9 +100,7 @@ const create = async (subProjectId, { equipmentPoolItemId }, userId) => {
         subProjectId,
         equipmentPoolItemId,
         // equipmentItemId KOLOM TERKELOLA SISTEM — diturunkan dari pool item,
-        // bukan dikirim klien. Pool item boleh belum terikat unit spesifik
-        // (equipmentItemId null) kalau Divisi Alat belum menentukan unitnya;
-        // alokasi ikut null sampai pool item diikat lewat bindItemUnit.
+        // bukan dikirim klien. Dijamin terisi oleh guard di atas.
         equipmentItemId: poolItem.equipmentItemId,
         allocatedBy: userId,
         allocatedAt: new Date(),

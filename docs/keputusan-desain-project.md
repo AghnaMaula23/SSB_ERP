@@ -145,17 +145,18 @@ Risiko duplikasi dimatikan dengan menjadikannya **kolom terkelola sistem**: untu
 menolak kiriman klien yang tidak cocok. Bertentangan jadi mustahil. Pola yang sama
 dengan aturan cache `assigned_to_location`.
 
-### `equipment_pool_items.equipment_request_item_id` belum dibuat
+### `equipment_pool_items.equipment_request_item_id` — DIBUAT 10 Oktober 2026
 
-Tabel `equipment_request_items` baru ada di Build Order langkah 4. Kolom FK tanpa
-tabel tujuan hanya perancah. Ditambahkan bersama modul Request Alat, lengkap FK-nya.
+Ditunda sampai tabel tujuannya ada; dibuat bersama modul Request Alat, lengkap
+FK-nya. Lihat `keputusan-desain-request-alat.md`.
 
-### `equipment_pool_item_status` tetap 6 nilai ERD
+### `equipment_pool_item_status` — `pending`/`rejected` ternyata TIDAK AKAN terjangkau
 
-`pending` dan `rejected` **belum bisa tercapai** sampai Request Alat ada — keduanya
-lahir dari approval `equipment_request_items`. Pool item yang dibuat langsung mulai
-dari `available`. Nilainya tetap dibuat karena Request Alat memang akan memakainya,
-jadi ini bukan nilai mati, hanya belum terjangkau.
+Dulu diduga keduanya lahir dari approval Request Alat. Setelah modulnya dibangun
+(10 Okt): pool item baru dibuat SESUDAH disetujui, dan hanya untuk unit yang
+disetujui — tidak ada isi pool yang menunggu persetujuan atau ditolak. Kedua nilai
+dijadwalkan dibuang di tahap contract yang menunggu konfirmasi tim, lihat
+`keputusan-desain-request-alat.md`.
 
 ---
 
@@ -204,8 +205,9 @@ hanya mencerminkannya.
 **Konsekuensi yang diterima sadar:** `pending` dan `rejected` pada enum pool item
 tetap tidak tercapai sampai Request Alat ada (sudah dicatat di P1). `requestedQuantity`
 vs `approvedQuantity` — tanpa alur approval terpisah, `approvedQuantity` disamakan
-dengan `requestedQuantity` saat pool item dibuat. Ini standin, bukan keputusan akhir;
-Request Alat (langkah 4) akan memberi approvedQuantity makna yang sebenarnya.
+dengan `requestedQuantity` saat pool item dibuat. **Ditutup 10 Okt:** keputusan
+kuantitas hidup di `equipment_request_items`; satu pool item = satu unit, jadi
+kedua kolom pool item tinggal sisa yang dijadwalkan di-drop.
 
 ### Satu pool item bisa dipakai beberapa alokasi berurutan — diuji, bukan diasumsikan
 
