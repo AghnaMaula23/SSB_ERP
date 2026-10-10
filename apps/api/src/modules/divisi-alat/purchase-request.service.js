@@ -8,12 +8,6 @@ const { toNumber, toDateOnly } = require('../../utils/shape.js');
 const PR_DOC_TYPE = 'PRQ';
 const PR_DOC_PAD = 6;
 
-// Batas default Prisma untuk transaksi interaktif hanya 5 detik. Lewat
-// connection pooler (Supabase) satu putaran bisa lewat dari itu, sehingga create
-// order gagal dengan "Transaction already closed" padahal tidak ada konflik
-// data. Dinaikkan supaya tidak bergantung pada latensi.
-const TRANSACTION_OPTIONS = { maxWait: 15000, timeout: 30000 };
-
 // Aspek yang belum mendekati jatuh tempo tidak boleh diajukan servisnya —
 // kalau dibuka, anggaran perawatan bisa dipakai kapan saja tanpa pemicu.
 const SERVICEABLE_SETTING_STATUSES = ['warning', 'due', 'overdue'];
@@ -411,7 +405,7 @@ const create = async (payload, userId) => {
       },
       include: detailInclude,
     });
-  }, TRANSACTION_OPTIONS);
+  });
 
   return { ...shapeRequest(created), balanceWarning: await buildBalanceWarning(totalEstimatedAmount) };
 };
@@ -486,7 +480,7 @@ const update = async (id, payload, userId) => {
       },
       include: detailInclude,
     });
-  }, TRANSACTION_OPTIONS);
+  });
 
   return {
     ...shapeRequest(updated),
@@ -690,7 +684,7 @@ const approve = async (id, payload, userId) => {
       : null;
 
     return { updated: row, cashTransaction: created };
-  }, TRANSACTION_OPTIONS);
+  });
 
   return {
     ...shapeRequest(updated),
