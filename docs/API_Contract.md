@@ -72,9 +72,19 @@ di level atas, bukan di dalam objek:
 > jalan keluarnya. **Tampilkan apa adanya di FE** — mengganti dengan "Terjadi
 > kesalahan" membuang informasi yang sudah disiapkan.
 
+**Kode status yang perlu ditangani khusus:**
+
+| Status | Arti | Yang sebaiknya dilakukan FE |
+|---|---|---|
+| 409 | Konflik keadaan — termasuk aksi bersamaan yang kalah (approve dua kali, dsb.) | Muat ulang data, tampilkan pesannya |
+| 429 | Terlalu banyak login gagal (10 per 15 menit per IP) | Tampilkan pesannya; jangan coba ulang otomatis |
+| 500 | Error tak terduga | Di **production** pesannya selalu generik ("Terjadi kesalahan pada server") — detailnya hanya di log server, supaya query dan host database tidak bocor. Di development pesan asli dan `stack` tetap dikirim |
+
 ## Auth
 
-Semua endpoint kecuali `POST /api/auth/login` dan `/register` memerlukan:
+Semua endpoint kecuali `POST /api/auth/login` memerlukan token.
+`POST /api/auth/register` **bukan pendaftaran mandiri** — butuh login dan
+permission `user:create` (super_admin).
 
 ```
 Authorization: Bearer <jwt_token>

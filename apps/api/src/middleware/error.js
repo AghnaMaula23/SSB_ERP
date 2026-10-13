@@ -34,7 +34,17 @@ const errorHandler = (err, req, res, next) => {
     err.status ||
     (res.statusCode && res.statusCode !== 200 ? res.statusCode : 500);
 
-  const message = prismaError?.message || err.message || 'Terjadi kesalahan pada server';
+  // Pesan asli hanya untuk error yang MEMANG ditujukan ke pengguna: httpError
+  // (punya statusCode), error Prisma yang sudah dipetakan, dan error 4xx dari
+  // middleware (mis. JSON rusak). Selebihnya — error tak terduga — membawa detail
+  // internal: pesan Prisma memuat query dan host database Supabase. Di production
+  // klien hanya menerima pesan generik; detailnya tetap tercatat di log server.
+  // Di development pesan asli tetap dikirim supaya mudah di-debug.
+  const isIntended = Boolean(prismaError) || Boolean(err.statusCode || err.status);
+  const exposeDetail = isIntended || process.env.NODE_ENV !== 'production';
+  const message = exposeDetail
+    ? prismaError?.message || err.message || 'Terjadi kesalahan pada server'
+    : 'Terjadi kesalahan pada server';
 
   if (statusCode >= 500) console.error(`[ERROR] ${err.stack || err.message}`);
   else console.warn(`[WARN ${statusCode}] ${message}`);

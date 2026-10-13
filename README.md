@@ -69,7 +69,7 @@ Edit `.env` dengan credential yang diberikan oleh tim lead (jangan commit file i
 ```properties
 DATABASE_URL="postgresql://..."     # Dari Supabase → Connect → ORMs (port 6543)
 DIRECT_URL="postgresql://..."       # Dari Supabase → Connect → ORMs (port 5432)
-JWT_SECRET=your-secret-key          # Bebas, tapi harus sama untuk semua developer
+JWT_SECRET=<min 32 karakter acak>  # openssl rand -base64 48 — production menolak jalan kalau kurang
 JWT_EXPIRES_IN=7d
 API_PORT=3000
 WEB_PORT=5173
@@ -89,7 +89,7 @@ VITE_ALAT_API_PREFIX=/api/equipment
 ```bash
 cd apps/api
 npx prisma generate          # Generate Prisma client
-npx prisma migrate dev       # Jalankan migration (buat tabel)
+npx prisma migrate deploy    # Terapkan migration yang sudah ada
 npm run db:seed              # Seed data awal (roles + super admin)
 cd ../..
 ```
@@ -158,10 +158,21 @@ app.use('/api/[path]', require('./modules/[nama-modul]/[nama].routes.js'));
 
 ### Backend — Mengubah database schema
 
+> **JANGAN PERNAH `prisma migrate dev`** (termasuk `--create-only`). Database dev
+> dipakai bersama lewat pooler Supabase yang tidak mengizinkan shadow database,
+> sehingga `migrate dev` menawarkan RESET seluruh database — dan terbukti tetap
+> menulis ke database meski perintahnya berakhir gagal.
+
 ```bash
 cd apps/api
-# Edit prisma/schema.prisma
-npx prisma migrate dev --name deskripsi_perubahan
+# 1. Edit prisma/schema.prisma
+# 2. Hasilkan SQL dari selisih database hidup vs schema (tanpa shadow database)
+npx prisma migrate diff --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+# 3. Baca SQL-nya, simpan manual ke prisma/migrations/<timestamp>_<nama>/migration.sql
+#    (tempel CHECK constraint kalau ada — Prisma tidak bisa menyatakannya)
+# 4. Terapkan
+npx prisma migrate deploy
 ```
 
 ### Frontend — Development
