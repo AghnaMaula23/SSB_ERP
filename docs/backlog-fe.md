@@ -272,3 +272,30 @@ Mock delivery, kas lapangan, dan tenaga kerja wajar: backend-nya belum ada.
 - **`POST /api/auth/register` sekarang butuh login + `user:create`**
   (super_admin). FE tidak memakainya; dicatat supaya tidak ada yang membangun
   layar daftar mandiri.
+
+## E13. API Request Material RM-1 tersedia (13 Okt 2026)
+
+Detail keputusan: `docs/keputusan-desain-request-material.md`.
+
+- **Master:** `GET/POST/PUT /api/materials/types`, `/api/materials/suppliers`,
+  dan `GET /api/materials/units`. **Dropdown satuan WAJIB dari `/units`**, jangan
+  hardcode `INVENTORY_UNITS` — validator backend memakai daftar yang sama.
+- **Satuan milik jenis material (keputusan D1).** Tidak ada input satuan di
+  request/delivery/receipt nanti, dan backend menolak `unit` kalau dikirim.
+  Tampilkan `unit` dari response **tepat di samping setiap angka kuantitas** —
+  itu pengaman utama supaya penginput sadar harus mengonversi (mis. rit → m³).
+- **Material pool:** `/api/projects/material-pools` (+ items). Satu baris per
+  jenis material per pool. Tidak ada angka total — jangan tampilkan kolom
+  "diminta/terkirim/diterima" dari pool; angkanya datang dari modul berikutnya.
+- **Supply project:** field `fieldPicId` (create/update) dan `fieldPic` di
+  response — PIC Lapangan pembuat request material untuk kontrak itu.
+- **Data seed asli menggantikan demo (E11):**
+  - `RNT-000001` sudah punya equipment pool `POOL-000004` dengan 2 unit
+    (SSB-DT-001, SSB-DT-002) dan 10 log jam kerja `external_rental` —
+    `rentalDemoService` untuk unit & timesheet bisa diganti
+    `/api/projects/equipment-pools?externalRentalProjectId=` dan
+    `/api/equipment/items/:id/workhour-logs?sourceType=external_rental`.
+  - `SPL-000001` sudah punya PIC `lapangan` dan material pool `MPL-000001`.
+  - `PRJ-000001` punya material pool `MPL-000002`.
+  - Delivery, inventori, kas lapangan, dan pekerja **tetap mock** — backendnya
+    RM-4, RM-5, dan langkah 7.

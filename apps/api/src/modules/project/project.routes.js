@@ -126,11 +126,15 @@ mountProjectType('external-rental', 'external-rental', {
       .withMessage(`billingMethod harus salah satu dari: ${BILLING_METHODS.join(', ')}`)],
 });
 
+// PIC Lapangan yang membuat request material untuk kontrak ini. null = belum ditentukan.
+const fieldPicRule = body('fieldPicId').optional({ nullable: true }).isInt({ min: 1 })
+  .withMessage('fieldPicId harus ID user').toInt();
+
 mountProjectType('external-supply', 'external-supply', {
   createRules: [nameRule('supplyProjectName', 'Nama supply project'), codeOverrideRule('supplyProjectCode'),
-    ...commonProjectRules, ...contractRules],
+    ...commonProjectRules, ...contractRules, fieldPicRule],
   updateRules: [optionalNameRule('supplyProjectName', 'Nama supply project'),
-    ...commonProjectRules, ...contractRules],
+    ...commonProjectRules, ...contractRules, fieldPicRule],
 });
 
 // ============================================================
@@ -311,6 +315,45 @@ router.put('/equipment-pools/:id/items/:itemId/close', authorize('equipment-pool
   validate([poolIdParam, poolItemIdParam,
     body('status').isIn(['completed', 'cancelled']).withMessage('status harus "completed" atau "cancelled"')]),
   controller.closePoolItem);
+
+// ============================================================
+// MATERIAL POOL — /api/projects/material-pools (Request Material RM-1)
+// ============================================================
+
+const MATERIAL_OWNER_TYPES = ['construction_project', 'external_supply_project'];
+
+router.get('/material-pools', authorize('material-pool:read'),
+  validate([...pageRules,
+    query('ownerType').optional().isIn(MATERIAL_OWNER_TYPES).withMessage(`ownerType harus salah satu dari: ${MATERIAL_OWNER_TYPES.join(', ')}`),
+    query('constructionProjectId').optional().isInt({ min: 1 }).withMessage('constructionProjectId harus angka'),
+    query('externalSupplyProjectId').optional().isInt({ min: 1 }).withMessage('externalSupplyProjectId harus angka'),
+    query('status').optional().isIn(POOL_STATUSES).withMessage(`status harus salah satu dari: ${POOL_STATUSES.join(', ')}`)]),
+  controller.listMaterialPools);
+
+router.get('/material-pools/:id', authorize('material-pool:read'),
+  validate([poolIdParam]), controller.detailMaterialPool);
+
+router.post('/material-pools', authorize('material-pool:create'),
+  validate([
+    body('ownerType').isIn(MATERIAL_OWNER_TYPES).withMessage(`ownerType wajib diisi, salah satu dari: ${MATERIAL_OWNER_TYPES.join(', ')}`),
+    body('constructionProjectId').optional({ nullable: true }).isInt({ min: 1 }).withMessage('constructionProjectId harus angka').toInt(),
+    body('externalSupplyProjectId').optional({ nullable: true }).isInt({ min: 1 }).withMessage('externalSupplyProjectId harus angka').toInt(),
+    ...rejectSystemManaged('poolCode', 'status', 'createdBy')]),
+  controller.createMaterialPool);
+
+router.put('/material-pools/:id/status', authorize('material-pool:update'),
+  validate([poolIdParam, statusBodyRule(POOL_STATUSES)]), controller.changeMaterialPoolStatus);
+
+// Satuan TIDAK diterima di sini: satuan milik jenis material (keputusan D1).
+router.post('/material-pools/:id/items', authorize('material-pool:update'),
+  validate([poolIdParam,
+    body('materialTypeId').isInt({ min: 1 }).withMessage('materialTypeId wajib diisi').toInt(),
+    body('notes').optional({ nullable: true }).isString().trim(),
+    body('unit').not().exists().withMessage('Satuan mengikuti jenis material dan tidak bisa dikirim per baris')]),
+  controller.addMaterialPoolItem);
+
+router.delete('/material-pools/:id/items/:itemId', authorize('material-pool:update'),
+  validate([poolIdParam, poolItemIdParam]), controller.removeMaterialPoolItem);
 
 // ============================================================
 // EQUIPMENT ALLOCATIONS — /api/projects/sub-projects/:subProjectId/allocations

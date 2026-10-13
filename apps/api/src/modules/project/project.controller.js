@@ -6,6 +6,7 @@ const service = require('./project.service.js');
 const subProject = require('./sub-project.service.js');
 const progress = require('./progress.service.js');
 const pool = require('./pool.service.js');
+const materialPool = require('./material-pool.service.js');
 const allocation = require('./allocation.service.js');
 
 // ============================================================
@@ -236,11 +237,61 @@ const changeAllocationStatus = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ============================================================
+// MATERIAL POOL (Request Material RM-1)
+// ============================================================
+
+const listMaterialPools = async (req, res, next) => {
+  try {
+    const result = await materialPool.list({
+      ...pageParams(req),
+      ownerType: req.query.ownerType,
+      constructionProjectId: numQuery(req.query.constructionProjectId),
+      externalSupplyProjectId: numQuery(req.query.externalSupplyProjectId),
+      status: req.query.status,
+    });
+    return paginated(res, result);
+  } catch (err) { next(err); }
+};
+
+const detailMaterialPool = async (req, res, next) => {
+  try { return success(res, await materialPool.getById(req.params.id)); } catch (err) { next(err); }
+};
+
+const createMaterialPool = async (req, res, next) => {
+  try {
+    const data = await materialPool.create(req.body, req.user.id);
+    return created(res, data, 'Material pool berhasil dibuat');
+  } catch (err) { next(err); }
+};
+
+const changeMaterialPoolStatus = async (req, res, next) => {
+  try {
+    const data = await materialPool.changeStatus(req.params.id, req.body.status);
+    return success(res, data, `Status material pool berhasil diubah menjadi "${req.body.status}"`);
+  } catch (err) { next(err); }
+};
+
+const addMaterialPoolItem = async (req, res, next) => {
+  try {
+    const data = await materialPool.addItem(req.params.id, req.body);
+    return created(res, data, 'Material berhasil ditambahkan ke pool');
+  } catch (err) { next(err); }
+};
+
+const removeMaterialPoolItem = async (req, res, next) => {
+  try {
+    const data = await materialPool.removeItem(req.params.id, req.params.itemId);
+    return success(res, data, 'Material berhasil dihapus dari pool');
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   listProjects, detailProject, createProject, updateProject, changeProjectStatus,
   listSubProjects, detailSubProject, detailSubProjectDirect, subProjectProgress,
   createSubProject, updateSubProject, changeSubProjectStatus,
   listProgressLogs, detailProgressLog, createProgressLog, updateProgressLog, validateProgressLog,
   listPools, detailPool, createPool, changePoolStatus, addPoolItem, bindPoolItemUnit, closePoolItem,
+  listMaterialPools, detailMaterialPool, createMaterialPool, changeMaterialPoolStatus, addMaterialPoolItem, removeMaterialPoolItem,
   listAllocations, detailAllocation, createAllocation, receiveAllocation, changeAllocationStatus,
 };

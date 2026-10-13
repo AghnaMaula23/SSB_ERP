@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { body } = require('express-validator');
+const { rateLimit } = require('express-rate-limit');
 const controller = require('./auth.controller.js');
 const validate = require('../../middleware/validate.js');
 const { authenticate, authorize } = require('../../middleware/auth.js');
@@ -30,7 +31,20 @@ const loginRules = [
 // bisa membuat akun. Sekarang hanya pemegang user:create (super_admin) yang
 // boleh membuat akun karyawan.
 router.post('/register', authenticate, authorize('user:create'), validate(registerRules), controller.register);
-router.post('/login', validate(loginRules), controller.login);
+// Membatasi tebak password. Login yang BERHASIL tidak dihitung, jadi pengguna
+// yang benar tidak ikut terkunci karena orang lain salah ketik dari IP yang sama.
+// Catatan deploy: di belakang reverse proxy, set app.set('trust proxy', 1) —
+// tanpa itu semua pengguna terbaca satu IP (IP proxy) dan berbagi kuota.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { success: false, message: 'Terlalu banyak percobaan login gagal. Coba lagi dalam 15 menit.' },
+});
+
+router.post('/login', loginLimiter, validate(loginRules), controller.login);
 router.get('/me', authenticate, controller.me);
 
 module.exports = router;
