@@ -15,6 +15,18 @@ import PurchaseOrderCreatePage from './modules/alat/pages/PurchaseOrderCreatePag
 import PurchaseOrderDetailPage from './modules/alat/pages/PurchaseOrderDetailPage.jsx';
 import KasPage from './modules/alat/pages/KasPage.jsx';
 import KasClaimPendapatanPage from './modules/alat/pages/KasClaimPendapatanPage.jsx';
+import ProjectWorkspacePage from './modules/admin/project/pages/ProjectWorkspacePage.jsx';
+import { parseProjectRoute } from './modules/admin/project/utils/projectRoute.js';
+import SupplyWorkspacePage from './modules/admin/supply/pages/SupplyWorkspacePage.jsx';
+import { parseSupplyRoute } from './modules/admin/supply/utils/supplyRoute.js';
+import RentalWorkspacePage from './modules/admin/rental/pages/RentalWorkspacePage.jsx';
+import { parseRentalRoute } from './modules/admin/rental/utils/rentalRoute.js';
+import IncomeWorkspacePage from './modules/admin/income/pages/IncomeWorkspacePage.jsx';
+import { parseIncomeRoute } from './modules/admin/income/utils/incomeRoute.js';
+import ApprovalWorkspacePage from './modules/admin/approvals/pages/ApprovalWorkspacePage.jsx';
+import { parseApprovalRoute } from './modules/admin/approvals/utils/approvalRoute.js';
+import FilesWorkspacePage from './modules/admin/files/pages/FilesWorkspacePage.jsx';
+import { parseFilesRoute } from './modules/admin/files/utils/filesRoute.js';
 import { clearSession, getCurrentUser } from './services/auth.js';
 
 function getInitialRoute() {
@@ -48,7 +60,13 @@ function isKnownRoute(route) {
     /^alat\/purchase-orders\/\d+\/?$/.test(route) ||
     route === 'alat/kas' ||
     route === 'alat/kas/claim-pendapatan' ||
-    route === 'alat/kas/request-pendapatan';
+    route === 'alat/kas/request-pendapatan' ||
+    parseProjectRoute(route) !== null ||
+    parseSupplyRoute(route) !== null ||
+    parseRentalRoute(route) !== null ||
+    parseIncomeRoute(route) !== null ||
+    parseApprovalRoute(route) !== null ||
+    parseFilesRoute(route) !== null;
 }
 
 function AppLoading() {
@@ -192,6 +210,20 @@ export default function App() {
   }
   if (route === 'alat/kas')
     return <KasPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  // Satu instance untuk seluruh rute admin/projects/* supaya pohon project dan
+  // cache tahapan tidak dimuat ulang setiap kali pindah halaman.
+  if (parseProjectRoute(route))
+    return <ProjectWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (parseSupplyRoute(route))
+    return <SupplyWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (parseRentalRoute(route))
+    return <RentalWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (parseIncomeRoute(route))
+    return <IncomeWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (parseApprovalRoute(route))
+    return <ApprovalWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (parseFilesRoute(route))
+    return <FilesWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (route === 'alat/kas/claim-pendapatan' || route === 'alat/kas/request-pendapatan')
     return <KasClaimPendapatanPage key={route} onBackToModules={() => navigate('modules')} onBackToKas={() => navigate('alat/kas')} onSignOut={signOut} />;
 

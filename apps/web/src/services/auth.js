@@ -11,6 +11,7 @@ export function clearSession() {
   // Sisa store lokal yang masih dipakai karena endpoint-nya belum ada:
   // - income_claims : modul income belum di-mount, klaim pendapatan masih lokal
   // - maintenance_* : threshold per tipe & reset reference belum punya endpoint
+  // - admin_mock_*  : inventory, pekerja, supply, rental, income, kas lapangan & files Admin, backend belum ada
   localStorage.removeItem('po_data');
   localStorage.removeItem('po_seq');
   localStorage.removeItem('kas_data');
@@ -20,6 +21,17 @@ export function clearSession() {
   localStorage.removeItem('income_claim_seq');
   localStorage.removeItem('maintenance_type_thresholds');
   localStorage.removeItem('maintenance_custom_aspects');
+  localStorage.removeItem('admin_mock_inventory');
+  localStorage.removeItem('admin_mock_workers');
+  localStorage.removeItem('admin_mock_supply_deliveries');
+  localStorage.removeItem('admin_mock_supply_deliveries_v2');
+  localStorage.removeItem('admin_mock_supply_projects');
+  localStorage.removeItem('admin_mock_rental');
+  localStorage.removeItem('admin_mock_income_records');
+  localStorage.removeItem('admin_mock_field_cash');
+  localStorage.removeItem('admin_mock_files');
+  // Isi berkas modul Files Admin disimpan di IndexedDB (lihat fileStore.js).
+  if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase('constructerp-files');
 }
 
 export async function login(credentials) {

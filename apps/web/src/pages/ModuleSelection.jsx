@@ -1,5 +1,5 @@
 const modules = [
-  { id: 'admin', title: 'Admin Division', description: 'Manage system users, access roles, and audit configuration.', icon: '▦', tone: 'blue' },
+  { id: 'admin/projects', title: 'Admin Division', description: 'Manage construction projects, sub-project contracts, and progress validation.', icon: '▦', tone: 'blue' },
   { id: 'alat/items', title: 'Divisi Alat', description: 'Manage equipment inventory, active issues, and maintenance.', icon: '⚒', tone: 'teal' },
   { id: 'lapangan', title: 'Divisi Lapangan', description: 'Coordinate field construction operations and project logs.', icon: '⌖', tone: 'green' },
   { id: 'finance', title: 'Divisi Finance', description: 'Track financial transactions, invoicing, and budget reports.', icon: '▤', tone: 'amber' },
@@ -14,7 +14,10 @@ const moduleTone = {
 
 export default function ModuleSelection({ user = {}, onSelectModule, onSignOut }) {
   const currentUser = user || {};
-  const canAccessEquipment = currentUser.roles?.includes('super_admin') || currentUser.permissions?.includes('equipment:read') || false;
+  const isSuperAdmin = currentUser.roles?.includes('super_admin') || false;
+  const canAccessEquipment = isSuperAdmin || currentUser.permissions?.includes('equipment:read') || false;
+  const canAccessAdmin = isSuperAdmin || currentUser.permissions?.includes('project:read') || false;
+  const moduleAccess = { 'alat/items': canAccessEquipment, 'admin/projects': canAccessAdmin };
 
   return (
     <main className="page-enter min-h-screen bg-slate-50 px-4 py-8 text-slate-800 sm:px-8 sm:py-12">
@@ -46,7 +49,7 @@ export default function ModuleSelection({ user = {}, onSelectModule, onSignOut }
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             {modules.map((module) => {
-              const isModuleAvailable = module.id === 'alat/items' ? canAccessEquipment : false;
+              const isModuleAvailable = moduleAccess[module.id] || false;
               const isActive = isModuleAvailable;
               return (
                 <button
