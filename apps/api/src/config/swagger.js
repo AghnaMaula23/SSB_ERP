@@ -106,7 +106,7 @@ const swaggerSpec = {
     // ========================================
     '/auth/register': {
       post: {
-        tags: ['Auth'], summary: 'Register user baru', security: [],
+        tags: ['Auth'], summary: 'Buat akun user baru', description: 'Permission: user:create (super_admin). BUKAN pendaftaran mandiri — dulu terbuka untuk publik, ditutup 13 Okt 2026. Akun baru tanpa role; role diberikan lewat PUT /users/{id}/roles.',
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['username', 'email', 'password', 'fullName'],
           properties: {
@@ -1269,7 +1269,7 @@ const swaggerSpec = {
       put: { tags: ['Purchase Requests'], summary: 'Admin validasi', description: 'Role: admin SAJA — super_admin tidak di-bypass. submitted -> waiting_finance_approval. Tanpa body: catatan approval belum punya tempat penyimpanan (rencananya approval_task_logs di Approval Center).', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Validated' } } }
     },
     '/equipment/purchase-requests/{id}/approve': {
-      put: { tags: ['Purchase Requests'], summary: 'Finance approve + cairkan', description: 'Role: finance SAJA — super_admin tidak di-bypass. Nominal aktual per baris WAJIB diisi, bukan menyalin estimasi. Boleh menyebabkan saldo Kas Alat negatif.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+      put: { tags: ['Purchase Requests'], summary: 'Finance approve + cairkan', description: 'Role: finance SAJA — super_admin tidak di-bypass. Atomik: approval bersamaan hanya satu yang lolos (sisanya 409), dan database menolak baris kas kedua untuk order yang sama. Nominal aktual per baris WAJIB diisi, bukan menyalin estimasi. Boleh menyebabkan saldo Kas Alat negatif.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: {
           approvedRepairItems: { type: 'array', items: { type: 'object', properties: { repairItemId: { type: 'integer' }, approvedServiceFee: { type: 'number' }, spareparts: { type: 'array', items: { type: 'object', properties: { sparepartId: { type: 'integer' }, approvedTotalPrice: { type: 'number' } } } } } } },
           approvedMaintenanceItems: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'integer' }, approvedPrice: { type: 'number' } } } },
@@ -1278,7 +1278,7 @@ const swaggerSpec = {
         responses: { 200: { description: 'Approved. total_approved_amount dijumlahkan dari baris, lalu cash-out Kas Alat dibuat dalam transaksi yang SAMA — kategori kasnya diturunkan dari orderCategory. Response menyertakan cashTransactionCreated + cashTransaction.' } } }
     },
     '/equipment/purchase-requests/{id}/reject': {
-      put: { tags: ['Purchase Requests'], summary: 'Tolak order', description: 'Role: admin (saat submitted) atau finance (saat waiting_finance_approval). super_admin tidak di-bypass. CATATAN: alasan penolakan BELUM bisa disimpan — header PR tidak punya kolom teks dan Approval Center belum dibangun. Mengirim `notes` akan ditolak 400 supaya tidak hilang diam-diam.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Rejected' } } }
+      put: { tags: ['Purchase Requests'], summary: 'Tolak order', description: 'Permission: purchase-request:validate (saat submitted) atau purchase-request:approve (saat waiting_finance_approval) — diperiksa per permission, bukan nama role. super_admin tidak di-bypass. Penolakan bersamaan dengan aksi lain: yang kalah 409. CATATAN: alasan penolakan BELUM bisa disimpan — header PR tidak punya kolom teks dan Approval Center belum dibangun. Mengirim `notes` akan ditolak 400 supaya tidak hilang diam-diam.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Rejected' } } }
     },
     '/equipment/purchase-requests/{id}/cancel': {
       put: { tags: ['Purchase Requests'], summary: 'Batalkan order', description: 'Role: divisi_alat, hanya pengaju sendiri, dan hanya SEBELUM approved. Order yang sudah approved ditolak 409 karena dananya sudah dicairkan — siapa yang berwenang mencatat dana kembali masuk belum diputuskan, jadi ditutup untuk MVP. Sementara ini pengembaliannya dicatat manual di Kas Alat sebagai cash-in `adjustment` kategori "Koreksi Masuk".', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Cancelled' } } }

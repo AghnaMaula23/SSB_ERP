@@ -3,6 +3,7 @@ const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const { toNumber, toDateOnly } = require('../../utils/shape.js');
+const { claimTransition } = require('../../utils/status-transition.js');
 
 const MAINTENANCE_DOC_TYPE = 'MTN';
 const MAINTENANCE_DOC_PAD = 6;
@@ -339,18 +340,28 @@ const applyWorkhourToSettings = async (tx, equipmentItemId, hours) => {
 
   const touched = [];
   for (const setting of settings) {
-    const nextValue = Number(setting.currentValueSinceReset) + Number(hours);
+    // Increment ATOMIK, bukan "baca nilai + jam lalu tulis". Versi lama
+    // menghitung dari nilai yang dibaca di awal transaksi. Kalau reset servis
+    // (createRecord) commit di antara baca dan tulis itu, reset-nya TERTIMPA:
+    // alat yang baru diservis langsung tampil warning lagi. Terbukti 13 Okt
+    // 2026: 8 dari 8 percobaan reset hilang di versi lama, 0 di versi ini.
+    // (Dua log jam kerja bersamaan sudah aman lewat kunci baris dari increment
+    // totalWorkhour di createWorkhourLog — jalur reset tidak lewat kunci itu.)
+    const incremented = await tx.equipmentMaintenanceSetting.update({
+      where: { id: setting.id },
+      data: { currentValueSinceReset: { increment: Number(hours) } },
+    });
+    const nextValue = Number(incremented.currentValueSinceReset);
     const status = computeStatus({
-      thresholdValue: setting.thresholdValue,
+      thresholdValue: incremented.thresholdValue,
       currentValueSinceReset: nextValue,
       warningLeadValue: setting.maintenanceAspect.warningLeadValue,
       isActive: true,
     });
 
-    await tx.equipmentMaintenanceSetting.update({
-      where: { id: setting.id },
-      data: { currentValueSinceReset: nextValue, status },
-    });
+    if (status !== incremented.status) {
+      await tx.equipmentMaintenanceSetting.update({ where: { id: setting.id }, data: { status } });
+    }
 
     touched.push({
       settingId: setting.id,
@@ -522,15 +533,14 @@ const cancelRecord = async (id, { notes }) => {
   const record = await findRecordOrFail(id);
   if (record.status === 'cancelled') throw httpError('Riwayat maintenance ini sudah dibatalkan', 409);
 
-  const updated = await prisma.maintenanceRecord.update({
-    where: { id },
-    data: {
+  const updated = await prisma.$transaction(async (tx) => {
+    await claimTransition(tx.maintenanceRecord, { id, status: { not: 'cancelled' } }, {
       status: 'cancelled',
       actionDescription: notes
         ? `${record.actionDescription}\n[DIBATALKAN] ${notes}`
         : record.actionDescription,
-    },
-    include: recordInclude,
+    });
+    return tx.maintenanceRecord.findUnique({ where: { id }, include: recordInclude });
   });
 
   return shapeRecord(updated);

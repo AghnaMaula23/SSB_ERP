@@ -3,6 +3,7 @@ const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const maintenance = require('./maintenance.service.js');
+const { claimTransition } = require('../../utils/status-transition.js');
 const { toNumber, toDateOnly } = require('../../utils/shape.js');
 
 const DAMAGE_DOC_TYPE = 'DMG';
@@ -232,17 +233,16 @@ const update = async (id, payload, userId) => {
   if (damageDate) assertNotFuture(damageDate, 'Tanggal kerusakan');
 
   const updated = await prisma.$transaction(async (tx) => {
-    const result = await tx.damageLog.update({
-      where: { id },
-      data: {
-        ...(description !== undefined && { description }),
-        ...(sparePartSource !== undefined && { sparePartSource }),
-        ...(mechanicTeam !== undefined && { mechanicTeam }),
-        ...(damageDate !== undefined && { damageDate: new Date(damageDate) }),
-        ...(stopsOperation !== undefined && { stopsOperation }),
-      },
-      include: damageInclude,
+    // stopsOperation lama ikut jadi syarat: keputusan menggerakkan status alat
+    // di bawah dibuat dari nilai itu, jadi nilainya tidak boleh basi.
+    await claimTransition(tx.damageLog, { id, status: 'reported', stopsOperation: log.stopsOperation }, {
+      ...(description !== undefined && { description }),
+      ...(sparePartSource !== undefined && { sparePartSource }),
+      ...(mechanicTeam !== undefined && { mechanicTeam }),
+      ...(damageDate !== undefined && { damageDate: new Date(damageDate) }),
+      ...(stopsOperation !== undefined && { stopsOperation }),
     });
+    const result = await tx.damageLog.findUnique({ where: { id }, include: damageInclude });
 
     // Mengubah penanda "alat berhenti" ikut menggerakkan status alat
     if (stopsOperation !== undefined && stopsOperation !== log.stopsOperation) {
@@ -289,6 +289,11 @@ const resolve = async (id, payload, userId) => {
   const item = await findItemOrFail(log.equipmentItemId);
 
   const resolved = await prisma.$transaction(async (tx) => {
+    // Klaim PERTAMA: resolve kedua yang bersamaan berhenti di sini dengan 409,
+    // tidak sempat membuat maintenance record kedua untuk kerusakan yang sama.
+    await claimTransition(tx.damageLog, { id, status: 'reported', stopsOperation: log.stopsOperation },
+      { status: 'resolved', resolvedAt: new Date() });
+
     const maintenanceCode = await nextDocumentNumber(tx, 'MTN', { pad: 6 });
 
     await tx.maintenanceRecord.create({
@@ -310,11 +315,7 @@ const resolve = async (id, payload, userId) => {
       },
     });
 
-    const result = await tx.damageLog.update({
-      where: { id },
-      data: { status: 'resolved', resolvedAt: new Date() },
-      include: damageInclude,
-    });
+    const result = await tx.damageLog.findUnique({ where: { id }, include: damageInclude });
 
     if (log.stopsOperation && await canReleaseFromDamage(tx, log.equipmentItemId, id) && !(await hasOtherStoppingDamage(tx, log.equipmentItemId, id))) {
       await moveEquipmentStatus(tx, item, 'operational', {
@@ -339,14 +340,11 @@ const cancel = async (id, { notes }, userId) => {
   const item = await findItemOrFail(log.equipmentItemId);
 
   const cancelled = await prisma.$transaction(async (tx) => {
-    const result = await tx.damageLog.update({
-      where: { id },
-      data: {
-        status: 'cancelled',
-        description: notes ? `${log.description}\n[DIBATALKAN] ${notes}` : log.description,
-      },
-      include: damageInclude,
+    await claimTransition(tx.damageLog, { id, status: 'reported', stopsOperation: log.stopsOperation }, {
+      status: 'cancelled',
+      description: notes ? `${log.description}\n[DIBATALKAN] ${notes}` : log.description,
     });
+    const result = await tx.damageLog.findUnique({ where: { id }, include: damageInclude });
 
     if (log.stopsOperation && await canReleaseFromDamage(tx, log.equipmentItemId, id) && !(await hasOtherStoppingDamage(tx, log.equipmentItemId, id))) {
       await moveEquipmentStatus(tx, item, 'operational', {

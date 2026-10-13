@@ -711,7 +711,12 @@ model EquipmentCashTransaction {
   voidedByUser  User?                 @relation("CashVoidedBy", fields: [voidedBy], references: [id])
 
   @@index([transactionDate])
-  @@index([sourceType, sourceId])
+  /// Satu dokumen sumber hanya boleh punya SATU baris kas — lapis kedua di
+  /// bawah claimTransition (utils/status-transition.js), setelah terbukti tiga
+  /// approval bersamaan bisa membuat tiga cash-out untuk satu order.
+  /// Baris manual selalu sourceId NULL (ditolak validator), dan Postgres
+  /// menganggap NULL saling berbeda, jadi catatan manual tidak terhalang.
+  @@unique([sourceType, sourceId])
   @@index([categoryId])
   @@index([isVoided])
   @@map("equipment_cash_transaction")

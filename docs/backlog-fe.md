@@ -57,6 +57,9 @@ boleh ditampilkan apa adanya.
 | 1 | **E3** `hasPermission` | Akan bikin super_admin dapat 403 saat layar approval dibuat |
 | 2 | **E4d** `maintenanceThresholdService` | Backend-nya SUDAH ADA, tapi FE masih localStorage penuh |
 | 3 | **E4e** `maintenanceService` hibrida | Separuh API separuh localStorage — paling rawan salah baca |
+| 1 | **E8** pool item "Jumlah" | **Memblokir migrasi contract** pool item |
+| 1 | **E9** fallback data palsu | Data dummy ikut tersimpan ke database |
+| 2 | **E10** data bisnis di localStorage (damage log) | Tidak terlihat user lain, hilang saat cache dibersihkan |
 | 4 | E5, E6 | Kebersihan kode, tidak mendesak |
 | — | E4b `incomeClaimService` | Tetap mock, **wajar** — backend Income baru langkah 6 |
 
@@ -134,8 +137,10 @@ berlaku dan dihapus dari dokumen ini.
 **Ini belum bisa dikerjakan** — backend Income & Klaim Pendapatan Alat baru
 Build Order langkah 6. Biarkan sampai modulnya ada.
 
-`projectService.js` TIDAK lagi mock: sudah memanggil API, dan backend modul
-Project sudah selesai (25 path `/api/projects/*` di swagger).
+**KOREKSI 13 Okt 2026:** catatan sebelumnya menyebut `projectService.js` (modul
+alat) "tidak lagi mock". Itu keliru. Ia memanggil `/api/projects?status=accepted`
+— path itu tidak ada, dan `accepted` bukan nilai status project — lalu jatuh ke
+`DUMMY_PROJECTS` diam-diam. Lihat **E9**.
 
 ## E4c. Kas Alat — BERES (commit 33d0070)
 
@@ -186,3 +191,84 @@ Catatan sebelumnya soal `available`/`assigned_to_location` **sudah tidak berlaku
 dengan peta alias untuk nilai lama.
 
 ---
+
+---
+
+# Temuan audit 13 Oktober 2026
+
+Dari audit `feature/be-div-alat` dan push Rafi `72c455a` (modul Admin). Build
+dan lint FE bersih; semua path API yang dipanggil modul Admin cocok dengan route.
+
+## E8. Pool item mengirim dan menampilkan kuantitas — MEMBLOKIR CONTRACT
+
+- `admin/project/pages/PoolItemFormPage.jsx` punya input **"Jumlah"**, dan
+  `projectService.addPoolItem` mengirim `requestedQuantity`.
+- `admin/project/pages/EquipmentPoolPage.jsx` menampilkan
+  `approvedQuantity || requestedQuantity`.
+
+**Satu pool item = satu unit** (`docs/keputusan-desain-request-alat.md`): ia
+memegang satu `equipmentItemId` dan satu alokasi menghabiskannya. "Jumlah: 3"
+pada satu slot tidak punya arti. Butuh 3 unit → tambah 3 pool item. Kolom
+`requested_quantity`/`approved_quantity` pool item dijadwalkan di-DROP; begitu
+itu jalan, form ini ditolak backend. **Hapus input dan kolomnya dulu.**
+
+`requestedQuantity` pada Request Alat (`rentalService` → `/api/request-alat`)
+**tetap sah** — itu kuantitas item permintaan, bukan pool item.
+
+## E9. `catch` yang diam-diam mengembalikan data palsu — FATAL
+
+Data palsu yang ditampilkan seolah asli ikut tersimpan ke database.
+
+1. **"Dikerjakan oleh" (maintenance & resolve damage).**
+   `maintenanceService.getMaintenancePerformedByOptions()` memanggil
+   `/api/users`; Divisi Alat tidak punya `user:read` → selalu 403 → FE diam-diam
+   menawarkan "Tim Mekanik Internal" / "Admin Divisi Alat", dan nilai itu
+   tersimpan ke `maintenance_records.performed_by`.
+   **Keputusan 13 Okt: nama mekanik TIDAK dicatat** — tidak ada data master
+   mekanik internal maupun eksternal. **Hapus input itu**, jangan kirim
+   `performedBy`. Backend sudah opsional, tidak perlu perubahan API.
+   Kolomnya dijadwalkan di-DROP bersama contract pool item.
+2. **`alat/services/projectService.js`** — path yang benar
+   `/api/projects/construction?status=active`. Hapus `DUMMY_PROJECTS`.
+
+Pola umumnya: kalau API gagal, **tampilkan errornya**. Fallback ke data contoh
+hanya pantas di layar yang backend-nya memang belum ada, dan harus kelihatan
+sebagai contoh.
+
+## E10. Data bisnis damage log disimpan di localStorage
+
+`alat/information/services/damageLogActionService.js`:
+
+- **`damage_log_action_status`** — tombol "selesaikan tindakan" pada riwayat
+  tindakan hanya menulis ke browser. User lain tidak melihatnya. Konsepnya juga
+  bertentangan dengan desain: `maintenance_record_status` hanya
+  `completed`/`cancelled` karena record adalah histori pekerjaan yang SUDAH
+  dilakukan, bukan pelacak pekerjaan berjalan. Kalau pelacakan itu dibutuhkan,
+  itu keputusan desain baru — bahas dulu.
+- **`damage_log_resolve_purchase_refs`** — PO yang dipilih saat resolve
+  disimpan lalu **tidak pernah dibaca lagi** (`getResolvePurchaseReferences`
+  tidak dipanggil di mana pun). Tautan PO ↔ damage log sudah ada di backend
+  (`repairItems[].damageLogId`) dan halaman detail sudah membacanya lewat
+  `ordersForDamageLog`.
+- FE **mewajibkan** memilih PO approved untuk resolve; backend tidak. Perbaikan
+  oleh mekanik internal tanpa pembelian sah di-resolve. Kalau aturan ini
+  diinginkan, tempatnya di backend — putuskan dulu.
+
+## E11. Data demo rental & supply tampil bercampur data asli
+
+`rentalDemoService` dan `demoSupplyService` menambahkan baris `demo-N` ke daftar
+project asli. Penandanya jelas (`isDemo`, dibersihkan saat logout), jadi bukan
+fallback diam-diam — tapi **butuh sakelar untuk mematikannya sebelum produksi**.
+Mock delivery, kas lapangan, dan tenaga kerja wajar: backend-nya belum ada.
+
+## E12. Perubahan perilaku backend yang perlu diikuti FE (13 Okt 2026)
+
+- **Alokasi pool item tanpa unit → 409.** Layar alokasi sebaiknya hanya
+  menawarkan pool item yang `equipmentItemId`-nya terisi.
+- **Aksi bersamaan → 409** pada approve/validate/reject/cancel PR, resolve/cancel
+  damage log, void/edit kas, cancel maintenance record, dan semua aksi Request
+  Alat. Tangani 409 dengan memuat ulang data, bukan menampilkannya sebagai gagal
+  biasa.
+- **`POST /api/auth/register` sekarang butuh login + `user:create`**
+  (super_admin). FE tidak memakainya; dicatat supaya tidak ada yang membangun
+  layar daftar mandiri.

@@ -2,6 +2,7 @@ const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
+const { claimTransition } = require('../../utils/status-transition.js');
 const { toNumber, toDateOnly } = require('../../utils/shape.js');
 
 const CASH_DOC_TYPE = 'KAS';
@@ -470,15 +471,14 @@ const updateTransaction = async (id, payload) => {
       ? assertNotFuture(payload.transactionDate, 'Tanggal transaksi')
       : undefined;
 
-  const updated = await prisma.equipmentCashTransaction.update({
-    where: { id },
-    data: {
+  const updated = await prisma.$transaction(async (tx) => {
+    await claimTransition(tx.equipmentCashTransaction, { id, isVoided: false }, {
       ...(transactionDate && { transactionDate }),
       ...(payload.categoryId !== undefined && { categoryId: payload.categoryId }),
       ...(payload.amount !== undefined && { amount: payload.amount }),
       ...(payload.description !== undefined && { description: payload.description }),
-    },
-    include: transactionInclude,
+    });
+    return tx.equipmentCashTransaction.findUnique({ where: { id }, include: transactionInclude });
   });
   return shapeTransaction(updated);
 };
@@ -495,10 +495,10 @@ const voidTransaction = async (id, { voidReason }, userId) => {
     throw httpError(`Transaksi ${existing.transactionCode} sudah dibatalkan sebelumnya`, 409);
   }
 
-  const updated = await prisma.equipmentCashTransaction.update({
-    where: { id },
-    data: { isVoided: true, voidReason, voidedBy: userId, voidedAt: new Date() },
-    include: transactionInclude,
+  const updated = await prisma.$transaction(async (tx) => {
+    await claimTransition(tx.equipmentCashTransaction, { id, isVoided: false },
+      { isVoided: true, voidReason, voidedBy: userId, voidedAt: new Date() });
+    return tx.equipmentCashTransaction.findUnique({ where: { id }, include: transactionInclude });
   });
   return shapeTransaction(updated);
 };
