@@ -41,8 +41,11 @@ const PROJECT_TYPES = {
     codeField: 'supplyProjectCode',
     nameField: 'supplyProjectName',
     writable: ['supplyProjectName', 'clientName', 'location', 'contractNo',
-      'contractStartDate', 'contractEndDate'],
+      'contractStartDate', 'contractEndDate', 'fieldPicId'],
     dateFields: ['contractStartDate', 'contractEndDate'],
+    // PIC Lapangan pembuat request material (RM-1). Aturan "hanya PIC yang
+    // boleh mengajukan" ditegakkan bersama request material di RM-2.
+    extraInclude: { fieldPic: { select: ACTOR_SELECT } },
   },
 };
 
@@ -51,6 +54,16 @@ const PROJECT_DOC_PAD = 6;
 // Project yang sudah selesai atau dibatalkan tidak boleh diubah lagi — angkanya
 // sudah dipakai laporan dan (untuk construction) sudah jadi dasar tagihan.
 const IMMUTABLE_STATUSES = ['completed', 'cancelled'];
+
+const includeFor = (config) => ({ createdByUser: { select: ACTOR_SELECT }, ...config.extraInclude });
+
+/** PIC harus user yang ada dan aktif. null diterima — artinya PIC dikosongkan. */
+const assertFieldPic = async (writable) => {
+  if (!writable.fieldPicId) return;
+  const user = await prisma.user.findUnique({ where: { id: writable.fieldPicId } });
+  if (!user) throw httpError(`User dengan ID ${writable.fieldPicId} tidak ditemukan`, 404);
+  if (!user.isActive) throw httpError(`User "${user.username}" nonaktif, tidak bisa dijadikan PIC`, 409);
+};
 
 const typeConfigOrFail = (kind) => {
   const config = PROJECT_TYPES[kind];
@@ -73,6 +86,7 @@ const shapeProject = (config, row) => ({
         contractEndDate: toDateOnly(row.contractEndDate),
       }),
   ...(config.model === 'externalRentalProject' && { billingMethod: row.billingMethod }),
+  ...(config.model === 'externalSupplyProject' && { fieldPicId: row.fieldPicId, fieldPic: shapeActor(row.fieldPic) }),
   status: row.status,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -84,7 +98,7 @@ const findOrFail = async (kind, id) => {
   const config = typeConfigOrFail(kind);
   const row = await prisma[config.model].findUnique({
     where: { id },
-    include: { createdByUser: { select: ACTOR_SELECT } },
+    include: includeFor(config),
   });
   if (!row) throw httpError(`${config.label} tidak ditemukan`, 404);
   return { config, row };
@@ -107,7 +121,7 @@ const list = async (kind, { page = 1, limit = 20, status, search }) => {
     prisma[config.model].findMany({
       where,
       include: {
-        createdByUser: { select: ACTOR_SELECT },
+        ...includeFor(config),
         ...(config.model === 'constructionProject' && { _count: { select: { subProjects: true } } }),
       },
       orderBy: { [config.codeField]: 'desc' },
@@ -151,12 +165,13 @@ const create = async (kind, payload, user) => {
   }
 
   assertDateOrder(config, writable);
+  await assertFieldPic(writable);
 
   const row = await prisma.$transaction(async (tx) => {
     const code = manualCode || await nextDocumentNumber(tx, config.docType, { pad: PROJECT_DOC_PAD });
     return tx[config.model].create({
       data: { ...writable, [config.codeField]: code, createdBy: user.id },
-      include: { createdByUser: { select: ACTOR_SELECT } },
+      include: includeFor(config),
     });
   });
 
@@ -175,11 +190,12 @@ const update = async (kind, id, payload) => {
 
   const writable = coerceDates(pickWritable(payload, config.writable), config.dateFields);
   assertDateOrder(config, { ...row, ...writable });
+  await assertFieldPic(writable);
 
   const updated = await prisma[config.model].update({
     where: { id },
     data: writable,
-    include: { createdByUser: { select: ACTOR_SELECT } },
+    include: includeFor(config),
   });
   return shapeProject(config, updated);
 };
@@ -226,7 +242,7 @@ const changeStatus = async (kind, id, status) => {
   const updated = await prisma[config.model].update({
     where: { id },
     data: { status },
-    include: { createdByUser: { select: ACTOR_SELECT } },
+    include: includeFor(config),
   });
   return shapeProject(config, updated);
 };

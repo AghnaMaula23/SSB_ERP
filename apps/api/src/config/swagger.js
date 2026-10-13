@@ -77,6 +77,7 @@ const swaggerSpec = {
     { name: 'External Rental', description: 'Project rental alat eksternal' },
     { name: 'External Supply', description: 'Project supply material eksternal' },
     { name: 'Equipment Pool & Material Pool', description: 'Pool alat dan material pada level project' },
+    { name: 'Material Master', description: 'Master jenis material, satuan baku, dan supplier' },
     { name: 'Project Files', description: 'Manajemen file dan folder project' },
     { name: 'Equipment Types', description: 'Master jenis alat' },
     { name: 'Equipment Items', description: 'Master unit alat' },
@@ -617,7 +618,8 @@ const swaggerSpec = {
             supplyProjectCode: { type: 'string', description: 'HANYA super_admin — sistem membuat SPL-000001' },
             supplyProjectName: { type: 'string' },
             clientName: { type: 'string' }, contractNo: { type: 'string' },
-            contractStartDate: { type: 'string', format: 'date' }, contractEndDate: { type: 'string', format: 'date' }
+            contractStartDate: { type: 'string', format: 'date' }, contractEndDate: { type: 'string', format: 'date' },
+            fieldPicId: { type: 'integer', nullable: true, description: 'PIC Lapangan pembuat request material untuk kontrak ini (user aktif). Juga diterima di PUT; null = dikosongkan. Response memuat `fieldPic`.' }
           }
         }}}},
         responses: { 201: { description: 'Created' } }
@@ -726,6 +728,58 @@ const swaggerSpec = {
         }}}},
         responses: { 200: { description: 'Updated' }, 409: { description: 'Status bukan available' } }
       }
+    },
+    '/projects/material-pools': {
+      get: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'List material pool', description: 'Permission: material-pool:read',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'ownerType', schema: { type: 'string', enum: ['construction_project', 'external_supply_project'] } },
+          { in: 'query', name: 'constructionProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'externalSupplyProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['draft', 'active', 'closed', 'cancelled'] } }],
+        responses: { 200: { description: 'Paginated list' } },
+      },
+      post: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Buat material pool',
+        description: 'Permission: material-pool:create (Admin). Generic seperti equipment pool: tepat satu FK sesuai ownerType (dijaga CHECK). `poolCode` dibuat sistem (MPL-000001). Tidak ada supplier di header pool — supplier milik delivery (keputusan D2).',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['ownerType'], properties: {
+          ownerType: { type: 'string', enum: ['construction_project', 'external_supply_project'] },
+          constructionProjectId: { type: 'integer' }, externalSupplyProjectId: { type: 'integer' },
+        } } } } },
+        responses: { 201: { description: 'Created' }, 400: { description: 'FK owner salah/ganda' }, 404: { description: 'Owner tidak ditemukan' } },
+      },
+    },
+    '/projects/material-pools/{id}': {
+      get: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Detail material pool + daftar material',
+        description: 'Permission: material-pool:read. Satu baris per jenis material. Tiap item memuat `unit` dari jenis materialnya — tampilkan di samping setiap angka kuantitas. Tidak ada penghitung total_* (keputusan D3): jumlahan request/delivery/receipt dihitung saat dibaca begitu modulnya ada.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } },
+      },
+    },
+    '/projects/material-pools/{id}/status': {
+      put: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Ubah status material pool',
+        description: 'Permission: material-pool:update. draft → active/cancelled, active → closed/cancelled; closed & cancelled final. Atomik: aksi bersamaan yang kalah 409.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['draft', 'active', 'closed', 'cancelled'] } } } } } },
+        responses: { 200: { description: 'Diubah' }, 409: { description: 'Transisi tidak sah' } },
+      },
+    },
+    '/projects/material-pools/{id}/items': {
+      post: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Tambah material ke pool',
+        description: 'Permission: material-pool:update. Satu jenis material sekali per pool (409 kalau sudah ada). Jenis material harus aktif. `unit` DITOLAK 400 — satuan milik jenis material (keputusan D1). Pool harus draft/active.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['materialTypeId'], properties: { materialTypeId: { type: 'integer' }, notes: { type: 'string' } } } } } },
+        responses: { 201: { description: 'Ditambahkan' }, 409: { description: 'Sudah ada / material nonaktif / pool tertutup' } },
+      },
+    },
+    '/projects/material-pools/{id}/items/{itemId}': {
+      delete: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Hapus material dari pool',
+        description: 'Permission: material-pool:update. Pool harus draft/active. Mulai RM-2, material yang sudah dirujuk request/inventori tidak bisa dihapus.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }, { in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Dihapus' } },
+      },
     },
     '/projects/sub-projects/{subProjectId}/allocations': {
       get: {
@@ -1418,6 +1472,71 @@ const swaggerSpec = {
         }}}},
         responses: { 200: { description: 'Voided' }, 409: { description: 'Baris sistem, atau sudah dibatalkan sebelumnya' } }
       }
+    },
+
+    // ========================================
+    // 3b. MATERIAL MASTER (Request Material RM-1)
+    // ========================================
+    '/materials/units': {
+      get: {
+        tags: ['Material Master'], summary: 'Daftar satuan baku',
+        description: 'Permission: material:read. Sumber dropdown satuan di FE — daftar yang SAMA dengan validator. "rit" sengaja tidak ada: konversikan ke m³ saat input.',
+        responses: { 200: { description: 'Array string satuan' } },
+      },
+    },
+    '/materials/types': {
+      get: {
+        tags: ['Material Master'], summary: 'List jenis material', description: 'Permission: material:read',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' }, { in: 'query', name: 'search', schema: { type: 'string' } }, { in: 'query', name: 'isActive', schema: { type: 'boolean' } }],
+        responses: { 200: { description: 'Paginated list' } },
+      },
+      post: {
+        tags: ['Material Master'], summary: 'Tambah jenis material',
+        description: 'Permission: material:create (Admin). `materialCode` disimpan uppercase dan unik. `materialName` unik tanpa melihat huruf besar-kecil. `unit` dari daftar baku — SATU-SATUNYA tempat satuan disimpan; semua kuantitas request/delivery/receipt mengikutinya (keputusan D1).',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['materialCode', 'materialName', 'unit'], properties: {
+          materialCode: { type: 'string', example: 'PSR-URUG' }, materialName: { type: 'string', example: 'Pasir Urug' },
+          unit: { type: 'string', enum: ['m³', 'ton', 'kg', 'liter', 'sak', 'roll', 'batang', 'unit'] }, description: { type: 'string' },
+        } } } } },
+        responses: { 201: { description: 'Created' }, 409: { description: 'Kode/nama sudah ada' } },
+      },
+    },
+    '/materials/types/{id}': {
+      get: { tags: ['Material Master'], summary: 'Detail jenis material', description: 'Permission: material:read', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
+      put: {
+        tags: ['Material Master'], summary: 'Ubah jenis material',
+        description: 'Permission: material:update. `materialCode` tidak bisa diubah. `unit` TERKUNCI begitu jenis material dipakai di pool (409) — mengubah m³ ke ton membuat angka lama terbaca salah; buat jenis material baru. Nonaktifkan lewat `isActive=false`.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: {
+          materialName: { type: 'string' }, unit: { type: 'string', enum: ['m³', 'ton', 'kg', 'liter', 'sak', 'roll', 'batang', 'unit'] }, description: { type: 'string' }, isActive: { type: 'boolean' },
+        } } } } },
+        responses: { 200: { description: 'Diperbarui' }, 409: { description: 'Satuan terkunci / nama sudah ada' } },
+      },
+    },
+    '/materials/suppliers': {
+      get: {
+        tags: ['Material Master'], summary: 'List supplier', description: 'Permission: supplier:read',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' }, { in: 'query', name: 'search', schema: { type: 'string' } }, { in: 'query', name: 'isActive', schema: { type: 'boolean' } }],
+        responses: { 200: { description: 'Paginated list' } },
+      },
+      post: {
+        tags: ['Material Master'], summary: 'Tambah supplier',
+        description: 'Permission: supplier:create (Admin). Nama unik tanpa melihat huruf besar-kecil.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['supplierName'], properties: {
+          supplierName: { type: 'string', example: 'Quarry Arjawinangun' }, phone: { type: 'string' }, address: { type: 'string' },
+        } } } } },
+        responses: { 201: { description: 'Created' }, 409: { description: 'Nama sudah ada' } },
+      },
+    },
+    '/materials/suppliers/{id}': {
+      get: { tags: ['Material Master'], summary: 'Detail supplier', description: 'Permission: supplier:read', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
+      put: {
+        tags: ['Material Master'], summary: 'Ubah supplier', description: 'Permission: supplier:update. Nonaktifkan lewat `isActive=false`.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: {
+          supplierName: { type: 'string' }, phone: { type: 'string' }, address: { type: 'string' }, isActive: { type: 'boolean' },
+        } } } } },
+        responses: { 200: { description: 'Diperbarui' } },
+      },
     },
 
     // ========================================

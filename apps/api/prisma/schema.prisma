@@ -52,6 +52,9 @@ model User {
   equipmentRequestsEquipmentReviewed EquipmentRequest[] @relation("EqRequestEquipmentReviewedBy")
   equipmentRequestsCancelled         EquipmentRequest[] @relation("EqRequestCancelledBy")
 
+  materialPoolsCreated MaterialPool[]          @relation("MaterialPoolCreatedBy")
+  supplyProjectsAsPic  ExternalSupplyProject[] @relation("SupplyProjectFieldPic")
+
   @@map("users")
 }
 
@@ -710,13 +713,13 @@ model EquipmentCashTransaction {
   createdByUser User?                 @relation("CashCreatedBy", fields: [createdBy], references: [id])
   voidedByUser  User?                 @relation("CashVoidedBy", fields: [voidedBy], references: [id])
 
-  @@index([transactionDate])
   /// Satu dokumen sumber hanya boleh punya SATU baris kas — lapis kedua di
   /// bawah claimTransition (utils/status-transition.js), setelah terbukti tiga
   /// approval bersamaan bisa membuat tiga cash-out untuk satu order.
   /// Baris manual selalu sourceId NULL (ditolak validator), dan Postgres
   /// menganggap NULL saling berbeda, jadi catatan manual tidak terhalang.
   @@unique([sourceType, sourceId])
+  @@index([transactionDate])
   @@index([categoryId])
   @@index([isVoided])
   @@map("equipment_cash_transaction")
@@ -843,6 +846,7 @@ model ConstructionProject {
   createdByUser  User?           @relation("ConstructionProjectCreatedBy", fields: [createdBy], references: [id])
   subProjects    SubProject[]
   equipmentPools EquipmentPool[]
+  materialPools  MaterialPool[]
 
   @@index([status])
   @@map("construction_projects")
@@ -876,8 +880,9 @@ model ExternalRentalProject {
   @@map("external_rental_projects")
 }
 
-/// Kontrak supply material ke klien eksternal. material_pools menyusul bersama
-/// modul Request Material (Build Order langkah 4) — belum dibuat di batch ini.
+/// Kontrak supply material ke klien eksternal. Materialnya dikumpulkan lewat
+/// material_pools. `field_pic_id` = PIC Lapangan yang membuat request material
+/// untuk kontrak ini (aturan "hanya PIC" ditegakkan bersama request, RM-2).
 model ExternalSupplyProject {
   id                Int           @id @default(autoincrement())
   supplyProjectCode String        @unique @map("supply_project_code") @db.VarChar(50)
@@ -888,11 +893,14 @@ model ExternalSupplyProject {
   contractStartDate DateTime?     @map("contract_start_date") @db.Date
   contractEndDate   DateTime?     @map("contract_end_date") @db.Date
   status            ProjectStatus @default(planned)
+  fieldPicId        Int?          @map("field_pic_id")
   createdBy         Int?          @map("created_by")
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
 
-  createdByUser User? @relation("SupplyProjectCreatedBy", fields: [createdBy], references: [id])
+  createdByUser User?          @relation("SupplyProjectCreatedBy", fields: [createdBy], references: [id])
+  fieldPic      User?          @relation("SupplyProjectFieldPic", fields: [fieldPicId], references: [id])
+  materialPools MaterialPool[]
 
   @@index([status])
   @@map("external_supply_projects")
@@ -1192,4 +1200,97 @@ model EquipmentRequestItem {
 
   @@index([equipmentRequestId, equipmentTypeId])
   @@map("equipment_request_items")
+}
+
+// ============================================================
+// MATERIAL — master & pool (Request Material RM-1).
+// Lihat docs/keputusan-desain-request-material.md
+// ============================================================
+
+/// Master jenis material. `unit` adalah SATU-SATUNYA tempat satuan disimpan —
+/// keputusan D1 (13 Okt 2026): ERD menaruh unit di lima tabel, sehingga satu
+/// material bisa tercatat m³ di request dan ton di receipt, lalu jumlahannya
+/// tidak bermakna. Semua baris kuantitas mengikuti satuan ini; konversi menjadi
+/// tanggung jawab penginput. Nilainya dari daftar baku di
+/// src/modules/material/material.constants.js, dan terkunci begitu dipakai.
+model MaterialType {
+  id           Int      @id @default(autoincrement())
+  // Disimpan uppercase supaya @unique juga menolak beda huruf besar-kecil
+  materialCode String   @unique @map("material_code") @db.VarChar(50)
+  materialName String   @unique @map("material_name") @db.VarChar(150)
+  unit         String   @db.VarChar(30)
+  description  String?  @db.Text
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  poolItems MaterialPoolItem[]
+
+  @@map("material_types")
+}
+
+/// Pemasok material. Siapa yang mengirim adalah fakta milik delivery (RM-4) —
+/// `supplier_id` pada header material_pools dari ERD TIDAK dibuat (keputusan D2),
+/// karena satu kontrak bisa dipasok lebih dari satu quarry.
+model Supplier {
+  id           Int      @id @default(autoincrement())
+  supplierName String   @unique @map("supplier_name") @db.VarChar(150)
+  phone        String?  @db.VarChar(50)
+  address      String?  @db.Text
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("suppliers")
+}
+
+enum MaterialPoolOwnerType {
+  construction_project
+  external_supply_project
+
+  @@map("material_pool_owner_type")
+}
+
+/// Daftar material milik construction project atau supply project. Generic
+/// seperti equipment_pools: owner_type diskriminator, FK yang sah dijaga CHECK
+/// constraint di migrasi.
+model MaterialPool {
+  id                      Int                   @id @default(autoincrement())
+  ownerType               MaterialPoolOwnerType @map("owner_type")
+  constructionProjectId   Int?                  @map("construction_project_id")
+  externalSupplyProjectId Int?                  @map("external_supply_project_id")
+  poolCode                String                @unique @map("pool_code") @db.VarChar(50)
+  status                  PoolStatus            @default(active)
+  createdBy               Int?                  @map("created_by")
+  createdAt               DateTime              @default(now()) @map("created_at")
+  updatedAt               DateTime              @updatedAt @map("updated_at")
+
+  constructionProject   ConstructionProject?   @relation(fields: [constructionProjectId], references: [id])
+  externalSupplyProject ExternalSupplyProject? @relation(fields: [externalSupplyProjectId], references: [id])
+  createdByUser         User?                  @relation("MaterialPoolCreatedBy", fields: [createdBy], references: [id])
+  items                 MaterialPoolItem[]
+
+  @@index([ownerType, constructionProjectId])
+  @@index([ownerType, externalSupplyProjectId])
+  @@map("material_pools")
+}
+
+/// Satu baris per jenis material per pool — BEDA dengan equipment pool item
+/// (di sana satu baris = satu unit). Empat penghitung total_* dari ERD TIDAK
+/// dibuat (keputusan D3): semuanya jumlahan dari request/delivery/receipt dan
+/// dihitung saat dibaca, sama dengan saldo Kas Alat.
+model MaterialPoolItem {
+  id             Int      @id @default(autoincrement())
+  materialPoolId Int      @map("material_pool_id")
+  materialTypeId Int      @map("material_type_id")
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  materialPool MaterialPool @relation(fields: [materialPoolId], references: [id])
+  materialType MaterialType @relation(fields: [materialTypeId], references: [id])
+
+  @@unique([materialPoolId, materialTypeId])
+  @@index([materialTypeId])
+  @@map("material_pool_items")
 }

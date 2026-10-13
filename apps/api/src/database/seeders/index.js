@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 const { seedDivisiAlatDemo } = require('./divisi-alat.seed.js');
 const { seedProjectDemo } = require('./project.seed.js');
+const { seedMaterialDemo } = require('./material.seed.js');
 // divisi-alat.seed.js jalan lewat service module, yang memakai singleton
 // Prisma di src/config/database.js — koneksi terpisah dari `prisma` di atas,
 // jadi ikut ditutup manual saat proses seed selesai (lihat main().finally di bawah).
@@ -53,6 +54,15 @@ const PERMISSIONS = [
   { module: 'equipment-request', action: 'create',  label: 'Ajukan dan batalkan request alat' },
   { module: 'equipment-request', action: 'review',  label: 'Review Admin: teruskan atau tolak request alat internal' },
   { module: 'equipment-request', action: 'approve', label: 'Putuskan kuantitas request alat (Divisi Alat)' },
+  { module: 'material',      action: 'read',   label: 'Lihat master jenis material' },
+  { module: 'material',      action: 'create', label: 'Tambah jenis material' },
+  { module: 'material',      action: 'update', label: 'Ubah atau nonaktifkan jenis material' },
+  { module: 'supplier',      action: 'read',   label: 'Lihat master supplier' },
+  { module: 'supplier',      action: 'create', label: 'Tambah supplier' },
+  { module: 'supplier',      action: 'update', label: 'Ubah atau nonaktifkan supplier' },
+  { module: 'material-pool', action: 'read',   label: 'Lihat material pool project' },
+  { module: 'material-pool', action: 'create', label: 'Buat material pool' },
+  { module: 'material-pool', action: 'update', label: 'Ubah status dan isi material pool' },
   { module: 'equipment',  action: 'read',   label: 'Lihat master alat' },
   { module: 'equipment',  action: 'create', label: 'Tambah jenis/unit alat' },
   { module: 'equipment',  action: 'update', label: 'Ubah data dan status alat' },
@@ -126,6 +136,11 @@ const ROLE_PERMISSIONS = {
     // rental (yang karena itu melewati review Admin). Sengaja TANPA approve —
     // keputusan kuantitas milik Divisi Alat yang tahu ketersediaan unit.
     'equipment-request:read', 'equipment-request:create', 'equipment-request:review',
+    // Admin pemilik master material, supplier, dan material pool (Request
+    // Material RM-1) — ERD: Admin yang memvalidasi kebutuhan dan menentukan supplier.
+    'material:read', 'material:create', 'material:update',
+    'supplier:read', 'supplier:create', 'supplier:update',
+    'material-pool:read', 'material-pool:create', 'material-pool:update',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
@@ -133,7 +148,9 @@ const ROLE_PERMISSIONS = {
   // Finance perlu membaca kontrak dan progress karena keduanya dasar tagihan
   // klien yang akan dia proses di modul Income (Build Order langkah 6).
   finance: ['purchase-request:read', 'purchase-request:approve', 'equipment:read', 'cash:read',
-    'project:read', 'sub-project:read', 'progress:read'],
+    'project:read', 'sub-project:read', 'progress:read',
+    // Finance menyetujui dana material (RM-3), jadi perlu membaca master & pool
+    'material:read', 'supplier:read', 'material-pool:read'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
@@ -167,7 +184,9 @@ const ROLE_PERMISSIONS = {
     // yang mengalokasikan adalah Divisi Alat.
     'equipment-pool:read', 'allocation:read', 'allocation:receive',
     // Lapangan pengaju request internal — tanpa review/approve
-    'equipment-request:read', 'equipment-request:create'],
+    'equipment-request:read', 'equipment-request:create',
+    // Lapangan memilih material saat mengajukan request (RM-2) — baca saja
+    'material:read', 'supplier:read', 'material-pool:read'],
 };
 
 async function main() {
@@ -272,6 +291,7 @@ async function main() {
   // Dijalankan SETELAH Divisi Alat: seeder Project memasukkan unit alat ke pool
   // dan mencatat jam kerjanya, jadi butuh master alat sudah ada.
   await seedProjectDemo(admin.id);
+  await seedMaterialDemo(admin.id);
 
   console.log('Seed complete.');
 }
