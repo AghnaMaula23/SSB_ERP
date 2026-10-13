@@ -21,6 +21,7 @@ const ROLES = [
 const PERMISSIONS = [
   { module: 'user',       action: 'read',   label: 'Lihat daftar user' },
   { module: 'user',       action: 'update', label: 'Kelola role user' },
+  { module: 'user',       action: 'create', label: 'Buat akun user baru' },
   { module: 'role',       action: 'read',   label: 'Lihat daftar role' },
   { module: 'role',       action: 'create', label: 'Tambah role' },
   { module: 'role',       action: 'update', label: 'Ubah role dan permission-nya' },

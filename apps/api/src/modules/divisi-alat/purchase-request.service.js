@@ -3,6 +3,7 @@ const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const cash = require('./cash.service.js');
+const { claimTransition } = require('../../utils/status-transition.js');
 const { toNumber, toDateOnly } = require('../../utils/shape.js');
 
 const PR_DOC_TYPE = 'PRQ';
@@ -444,6 +445,14 @@ const update = async (id, payload, userId) => {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    // Kunci dulu: edit hanya sah selama order masih `submitted`. Tanpa ini
+    // pengaju bisa mengganti isi order tepat saat Admin memvalidasinya, dan
+    // yang divalidasi berbeda dari yang dilihat Admin.
+    await claimTransition(tx.equipmentPurchaseRequest, { id, status: 'submitted' }, {
+      ...(date && { requestDate: date }),
+      ...(prepared && { totalEstimatedAmount: sumEstimated(pr.orderCategory, prepared) }),
+    });
+
     if (prepared) {
       // Ganti total: hapus dulu, lalu buat ulang. Sparepart ikut terhapus lewat cascade.
       if (pr.orderCategory === 'repair') {
@@ -472,14 +481,7 @@ const update = async (id, payload, userId) => {
       }
     }
 
-    return tx.equipmentPurchaseRequest.update({
-      where: { id },
-      data: {
-        ...(date && { requestDate: date }),
-        ...(prepared && { totalEstimatedAmount: sumEstimated(pr.orderCategory, prepared) }),
-      },
-      include: detailInclude,
-    });
+    return tx.equipmentPurchaseRequest.findUnique({ where: { id }, include: detailInclude });
   });
 
   return {
@@ -511,10 +513,13 @@ const cancel = async (id, userId) => {
     throw httpError('Hanya pengaju yang boleh membatalkan order ini', 403);
   }
 
-  const cancelled = await prisma.equipmentPurchaseRequest.update({
-    where: { id },
-    data: { status: 'cancelled', cancelledBy: userId, cancelledAt: new Date() },
-    include: detailInclude,
+  const cancelled = await prisma.$transaction(async (tx) => {
+    await claimTransition(
+      tx.equipmentPurchaseRequest,
+      { id, status: { in: ['submitted', 'waiting_finance_approval'] } },
+      { status: 'cancelled', cancelledBy: userId, cancelledAt: new Date() }
+    );
+    return tx.equipmentPurchaseRequest.findUnique({ where: { id }, include: detailInclude });
   });
   return shapeRequest(cancelled);
 };
@@ -538,47 +543,46 @@ const validateByAdmin = async (id, userId) => {
   }
   assertNotOwnRequest(pr, userId, 'memvalidasi');
 
-  const updated = await prisma.equipmentPurchaseRequest.update({
-    where: { id },
-    data: {
+  const updated = await prisma.$transaction(async (tx) => {
+    await claimTransition(tx.equipmentPurchaseRequest, { id, status: 'submitted' }, {
       status: 'waiting_finance_approval',
       adminValidatedBy: userId,
       adminValidatedAt: new Date(),
-    },
-    include: detailInclude,
+    });
+    return tx.equipmentPurchaseRequest.findUnique({ where: { id }, include: detailInclude });
   });
   return shapeRequest(updated);
 };
 
-const reject = async (id, userId, userRoles) => {
+// Siapa yang boleh menolak ditentukan PERMISSION, bukan nama role. Dulu dicek
+// `roles.includes('admin')`, sehingga role lain yang diberi wewenang yang sama
+// tetap ditolak — permission jadi tidak berarti.
+const REJECT_RULES = {
+  submitted: {
+    permission: 'purchase-request:validate',
+    deniedMessage: 'Order yang belum divalidasi hanya bisa ditolak pemegang wewenang validasi Admin',
+    data: (userId) => ({ status: 'rejected_by_admin', adminValidatedBy: userId, adminValidatedAt: new Date() }),
+  },
+  waiting_finance_approval: {
+    permission: 'purchase-request:approve',
+    deniedMessage: 'Order yang menunggu pencairan hanya bisa ditolak pemegang wewenang approval Finance',
+    data: (userId) => ({ status: 'rejected_by_finance', financeApprovedBy: userId, financeApprovedAt: new Date() }),
+  },
+};
+
+const reject = async (id, userId, userPermissions) => {
   const pr = await findRequestOrFail(id);
   assertNotOwnRequest(pr, userId, 'menolak');
 
-  if (pr.status === 'submitted') {
-    if (!userRoles.includes('admin')) {
-      throw httpError('Order yang belum divalidasi hanya bisa ditolak Admin', 403);
-    }
-    const updated = await prisma.equipmentPurchaseRequest.update({
-      where: { id },
-      data: { status: 'rejected_by_admin', adminValidatedBy: userId, adminValidatedAt: new Date() },
-      include: detailInclude,
-    });
-    return shapeRequest(updated);
-  }
+  const rule = REJECT_RULES[pr.status];
+  if (!rule) throw httpError(`Order berstatus "${pr.status}" tidak bisa ditolak`, 409);
+  if (!userPermissions.includes(rule.permission)) throw httpError(rule.deniedMessage, 403);
 
-  if (pr.status === 'waiting_finance_approval') {
-    if (!userRoles.includes('finance')) {
-      throw httpError('Order yang menunggu pencairan hanya bisa ditolak Finance', 403);
-    }
-    const updated = await prisma.equipmentPurchaseRequest.update({
-      where: { id },
-      data: { status: 'rejected_by_finance', financeApprovedBy: userId, financeApprovedAt: new Date() },
-      include: detailInclude,
-    });
-    return shapeRequest(updated);
-  }
-
-  throw httpError(`Order berstatus "${pr.status}" tidak bisa ditolak`, 409);
+  const updated = await prisma.$transaction(async (tx) => {
+    await claimTransition(tx.equipmentPurchaseRequest, { id, status: pr.status }, rule.data(userId));
+    return tx.equipmentPurchaseRequest.findUnique({ where: { id }, include: detailInclude });
+  });
+  return shapeRequest(updated);
 };
 
 /**
@@ -664,18 +668,18 @@ const approve = async (id, payload, userId) => {
   // Kalau salah satu gagal: jangan ada order approved dengan nominal setengah
   // terisi, order approved tanpa dana keluar, maupun dana keluar tanpa ordernya.
   const { updated, cashTransaction } = await prisma.$transaction(async (tx) => {
+    // Klaim PERTAMA, sebelum menulis apa pun: approval kedua yang bersamaan
+    // berhenti di sini dengan 409, tidak sempat membuat cash-out kedua.
+    await claimTransition(tx.equipmentPurchaseRequest, { id, status: 'waiting_finance_approval' }, {
+      status: 'approved',
+      totalApprovedAmount,
+      financeApprovedBy: userId,
+      financeApprovedAt: new Date(),
+    });
+
     for (const write of writes) await write(tx);
 
-    const row = await tx.equipmentPurchaseRequest.update({
-      where: { id },
-      data: {
-        status: 'approved',
-        totalApprovedAmount,
-        financeApprovedBy: userId,
-        financeApprovedAt: new Date(),
-      },
-      include: detailInclude,
-    });
+    const row = await tx.equipmentPurchaseRequest.findUnique({ where: { id }, include: detailInclude });
 
     // Saldo boleh jadi negatif — keputusan Finance, bukan blokir sistem.
     // Nominalnya totalApprovedAmount (yang benar-benar dicairkan), BUKAN estimasi.

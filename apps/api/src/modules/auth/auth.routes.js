@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { body } = require('express-validator');
 const controller = require('./auth.controller.js');
 const validate = require('../../middleware/validate.js');
-const { authenticate } = require('../../middleware/auth.js');
+const { authenticate, authorize } = require('../../middleware/auth.js');
 
 const router = Router();
 
@@ -25,7 +25,11 @@ const loginRules = [
   body('password').notEmpty().withMessage('Password wajib diisi'),
 ];
 
-router.post('/register', validate(registerRules), controller.register);
+// Bukan pendaftaran mandiri. Sejak boilerplate awal route ini terbuka untuk
+// publik — pola aplikasi umum yang tidak cocok untuk ERP internal: siapa pun
+// bisa membuat akun. Sekarang hanya pemegang user:create (super_admin) yang
+// boleh membuat akun karyawan.
+router.post('/register', authenticate, authorize('user:create'), validate(registerRules), controller.register);
 router.post('/login', validate(loginRules), controller.login);
 router.get('/me', authenticate, controller.me);
 

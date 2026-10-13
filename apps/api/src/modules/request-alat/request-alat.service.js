@@ -4,6 +4,7 @@ const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 const poolService = require('../project/pool.service.js');
+const { claimTransition } = require('../../utils/status-transition.js');
 
 // ============================================================
 // REQUEST ALAT — permintaan alat untuk internal project (dari sub-project,
@@ -128,17 +129,6 @@ const findOrFail = async (id, client = prisma) => {
   const row = await client.equipmentRequest.findUnique({ where: { id }, include: DETAIL_INCLUDE });
   if (!row) throw httpError('Request alat tidak ditemukan', 404);
   return row;
-};
-
-/**
- * Pindah status HANYA kalau status saat ini masih `from`. Dua aksi yang
- * bersaing (mis. pengaju membatalkan saat Divisi Alat sedang memutuskan) tidak
- * bisa sama-sama lolos: yang kalah mendapat 409, bukan menimpa diam-diam —
- * dan untuk approval, tidak melahirkan pool item ganda.
- */
-const transition = async (tx, id, from, data) => {
-  const { count } = await tx.equipmentRequest.updateMany({ where: { id, status: { in: from } }, data });
-  if (count === 0) throw httpError('Request ini baru saja diproses orang lain. Muat ulang datanya.', 409);
 };
 
 const assertNotOwnRequest = (row, userId, action) => {
@@ -285,7 +275,7 @@ const cancel = async (id, userId) => {
   if (row.requestedBy !== userId) throw httpError('Hanya pengaju yang boleh membatalkan request ini', 403);
 
   const updated = await prisma.$transaction(async (tx) => {
-    await transition(tx, id, ['submitted', 'equipment_review'], { status: 'cancelled', cancelledBy: userId, cancelledAt: new Date() });
+    await claimTransition(tx.equipmentRequest, { id, status: { in: ['submitted', 'equipment_review'] } }, { status: 'cancelled', cancelledBy: userId, cancelledAt: new Date() });
     return findOrFail(id, tx);
   });
   return shapeDetail(updated);
@@ -306,7 +296,7 @@ const adminReview = async (id, { action, notes }, userId) => {
   if (action === 'reject' && !notes?.trim()) throw httpError('Alasan penolakan wajib diisi', 400);
 
   const updated = await prisma.$transaction(async (tx) => {
-    await transition(tx, id, ['submitted'], {
+    await claimTransition(tx.equipmentRequest, { id, status: { in: ['submitted'] } }, {
       status: action === 'forward' ? 'equipment_review' : 'rejected',
       adminReviewedBy: userId,
       adminReviewedAt: new Date(),
@@ -378,7 +368,7 @@ const equipmentReview = async (id, { items: decisions, notes, equipmentPoolId },
   if (totalApproved === 0 && !notes?.trim()) throw httpError('Alasan penolakan wajib diisi', 400);
 
   const updated = await prisma.$transaction(async (tx) => {
-    await transition(tx, id, ['equipment_review'], {
+    await claimTransition(tx.equipmentRequest, { id, status: { in: ['equipment_review'] } }, {
       status: totalApproved === 0 ? 'rejected' : 'approved',
       equipmentReviewedBy: userId,
       equipmentReviewedAt: new Date(),

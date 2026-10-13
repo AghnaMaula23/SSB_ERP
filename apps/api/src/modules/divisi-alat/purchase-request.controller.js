@@ -51,7 +51,7 @@ const validateByAdmin = async (req, res, next) => {
 
 const reject = async (req, res, next) => {
   try {
-    const result = await service.reject(Number(req.params.id), req.user.id, req.user.roles);
+    const result = await service.reject(Number(req.params.id), req.user.id, req.user.permissions);
     return success(res, result, 'Purchase request ditolak');
   } catch (err) { next(err); }
 };

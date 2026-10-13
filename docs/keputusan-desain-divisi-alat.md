@@ -261,3 +261,58 @@ riwayat, bukan sebagai pekerjaan tertunda.
 Rinciannya ada di `keputusan-desain-project.md`; status backlog-nya di
 `claude_knowledge/backlog-divisi-alat.md` bagian C.
 
+## Race condition pada transisi status — DIPERBAIKI (13 Oktober 2026)
+
+Ditemukan saat audit `feature/be-div-alat`, dibuktikan langsung di database dev.
+
+**Polanya:** service membaca status → mengecek → `update({ where: { id } })`.
+Dua permintaan bersamaan sama-sama lolos pengecekan, lalu sama-sama menulis.
+
+| Tempat | Akibat yang terbukti / terbaca |
+|---|---|
+| Approve purchase request | **3 approval bersamaan → 3 cash-out Kas Alat untuk 1 order** (terbukti) |
+| Approve + cancel PR | Keduanya menjawab 200; pengaju diberi tahu batal padahal dana keluar (terbukti) |
+| Resolve damage log | Resolve ganda → 2 maintenance record untuk 1 kerusakan (terbukti 3→1 setelah perbaikan) |
+| Edit PR saat divalidasi | Yang divalidasi Admin bisa berbeda dari yang dilihatnya |
+| Void / edit kas, cancel maintenance record | Ringan — tapi pola yang sama |
+
+**Perbaikan:** `utils/status-transition.js` → `claimTransition(delegate, where, data)`.
+`updateMany` dengan syarat keadaan di WHERE, di dalam transaksi, dijalankan
+**sebagai langkah pertama** sebelum efek samping apa pun (cash-out, maintenance
+record). Database menjamin hanya satu yang menang; sisanya `count 0` → 409.
+Pengecekan di luar transaksi tetap ada untuk pesan error yang jelas. Request
+Alat sudah memakai pola ini sejak awal; salinannya dipindah ke helper ini.
+
+Damage log ikut menyertakan `stopsOperation` lama di syarat klaim, karena
+keputusan menggerakkan status alat dibuat dari nilai itu.
+
+**Lapis kedua:** `@@unique([source_type, source_id])` pada
+`equipment_cash_transaction` (migrasi `20261013090000_unique_cash_source`). Baris
+manual selalu `source_id NULL`, dan Postgres menganggap NULL saling berbeda,
+jadi catatan manual tidak terhalang.
+
+## Reset counter servis tertimpa jam kerja — DIPERBAIKI (13 Oktober 2026)
+
+`applyWorkhourToSettings` menghitung `nilai lama + jam` dari nilai yang dibaca di
+awal transaksi. Kalau reset servis (`createRecord`) commit di antara baca dan
+tulis itu, **reset-nya tertimpa**: alat yang baru diservis langsung tampil
+warning lagi. Terbukti: **8 dari 8 percobaan reset hilang** di versi lama, 0 di
+versi baru. Diganti increment atomik; status dihitung dari nilai hasil increment.
+
+Dugaan awal audit ("dua log jam kerja bersamaan kehilangan jam") **keliru** dan
+dicatat supaya tidak diulang: jalur itu sudah aman, karena `createWorkhourLog`
+meng-increment `totalWorkhour` alat lebih dulu dan kunci baris itu membuat log
+untuk unit yang sama antre. Jalur reset tidak lewat kunci itu.
+
+## Perbaikan lain di paket yang sama
+
+- **`POST /auth/register` tidak lagi publik.** Terbuka sejak boilerplate awal
+  (`753960f`) karena `auth.routes.js` tidak memasang `authenticate`. Sekarang
+  `authenticate` + `authorize('user:create')`, permission baru khusus
+  super_admin. FE tidak memakai endpoint ini.
+- **Reject PR diperiksa per permission** (`purchase-request:validate` /
+  `:approve`), bukan nama role `admin`/`finance` — dulu role lain yang diberi
+  wewenang yang sama tetap ditolak.
+- **Nama mekanik tidak dicatat** (keputusan 13 Okt): tidak ada data master
+  mekanik. Backend sudah opsional; FE menghapus inputnya (`backlog-fe.md` E9).
+  `maintenance_records.performed_by` dijadwalkan di-DROP bersama contract pool item.
