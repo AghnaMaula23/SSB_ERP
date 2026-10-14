@@ -1,5 +1,6 @@
 const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
+const { claimTransition } = require('../../utils/status-transition.js');
 const { toNumber, toDateOnly, coerceDates, pickWritable, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 
 // Urutan tahapan baku. Dipakai sebagai sequenceOrder default dan sebagai acuan
@@ -322,6 +323,34 @@ const buildSequenceWarning = async (subProject) => {
   };
 };
 
+/**
+ * Dalam satu project hanya SATU tahapan boleh `active` (dikonfirmasi 14 Okt
+ * 2026: tahapan tidak pernah berjalan bersamaan dalam project yang sama — satu
+ * selesai dulu, baru yang berikutnya). Ini BLOKIR, beda dengan urutan yang tetap
+ * peringatan (buildSequenceWarning): perusahaan bisa hanya mendapat kontrak
+ * tahapan akhir, tapi tidak pernah mengerjakan dua tahapan sekaligus.
+ *
+ * Baris project DIKUNCI dulu (FOR UPDATE). Tanpa itu, dua tahapan berbeda yang
+ * diaktifkan bersamaan sama-sama lolos hitungan — klaim per baris tahapan tidak
+ * saling menghalangi karena barisnya berbeda. Index unik parsial
+ * (WHERE status='active') tidak dipakai karena Prisma tidak bisa menyatakannya
+ * dan setiap migrate diff akan mengusulkan DROP-nya.
+ */
+const assertNoOtherActiveStage = async (tx, subProject) => {
+  await tx.$queryRaw`SELECT id FROM construction_projects WHERE id = ${subProject.constructionProjectId} FOR UPDATE`;
+  const other = await tx.subProject.findFirst({
+    where: { constructionProjectId: subProject.constructionProjectId, status: 'active', id: { not: subProject.id } },
+    select: { subProjectType: true },
+  });
+  if (other) {
+    throw httpError(
+      `Tahapan "${other.subProjectType}" masih aktif. Selesaikan atau batalkan dulu sebelum mengaktifkan "${subProject.subProjectType}" — ` +
+      'dalam satu project hanya satu tahapan yang berjalan.',
+      409
+    );
+  }
+};
+
 const changeStatus = async (projectId, id, status) => {
   const row = await findOrFail(projectId, id);
 
@@ -351,10 +380,13 @@ const changeStatus = async (projectId, id, status) => {
     }
   }
 
-  const updated = await prisma.subProject.update({
-    where: { id },
-    data: { status },
-    include: { constructionProject: true, createdByUser: { select: ACTOR_SELECT } },
+  const updated = await prisma.$transaction(async (tx) => {
+    if (status === 'active') await assertNoOtherActiveStage(tx, row);
+    await claimTransition(tx.subProject, { id, status: row.status }, { status });
+    return tx.subProject.findUnique({
+      where: { id },
+      include: { constructionProject: true, createdByUser: { select: ACTOR_SELECT } },
+    });
   });
 
   return {

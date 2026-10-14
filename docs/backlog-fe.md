@@ -299,3 +299,19 @@ Detail keputusan: `docs/keputusan-desain-request-material.md`.
   - `PRJ-000001` punya material pool `MPL-000002`.
   - Delivery, inventori, kas lapangan, dan pekerja **tetap mock** — backendnya
     RM-4, RM-5, dan langkah 7.
+
+## E14. API Request Material RM-2 + guard tahapan (14 Okt 2026)
+
+- **`/api/request-material`**: list, detail, create, cancel, `PUT /:id/admin-validation`
+  (Admin mengurangi kuantitas per item, status tetap `submitted`), `PUT /:id/reject`
+  (alasan wajib). Diteruskan ke Finance & approval menyusul di RM-3.
+- **Material dipilih bebas dari master** (`/api/materials/types?isActive=true`),
+  tidak harus ada di pool. Satu jenis material sekali per request.
+- **Jangan kirim `unit`** — ditolak 400. Tampilkan `unit` dari response di samping
+  setiap kuantitas; tampilkan `effectiveQuantity` sebagai kuantitas yang berlaku
+  (= `adminValidatedQuantity` kalau Admin mengubahnya, selain itu = diminta).
+- **Supply:** hanya PIC (`fieldPic` di supply project) yang bisa mengajukan —
+  sembunyikan tombol ajukan untuk user lain; PIC kosong → 409.
+- **`rejectedBy`** (`admin`/`finance`) menggantikan dua status penolakan ERD.
+- **Tahapan:** mengaktifkan tahapan saat tahapan lain di project yang sama masih
+  `active` sekarang **409**. Tawarkan "tutup tahapan aktif dulu" di layar.

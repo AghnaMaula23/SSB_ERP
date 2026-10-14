@@ -52,8 +52,12 @@ model User {
   equipmentRequestsEquipmentReviewed EquipmentRequest[] @relation("EqRequestEquipmentReviewedBy")
   equipmentRequestsCancelled         EquipmentRequest[] @relation("EqRequestCancelledBy")
 
-  materialPoolsCreated MaterialPool[]          @relation("MaterialPoolCreatedBy")
-  supplyProjectsAsPic  ExternalSupplyProject[] @relation("SupplyProjectFieldPic")
+  materialPoolsCreated            MaterialPool[]          @relation("MaterialPoolCreatedBy")
+  supplyProjectsAsPic             ExternalSupplyProject[] @relation("SupplyProjectFieldPic")
+  materialRequestsCreated         MaterialRequest[]       @relation("MatRequestRequestedBy")
+  materialRequestsAdminReviewed   MaterialRequest[]       @relation("MatRequestAdminReviewedBy")
+  materialRequestsFinanceReviewed MaterialRequest[]       @relation("MatRequestFinanceReviewedBy")
+  materialRequestsCancelled       MaterialRequest[]       @relation("MatRequestCancelledBy")
 
   @@map("users")
 }
@@ -898,9 +902,10 @@ model ExternalSupplyProject {
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
 
-  createdByUser User?          @relation("SupplyProjectCreatedBy", fields: [createdBy], references: [id])
-  fieldPic      User?          @relation("SupplyProjectFieldPic", fields: [fieldPicId], references: [id])
-  materialPools MaterialPool[]
+  createdByUser    User?             @relation("SupplyProjectCreatedBy", fields: [createdBy], references: [id])
+  fieldPic         User?             @relation("SupplyProjectFieldPic", fields: [fieldPicId], references: [id])
+  materialRequests MaterialRequest[]
+  materialPools    MaterialPool[]
 
   @@index([status])
   @@map("external_supply_projects")
@@ -940,6 +945,7 @@ model SubProject {
   progressLogs         DailyProgressLog[]
   equipmentAllocations SubProjectEquipmentAllocation[]
   equipmentRequests    EquipmentRequest[]
+  materialRequests     MaterialRequest[]
 
   // Satu construction project hanya boleh punya satu tahapan per tipe
   @@unique([constructionProjectId, subProjectType])
@@ -1224,7 +1230,8 @@ model MaterialType {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  poolItems MaterialPoolItem[]
+  poolItems    MaterialPoolItem[]
+  requestItems MaterialRequestItem[]
 
   @@map("material_types")
 }
@@ -1287,10 +1294,114 @@ model MaterialPoolItem {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  materialPool MaterialPool @relation(fields: [materialPoolId], references: [id])
-  materialType MaterialType @relation(fields: [materialTypeId], references: [id])
+  materialPool MaterialPool          @relation(fields: [materialPoolId], references: [id])
+  materialType MaterialType          @relation(fields: [materialTypeId], references: [id])
+  requestItems MaterialRequestItem[]
 
   @@unique([materialPoolId, materialTypeId])
   @@index([materialTypeId])
   @@map("material_pool_items")
+}
+
+// ============================================================
+// REQUEST MATERIAL — request & validasi Admin (RM-2).
+// Lihat docs/keputusan-desain-request-material.md
+// ============================================================
+
+enum MaterialRequestType {
+  internal_project
+  external_supply
+
+  @@map("material_request_type")
+}
+
+/// Diciutkan dari 6 nilai ERD menjadi 5 (keputusan R1, 14 Okt 2026), selaras
+/// dengan purchase request dan Request Alat:
+/// - `waiting_admin_validation` dinamai `submitted` (antrean Admin)
+/// - `rejected_by_admin`/`rejected_by_finance` disatukan jadi `rejected`; siapa
+///   yang menolak terbaca dari kolom reviewer mana yang terisi
+enum MaterialRequestStatus {
+  submitted
+  waiting_finance_approval
+  approved
+  rejected
+  cancelled
+
+  @@map("material_request_status")
+}
+
+/// Header permintaan material. internal_project dari tahapan (Lapangan),
+/// external_supply dari supply project (HANYA PIC Lapangan project itu).
+/// Diskriminator FK dijaga CHECK constraint di migrasi.
+///
+/// material_request_status_logs dan enum action_type dari ERD TIDAK DIBUAT
+/// (keputusan R2): alur linear, tiap langkah paling banyak sekali, dan ERD
+/// menegaskan revisi = request baru. Kolom aktor di header sudah memuat
+/// seluruh riwayat — pola yang sama dengan Request Alat.
+model MaterialRequest {
+  id                      Int                   @id @default(autoincrement())
+  requestCode             String                @unique @map("request_code") @db.VarChar(50)
+  requestType             MaterialRequestType   @map("request_type")
+  subProjectId            Int?                  @map("sub_project_id")
+  externalSupplyProjectId Int?                  @map("external_supply_project_id")
+  requestDate             DateTime              @map("request_date") @db.Date
+  neededDate              DateTime?             @map("needed_date") @db.Date
+  requestNotes            String?               @map("request_notes") @db.Text
+  status                  MaterialRequestStatus @default(submitted)
+
+  requestedBy       Int       @map("requested_by")
+  adminReviewedBy   Int?      @map("admin_reviewed_by")
+  adminReviewedAt   DateTime? @map("admin_reviewed_at")
+  adminNotes        String?   @map("admin_notes") @db.Text
+  financeReviewedBy Int?      @map("finance_reviewed_by")
+  financeReviewedAt DateTime? @map("finance_reviewed_at")
+  financeNotes      String?   @map("finance_notes") @db.Text
+  cancelledBy       Int?      @map("cancelled_by")
+  cancelledAt       DateTime? @map("cancelled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subProject            SubProject?            @relation(fields: [subProjectId], references: [id])
+  externalSupplyProject ExternalSupplyProject? @relation(fields: [externalSupplyProjectId], references: [id])
+  requestedByUser       User                   @relation("MatRequestRequestedBy", fields: [requestedBy], references: [id])
+  adminReviewedByUser   User?                  @relation("MatRequestAdminReviewedBy", fields: [adminReviewedBy], references: [id])
+  financeReviewedByUser User?                  @relation("MatRequestFinanceReviewedBy", fields: [financeReviewedBy], references: [id])
+  cancelledByUser       User?                  @relation("MatRequestCancelledBy", fields: [cancelledBy], references: [id])
+  items                 MaterialRequestItem[]
+
+  @@index([requestType, status])
+  @@index([subProjectId, requestDate])
+  @@index([externalSupplyProjectId, requestDate])
+  @@map("material_requests")
+}
+
+/// Satu baris per jenis material per request. Material dipilih BEBAS dari master
+/// (keputusan R3) — tidak wajib sudah ada di pool. `unit` dari ERD TIDAK dibuat
+/// (D1): satuan dibaca dari material_types.
+///
+/// `admin_validated_quantity` NULL = Admin belum mengubah (berlaku = diminta).
+/// Boleh dikurangi, tidak boleh dinaikkan maupun dinolkan (R4) — dijaga CHECK.
+/// `material_pool_item_id` terisi saat disetujui Finance (RM-3): material yang
+/// disetujui masuk ke pool project.
+model MaterialRequestItem {
+  id                     Int      @id @default(autoincrement())
+  materialRequestId      Int      @map("material_request_id")
+  materialTypeId         Int      @map("material_type_id")
+  materialPoolItemId     Int?     @map("material_pool_item_id")
+  requestedQuantity      Decimal  @map("requested_quantity") @db.Decimal(18, 2)
+  adminValidatedQuantity Decimal? @map("admin_validated_quantity") @db.Decimal(18, 2)
+  itemNotes              String?  @map("item_notes") @db.Text
+  adminNotes             String?  @map("admin_notes") @db.Text
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  materialRequest  MaterialRequest   @relation(fields: [materialRequestId], references: [id])
+  materialType     MaterialType      @relation(fields: [materialTypeId], references: [id])
+  materialPoolItem MaterialPoolItem? @relation(fields: [materialPoolItemId], references: [id])
+
+  @@unique([materialRequestId, materialTypeId])
+  @@index([materialTypeId])
+  @@index([materialPoolItemId])
+  @@map("material_request_items")
 }
