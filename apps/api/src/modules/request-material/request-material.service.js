@@ -464,6 +464,11 @@ const approve = async (id, { notes, materialPoolId }, userId) => {
   const row = await findOrFail(id);
   if (row.status !== 'waiting_finance_approval') throw httpError(`Request berstatus "${row.status}", bukan antrean Finance`, 409);
   assertNotOwnRequest(row, userId, 'menyetujuinya');
+  // Pemisahan tugas: role bisa dirangkap (admin + finance). Yang menyusun
+  // nominal biaya tidak boleh menyetujuinya sendiri — butuh pemeriksa kedua.
+  if (row.adminReviewedBy === userId) {
+    throw httpError('Anda menyusun dan meneruskan paket ini sebagai Admin, jadi tidak boleh menyetujuinya sebagai Finance. Persetujuan butuh orang kedua.', 403);
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     await claimTransition(tx.materialRequest, { id, status: 'waiting_finance_approval' }, {

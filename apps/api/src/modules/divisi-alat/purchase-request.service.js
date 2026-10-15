@@ -534,6 +534,17 @@ const assertNotOwnRequest = (pr, userId, action) => {
   }
 };
 
+/**
+ * Pemisahan tugas: role bisa dirangkap (admin + finance), jadi Admin yang
+ * memvalidasi order tidak boleh ikut menyetujui dananya — tanpa ini satu orang
+ * bisa meloloskan pencairan Kas Alat tanpa pemeriksa kedua.
+ */
+const assertNotAdminValidator = (pr, userId) => {
+  if (pr.adminValidatedBy === userId) {
+    throw httpError('Anda memvalidasi order ini sebagai Admin, jadi tidak boleh menyetujuinya sebagai Finance. Persetujuan butuh orang kedua.', 403);
+  }
+};
+
 /** submitted -> waiting_finance_approval. Tidak ada status `admin_validated`:
  *  validasi Admin langsung melempar ke antrean Finance. */
 const validateByAdmin = async (id, userId) => {
@@ -596,6 +607,7 @@ const approve = async (id, payload, userId) => {
     throw httpError(`Order berstatus "${pr.status}" tidak menunggu approval Finance`, 409);
   }
   assertNotOwnRequest(pr, userId, 'menyetujui');
+  assertNotAdminValidator(pr, userId);
 
   const writes = [];
   let totalApprovedAmount = 0;

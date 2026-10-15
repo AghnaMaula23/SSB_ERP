@@ -11,7 +11,7 @@ sejak 15 Okt 2026 sisanya langsung di `module/project` (satu commit per tahap):
 |---|---|---|
 | RM-1 | Master jenis material & supplier, material pool, PIC supply project | **Dibangun 13 Okt 2026** |
 | RM-2 | Material request + meja Admin (sesuaikan kuantitas / tolak) | **Dibangun 14 Okt 2026** |
-| RM-3 | Biaya + approval paket oleh Finance | **Dirancang & disetujui 15 Okt 2026**, belum dibangun — lihat bagian RM-3 di bawah |
+| RM-3 | Biaya + approval paket oleh Finance | **Dibangun 15 Okt 2026** — lihat bagian RM-3 di bawah |
 | — | Desain lampiran bersama (surat jalan, bukti receipt, damage, PR, project files) | **Wajib sebelum RM-4** — arah penyimpanan sudah diputuskan, lihat bagian Lampiran |
 | RM-4 | Delivery + surat jalan | Belum |
 | RM-5 | Receipt + inventori + stock movement (dibaca Income) | Belum |
@@ -242,7 +242,7 @@ lampiran sebelum RM-4.
 
 ---
 
-# RM-3 — Rancangan yang disetujui (15 Oktober 2026), BELUM dibangun
+# RM-3 — Dibangun 15 Oktober 2026 (migrasi `20261015090000_add_material_request_costs`)
 
 Skema rinci (DBML + CHECK) ada di `claude_knowledge/ERD/Revisi/05_Request_Material.md`.
 
