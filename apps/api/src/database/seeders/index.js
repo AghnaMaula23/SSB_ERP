@@ -67,6 +67,7 @@ const PERMISSIONS = [
   { module: 'material-request', action: 'create',   label: 'Ajukan dan batalkan request material' },
   { module: 'material-request', action: 'validate', label: 'Validasi Admin: sesuaikan kuantitas atau tolak request material' },
   { module: 'material-request', action: 'approve',  label: 'Approval Finance: setujui atau tolak paket dana request material' },
+  { module: 'material-delivery', action: 'create', label: 'Catat delivery + surat jalan, ganti file, batalkan' },
   { module: 'equipment',  action: 'read',   label: 'Lihat master alat' },
   { module: 'equipment',  action: 'create', label: 'Tambah jenis/unit alat' },
   { module: 'equipment',  action: 'update', label: 'Ubah data dan status alat' },
@@ -148,7 +149,7 @@ const ROLE_PERMISSIONS = {
     'supplier:read', 'supplier:create', 'supplier:update',
     'material-pool:read', 'material-pool:create', 'material-pool:update',
     // Admin di meja validasi request material (RM-2/RM-3): kuantitas, rincian
-    // biaya, teruskan ke Finance. Tanpa create (pengaju = Lapangan/PIC) dan
+    // biaya, teruskan ke Finance. Tanpa create (pengaju = Lapangan) dan
     // tanpa approve (milik Finance)
     'material-request:read', 'material-request:validate',
   ],
@@ -199,8 +200,11 @@ const ROLE_PERMISSIONS = {
     'equipment-request:read', 'equipment-request:create',
     // Lapangan memilih material saat mengajukan request (RM-2) — baca saja
     'material:read', 'supplier:read', 'material-pool:read',
-    // Lapangan & PIC supply mengajukan request material — tanpa validate
-    'material-request:read', 'material-request:create'],
+    // Lapangan mengajukan request material (konstruksi & supply) — tanpa validate
+    'material-request:read', 'material-request:create',
+    // Lapangan memegang surat jalan, jadi mencatat delivery untuk semua jenis
+    // request (RM-4, G3). Admin cukup melihat lewat material-request:read.
+    'material-delivery:create'],
 };
 
 async function main() {

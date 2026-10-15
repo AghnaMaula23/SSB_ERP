@@ -293,15 +293,15 @@ Detail keputusan: `docs/keputusan-desain-request-material.md`.
 - **Material pool:** `/api/projects/material-pools` (+ items). Satu baris per
   jenis material per pool. Tidak ada angka total — jangan tampilkan kolom
   "diminta/terkirim/diterima" dari pool; angkanya datang dari modul berikutnya.
-- **Supply project:** field `fieldPicId` (create/update) dan `fieldPic` di
-  response — PIC Lapangan pembuat request material untuk kontrak itu.
+- **Supply project:** ~~field `fieldPicId`~~ — dibuang 16 Okt 2026; sekarang
+  ditolak 400 kalau dikirim.
 - **Data seed asli menggantikan demo (E11):**
   - `RNT-000001` sudah punya equipment pool `POOL-000004` dengan 2 unit
     (SSB-DT-001, SSB-DT-002) dan 10 log jam kerja `external_rental` —
     `rentalDemoService` untuk unit & timesheet bisa diganti
     `/api/projects/equipment-pools?externalRentalProjectId=` dan
     `/api/equipment/items/:id/workhour-logs?sourceType=external_rental`.
-  - `SPL-000001` sudah punya PIC `lapangan` dan material pool `MPL-000001`.
+  - `SPL-000001` sudah punya material pool `MPL-000001`.
   - `PRJ-000001` punya material pool `MPL-000002`.
   - Delivery, inventori, kas lapangan, dan pekerja **tetap mock** — backendnya
     RM-4, RM-5, dan langkah 7.
@@ -316,8 +316,42 @@ Detail keputusan: `docs/keputusan-desain-request-material.md`.
 - **Jangan kirim `unit`** — ditolak 400. Tampilkan `unit` dari response di samping
   setiap kuantitas; tampilkan `effectiveQuantity` sebagai kuantitas yang berlaku
   (= `adminValidatedQuantity` kalau Admin mengubahnya, selain itu = diminta).
-- **Supply:** hanya PIC (`fieldPic` di supply project) yang bisa mengajukan —
-  sembunyikan tombol ajukan untuk user lain; PIC kosong → 409.
+- **Supply:** ~~hanya PIC~~ — sejak 16 Okt 2026 Lapangan mana pun boleh mengajukan.
 - **`rejectedBy`** (`admin`/`finance`) menggantikan dua status penolakan ERD.
 - **Tahapan:** mengaktifkan tahapan saat tahapan lain di project yang sama masih
   `active` sekarang **409**. Tawarkan "tutup tahapan aktif dulu" di layar.
+
+---
+
+## E15. Form ritase / surat jalan pindah ke Divisi Lapangan (16 Okt 2026)
+
+`admin/supply/pages/DeliveryFormPage.jsx` + `deliveryMockService.js` mencatat ritase
+supply dari menu **Admin** dan di localStorage. Keputusan RM-4: delivery dicatat
+**Divisi Lapangan** untuk konstruksi maupun supply (tanpa PIC).
+Saat API RM-4 tersedia:
+
+- Form pindah ke menu Lapangan; Admin cukup melihat.
+- Wajib melampirkan **file surat jalan** (PDF/JPG/PNG/WebP, maks 10 MB; HEIC ditolak).
+- Delivery terikat ke **request material yang sudah approved** dan satu item-nya —
+  material tidak lagi dipilih bebas dari daftar `MATERIALS`.
+- Supplier wajib; nomor surat jalan unik per supplier (bukan per project).
+- Tidak ada edit bebas: koreksi = batalkan (dengan alasan) lalu catat ulang.
+
+**API tersedia (16 Okt 2026)** — detail di Swagger tag *Material Delivery* & *Files*:
+
+- `POST /api/material-deliveries` — **multipart/form-data**: field teks +
+  file di field `deliveryNote`. Jangan set header `Content-Type` manual (biarkan
+  browser menambahkan boundary). Wajib: `materialRequestItemId`, `supplierId`,
+  `deliveredQuantity`, `deliveryNoteNumber`, `deliveryNoteDate`, `vehicleNumber`,
+  `driverName`.
+- `GET /api/material-deliveries?materialRequestId=&externalSupplyProjectId=&subProjectId=&cancelled=`
+  — pengganti `listDeliveries(projectId)` di mock.
+- `PUT /:id/delivery-note` (multipart, ganti file) dan `PUT /:id/cancel` `{ reason }` —
+  hanya pencatatnya.
+- Menampilkan file: `GET /api/files/{deliveryNoteFile.id}/url` → buka `data.url`
+  (berlaku 5 menit; minta ulang setiap kali dibuka, JANGAN disimpan).
+- Detail request material kini memuat per item `deliveredQuantity` &
+  `deliveryCount` — boleh melebihi `effectiveQuantity`.
+- `suggestNoteNo` di mock tidak punya padanan: nomor surat jalan diterbitkan
+  supplier, jadi diketik dari dokumen fisiknya.
+

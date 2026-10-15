@@ -9,11 +9,11 @@ sejak 15 Okt 2026 sisanya langsung di `module/project` (satu commit per tahap):
 
 | Tahap | Isi | Status |
 |---|---|---|
-| RM-1 | Master jenis material & supplier, material pool, PIC supply project | **Dibangun 13 Okt 2026** |
+| RM-1 | Master jenis material & supplier, material pool, ~~PIC supply project~~ (dibuang 16 Okt) | **Dibangun 13 Okt 2026** |
 | RM-2 | Material request + meja Admin (sesuaikan kuantitas / tolak) | **Dibangun 14 Okt 2026** |
 | RM-3 | Biaya + approval paket oleh Finance | **Dibangun 15 Okt 2026** — lihat bagian RM-3 di bawah |
-| — | Desain lampiran bersama (surat jalan, bukti receipt, damage, PR, project files) | **Wajib sebelum RM-4** — arah penyimpanan sudah diputuskan, lihat bagian Lampiran |
-| RM-4 | Delivery + surat jalan | Belum |
+| — | Lampiran bersama (surat jalan, bukti receipt, damage, PR, project files) | **Fondasi dibangun 16 Okt 2026** — `docs/keputusan-desain-lampiran.md` |
+| RM-4 | Delivery + surat jalan | **Dibangun 16 Okt 2026** — lihat bagian RM-4 |
 | RM-5 | Receipt + inventori + stock movement (dibaca Income) | Belum |
 
 ---
@@ -92,11 +92,17 @@ baris per unit.
 Mengikuti `equipment_types.type_code` (mis. `AGG-BA`). Kode material bukan nomor
 dokumen, jadi tidak lewat counter. Tidak bisa diubah setelah dibuat.
 
-## D5. PIC Lapangan pada supply project
+## D5. PIC Lapangan pada supply project — DIBUANG 16 Oktober 2026
 
-`external_supply_projects.field_pic_id` (FK users, nullable). Di RM-1 hanya
-divalidasi: user ada dan aktif. Aturan "hanya PIC yang boleh mengajukan request
-material untuk kontrak ini" ditegakkan bersama request di RM-2.
+~~`external_supply_projects.field_pic_id` (FK users, nullable). Aturan "hanya PIC
+yang boleh mengajukan request material untuk kontrak ini" ditegakkan di RM-2.~~
+
+Dibuang karena sistem tidak punya proses menugaskan orang Divisi Lapangan ke
+project mana pun — PIC hanya isian bebas Admin, jadi aturan yang bersandar padanya
+tidak bisa ditegakkan jujur. Request material dan delivery supply sekarang terbuka
+untuk pemegang permission Lapangan mana pun, sama seperti konstruksi. Kolom sudah
+keluar dari schema & kode; **DROP COLUMN ditunda** ke migrasi terpisah karena
+database dev dipakai bersama (backend rekan yang belum pull masih membacanya).
 
 ## Wewenang
 
@@ -176,7 +182,8 @@ service **dan** CHECK `material_request_items_quantity_check`.
 
 ## R5. Siapa boleh mengajukan
 
-- **Supply:** hanya PIC Lapangan project itu (D5). PIC belum ada → 409.
+- **Supply:** ~~hanya PIC Lapangan project itu (D5)~~ — sejak 16 Okt 2026 pemegang
+  `material-request:create` mana pun, untuk kontrak yang belum ditutup.
 - **Konstruksi:** pemegang `material-request:create`, untuk tahapan `planned`
   atau `active` — material wajar dipesan sebelum pekerjaan dimulai.
 
@@ -225,6 +232,8 @@ menyatakannya dan setiap `migrate diff` akan mengusulkan DROP-nya.
   sudah membedakannya; GL memilih akun berdasarkan itu.
 
 ### Lampiran — arah penyimpanan file
+
+> Rancangan lengkapnya sekarang di `docs/keputusan-desain-lampiran.md` (16 Okt 2026).
 
 Untuk fase development: **Supabase Storage lewat protokol S3** (klien S3
 standar, bukan SDK Supabase), dengan dua aturan supaya pindah penyedia di
@@ -296,3 +305,76 @@ project. Dibuat otomatis kalau belum ada; lebih dari satu pool hidup → wajib
 
 Approve ganda bersamaan → satu 200, satu 409, pool item tidak dobel. Approve + cancel
 bersamaan. CHECK lewat SQL mentah. Tabel baru `ENABLE ROW LEVEL SECURITY`.
+
+---
+
+# RM-4 — Dibangun 16 Oktober 2026 (migrasi `20261016090000_add_files_and_material_deliveries`)
+
+Dibangun di atas fondasi lampiran (`docs/keputusan-desain-lampiran.md`).
+Endpoint: `/api/material-deliveries` (list, detail, catat, ganti file surat jalan, batal).
+
+## G1. Satu delivery = satu surat jalan = satu truk = satu material
+
+Dikonfirmasi: satu truk tidak membawa campuran material. Karena itu
+**`material_delivery_items` tidak dibuat** — delivery menunjuk langsung satu item
+request. Sesuai juga dengan "ritase" di FE.
+
+```
+material_deliveries
+  id, delivery_code            -- DLV-NNNNNN, dibuat sistem
+  material_request_id, material_request_item_id, delivered_quantity (> 0, CHECK)
+  supplier_id (WAJIB), delivery_note_number, delivery_note_date (tidak di masa depan)
+  delivery_note_file_id (WAJIB, unik) -> files
+  vehicle_type, vehicle_number, driver_name, driver_phone
+  origin_location, destination_location, notes
+  created_by, cancelled_by, cancelled_at, cancel_reason
+  UNIQUE (supplier_id, delivery_note_number)
+```
+
+Item request wajib milik request yang sama — dijaga composite FK
+`(material_request_item_id, material_request_id)`. Nomor surat jalan unik per
+supplier **di antara delivery aktif**: index unik `(supplier_id, delivery_note_number,
+cancelled_at) NULLS NOT DISTINCT`, supaya koreksi "batalkan lalu catat ulang" bisa
+memakai nomor yang sama. Nomor surat jalan & plat dinormalisasi huruf besar.
+CHECK: kuantitas > 0; kolom pembatalan terisi bersamaan.
+
+## G2. Selisih terhadap ERD
+
+| ERD | Revisi | Alasan |
+|---|---|---|
+| `material_delivery_items` | tidak dibuat | G1 |
+| `unit`, `material_type_id`, `material_pool_item_id` | dibuang | terbaca dari item request (D1, satu fakta) |
+| `material_delivery_status` 5 nilai | **tanpa kolom status**, hanya kolom pembatalan | `planned`/`shipped` tak pernah terjadi (surat jalan baru ada saat truk berangkat); `partially_received`/`received` diturunkan dari receipt (RM-5). Pola sama dengan `is_voided` Kas Alat |
+| `planned_delivery_date`, `shipped_at`, `estimated_arrival_at` | dibuang | tidak ada tahap perencanaan |
+| `delivery_note_file_url` | `delivery_note_file_id` -> `files` | lampiran bersama (L1) |
+| `uploaded_by/at` | di `files` | |
+| nomor surat jalan unik global | unik **per supplier** | nomor diterbitkan supplier; dua quarry bisa memakai nomor sama |
+| — | `vehicle_type`, `origin_location`, `destination_location` | sudah ada di form FE |
+
+## G3. Siapa mencatat
+
+**Divisi Lapangan untuk semua jenis request** — merekalah yang memegang surat jalan
+(diputuskan 16 Okt 2026; FE saat ini menaruh form ritase supply di menu Admin, lihat
+backlog-fe E15).
+
+- Permission baru `material-delivery:create` → lapangan.
+- Berlaku sama untuk `internal_project` dan `external_supply` — tanpa PIC (D5 dibuang).
+- Pembatalan: pencatatnya, alasan wajib, hanya selama belum ada receipt (RM-5
+  menambahkan pengecekan itu).
+- Baca: `material-request:read` (delivery adalah bagian dari request).
+
+## G4. Aturan
+
+- Hanya untuk request `approved` (ERD aturan 11), tahapan/kontrak belum ditutup.
+- Surat jalan wajib dilampirkan saat dicatat, profil `evidence`. Selama belum ada
+  receipt, file boleh diganti (L6).
+- Detail request menampilkan per item **total terkirim** (dihitung saat dibaca,
+  delivery batal tidak dihitung).
+
+## G5. Kelebihan kiriman — FUTURE FEATURE
+
+Total terkirim boleh melebihi kuantitas disetujui: volume per truk perkiraan, truk
+terakhir tidak bisa setengah muat. Sistem **tidak menolak** — truk yang benar-benar
+datang harus bisa dicatat. Penandaan "lebih X m³" untuk Finance dan penyelesaian
+uangnya (lewat `financial_correction_requests`) ditunda sebagai fitur antisipasi.
+

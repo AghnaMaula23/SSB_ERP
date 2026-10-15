@@ -121,9 +121,10 @@ mountProjectType('external-rental', 'external-rental', {
       .withMessage(`billingMethod harus salah satu dari: ${BILLING_METHODS.join(', ')}`)],
 });
 
-// PIC Lapangan yang membuat request material untuk kontrak ini. null = belum ditentukan.
-const fieldPicRule = body('fieldPicId').optional({ nullable: true }).isInt({ min: 1 })
-  .withMessage('fieldPicId harus ID user').toInt();
+// PIC Lapangan dibuang 16 Okt 2026 (sistem tidak menugaskan orang lapangan) —
+// ditolak eksplisit supaya klien lama tahu, bukan diabaikan diam-diam.
+const fieldPicRule = body('fieldPicId').not().exists()
+  .withMessage('fieldPicId tidak dipakai lagi: request material & delivery supply dicatat Divisi Lapangan mana pun');
 
 mountProjectType('external-supply', 'external-supply', {
   createRules: [nameRule('supplyProjectName', 'Nama supply project'), ...rejectSystemManaged('supplyProjectCode'),

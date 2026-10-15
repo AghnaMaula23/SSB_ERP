@@ -5,6 +5,7 @@ const { nextDocumentNumber } = require('../../utils/document-number.js');
 const { claimTransition } = require('../../utils/status-transition.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 const materialPoolService = require('../project/material-pool.service.js');
+const deliveryService = require('./material-delivery.service.js');
 
 // ============================================================
 // REQUEST MATERIAL — RM-2 (pengajuan & meja Admin) + RM-3 (biaya & Finance).
@@ -38,7 +39,7 @@ const MATERIAL_TYPE_SELECT = { id: true, materialCode: true, materialName: true,
 
 const DETAIL_INCLUDE = {
   subProject: { select: { id: true, subProjectType: true, status: true, constructionProjectId: true } },
-  externalSupplyProject: { select: { id: true, supplyProjectCode: true, supplyProjectName: true, status: true, fieldPicId: true } },
+  externalSupplyProject: { select: { id: true, supplyProjectCode: true, supplyProjectName: true, status: true } },
   requestedByUser: { select: ACTOR_SELECT },
   adminReviewedByUser: { select: ACTOR_SELECT },
   financeReviewedByUser: { select: ACTOR_SELECT },
@@ -60,7 +61,7 @@ const rejectedBy = (row) => {
   return row.financeReviewedAt ? 'finance' : 'admin';
 };
 
-const shapeItem = (item) => {
+const shapeItem = (item, delivered) => {
   const requested = toNumber(item.requestedQuantity);
   const validated = toNumber(item.adminValidatedQuantity);
   return {
@@ -75,6 +76,10 @@ const shapeItem = (item) => {
     materialPoolItemId: item.materialPoolItemId,
     itemNotes: item.itemNotes,
     adminNotes: item.adminNotes,
+    // RM-4: jumlahan delivery aktif, dihitung saat dibaca (G4). Boleh melebihi
+    // effectiveQuantity — truk yang datang tetap dicatat; penandaannya future feature (G5).
+    deliveredQuantity: delivered?.quantity ?? 0,
+    deliveryCount: delivered?.count ?? 0,
   };
 };
 
@@ -108,7 +113,9 @@ const shapeHeader = (row) => ({
   createdAt: row.createdAt,
 });
 
-const shapeDetail = (row) => ({
+// `deliveredByItem` hanya terisi saat dibaca: delivery baru ada setelah approved,
+// dan setelah approved tidak ada aksi lain yang mengembalikan detail.
+const shapeDetail = (row, deliveredByItem = new Map()) => ({
   ...shapeHeader(row),
   adminReviewedBy: shapeActor(row.adminReviewedByUser),
   adminReviewedAt: row.adminReviewedAt,
@@ -118,7 +125,7 @@ const shapeDetail = (row) => ({
   financeNotes: row.financeNotes,
   cancelledBy: shapeActor(row.cancelledByUser),
   cancelledAt: row.cancelledAt,
-  items: row.items.map(shapeItem),
+  items: row.items.map((item) => shapeItem(item, deliveredByItem.get(item.id))),
   costs: row.costs.map(shapeCost),
   totalCostAmount: sumAmounts(row.costs.map((c) => c.amount)),
 });
@@ -161,19 +168,21 @@ const list = async ({ page = 1, limit = 20, status, requestType, subProjectId, e
   };
 };
 
-const getById = async (id) => shapeDetail(await findOrFail(id));
+const getById = async (id) => {
+  const row = await findOrFail(id);
+  return shapeDetail(row, row.status === 'approved' ? await deliveryService.deliveredByItem(id) : undefined);
+};
 
 // ============================================================
 // CREATE & CANCEL
 // ============================================================
 
 /**
- * internal_project: tahapan & project-nya belum ditutup.
- * external_supply: kontrak belum ditutup, PIC sudah ditentukan, dan HANYA PIC
- * itu yang boleh mengajukan (D5/R5) — kontrak supply adalah tanggung jawab satu
- * orang lapangan yang ditunjuk Admin.
+ * Konteks belum ditutup. Aturan "supply hanya oleh PIC" (D5/R5) DIBUANG 16 Okt
+ * 2026: sistem tidak punya proses menugaskan orang lapangan, jadi pemegang
+ * material-request:create mana pun boleh mengajukan untuk kedua jenis.
  */
-const assertContextAllowed = async (requestType, contextId, userId) => {
+const assertContextAllowed = async (requestType, contextId) => {
   if (requestType === 'internal_project') {
     const subProject = await prisma.subProject.findUnique({
       where: { id: contextId }, include: { constructionProject: { select: { status: true } } },
@@ -192,12 +201,6 @@ const assertContextAllowed = async (requestType, contextId, userId) => {
   if (!supply) throw httpError(`External supply project dengan ID ${contextId} tidak ditemukan`, 404);
   if (CLOSED_CONTEXT_STATUSES.includes(supply.status)) {
     throw httpError(`External supply project berstatus "${supply.status}", tidak bisa meminta material`, 409);
-  }
-  if (!supply.fieldPicId) {
-    throw httpError(`Supply project ${supply.supplyProjectCode} belum punya PIC Lapangan. Admin perlu menentukannya dulu.`, 409);
-  }
-  if (supply.fieldPicId !== userId) {
-    throw httpError(`Hanya PIC Lapangan supply project ${supply.supplyProjectCode} yang boleh mengajukan request material`, 403);
   }
 };
 
@@ -225,7 +228,7 @@ const create = async (payload, userId) => {
     throw httpError(`${config.otherField} tidak boleh diisi untuk requestType "${requestType}"`, 400);
   }
 
-  await assertContextAllowed(requestType, contextId, userId);
+  await assertContextAllowed(requestType, contextId);
   await assertMaterialTypes(items);
 
   const requestDate = payload.requestDate ? assertNotFuture(payload.requestDate, 'Tanggal request') : new Date();

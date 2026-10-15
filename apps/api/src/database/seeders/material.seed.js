@@ -80,15 +80,9 @@ async function seedMaterialDemo(adminId) {
   }
   console.log(`  - jenis material +${typesAdded}, supplier +${suppliersAdded}`);
 
-  const lapangan = await prisma.user.findUnique({ where: { username: 'lapangan' } });
-
-  // ── Supply project: PIC Lapangan + material pool ────────────────────────
+  // ── Supply project: material pool ───────────────────────────────────────
   const supply = await prisma.externalSupplyProject.findFirst({ where: { status: { notIn: ['completed', 'cancelled'] } }, orderBy: { id: 'asc' } });
   if (supply) {
-    if (!supply.fieldPicId && lapangan) {
-      await projectSvc.update('external-supply', supply.id, { fieldPicId: lapangan.id });
-      console.log(`  - ${supply.supplyProjectCode}: PIC Lapangan = ${lapangan.username}`);
-    }
     const r = await ensureMaterialPool('external_supply_project', 'externalSupplyProjectId', supply.id,
       ['SPL-23', 'SPL-12', 'AGG-BA', 'PSR-CUCI'], adminId);
     console.log(`  - ${supply.supplyProjectCode}: material pool ${r.poolCode} (+${r.added} material)`);

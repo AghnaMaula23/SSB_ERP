@@ -41,11 +41,8 @@ const PROJECT_TYPES = {
     codeField: 'supplyProjectCode',
     nameField: 'supplyProjectName',
     writable: ['supplyProjectName', 'clientName', 'location', 'contractNo',
-      'contractStartDate', 'contractEndDate', 'fieldPicId'],
+      'contractStartDate', 'contractEndDate'],
     dateFields: ['contractStartDate', 'contractEndDate'],
-    // PIC Lapangan pembuat request material (RM-1). Aturan "hanya PIC yang
-    // boleh mengajukan" ditegakkan bersama request material di RM-2.
-    extraInclude: { fieldPic: { select: ACTOR_SELECT } },
   },
 };
 
@@ -56,14 +53,6 @@ const PROJECT_DOC_PAD = 6;
 const IMMUTABLE_STATUSES = ['completed', 'cancelled'];
 
 const includeFor = (config) => ({ createdByUser: { select: ACTOR_SELECT }, ...config.extraInclude });
-
-/** PIC harus user yang ada dan aktif. null diterima — artinya PIC dikosongkan. */
-const assertFieldPic = async (writable) => {
-  if (!writable.fieldPicId) return;
-  const user = await prisma.user.findUnique({ where: { id: writable.fieldPicId } });
-  if (!user) throw httpError(`User dengan ID ${writable.fieldPicId} tidak ditemukan`, 404);
-  if (!user.isActive) throw httpError(`User "${user.username}" nonaktif, tidak bisa dijadikan PIC`, 409);
-};
 
 const typeConfigOrFail = (kind) => {
   const config = PROJECT_TYPES[kind];
@@ -86,7 +75,6 @@ const shapeProject = (config, row) => ({
         contractEndDate: toDateOnly(row.contractEndDate),
       }),
   ...(config.model === 'externalRentalProject' && { billingMethod: row.billingMethod }),
-  ...(config.model === 'externalSupplyProject' && { fieldPicId: row.fieldPicId, fieldPic: shapeActor(row.fieldPic) }),
   status: row.status,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -156,7 +144,6 @@ const create = async (kind, payload, user) => {
   // migrasi data lama dikerjakan lewat skrip impor sekali jalan, bukan API.
 
   assertDateOrder(config, writable);
-  await assertFieldPic(writable);
 
   const row = await prisma.$transaction(async (tx) => {
     const code = await nextDocumentNumber(tx, config.docType, { pad: PROJECT_DOC_PAD });
@@ -181,7 +168,6 @@ const update = async (kind, id, payload) => {
 
   const writable = coerceDates(pickWritable(payload, config.writable), config.dateFields);
   assertDateOrder(config, { ...row, ...writable });
-  await assertFieldPic(writable);
 
   const updated = await prisma[config.model].update({
     where: { id },

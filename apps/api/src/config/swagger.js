@@ -88,6 +88,8 @@ const swaggerSpec = {
     { name: 'Kas Divisi Alat', description: 'Saldo dan transaksi kas Divisi Alat' },
     { name: 'Request Alat', description: 'Permintaan alat dari Lapangan' },
     { name: 'Request Material', description: 'Permintaan material dari Lapangan' },
+    { name: 'Material Delivery', description: 'Delivery + surat jalan per truk (RM-4)' },
+    { name: 'Files', description: 'Unduh lampiran lewat signed URL' },
     { name: 'Approval Center', description: 'Approval terpusat lintas modul' },
     { name: 'Income Records', description: 'Pencatatan pendapatan dan billing' },
     { name: 'Income Payments', description: 'Pembayaran client' },
@@ -618,7 +620,6 @@ const swaggerSpec = {
             supplyProjectName: { type: 'string' },
             clientName: { type: 'string' }, contractNo: { type: 'string' },
             contractStartDate: { type: 'string', format: 'date' }, contractEndDate: { type: 'string', format: 'date' },
-            fieldPicId: { type: 'integer', nullable: true, description: 'PIC Lapangan pembuat request material untuk kontrak ini (user aktif). Juga diterima di PUT; null = dikosongkan. Response memuat `fieldPic`.' }
           }
         }}}},
         responses: { 201: { description: 'Created' } }
@@ -1631,7 +1632,7 @@ const swaggerSpec = {
       },
       post: {
         tags: ['Request Material'], summary: 'Ajukan request material',
-        description: 'Permission: material-request:create. `internal_project` dari tahapan berstatus planned/active. `external_supply` HANYA oleh PIC Lapangan supply project itu (403 selain PIC, 409 kalau PIC belum ditentukan). Material dipilih bebas dari master (tidak wajib ada di pool), harus aktif, sekali per request. Kuantitas dalam SATUAN JENIS MATERIAL — `unit` ditolak 400; konversi (mis. rit → m³) tanggung jawab penginput. Kode MRQ-NNNNNN dibuat sistem.',
+        description: 'Permission: material-request:create. `internal_project` dari tahapan berstatus planned/active. `external_supply` dari kontrak yang belum ditutup (tanpa PIC sejak 16 Okt 2026). Material dipilih bebas dari master (tidak wajib ada di pool), harus aktif, sekali per request. Kuantitas dalam SATUAN JENIS MATERIAL — `unit` ditolak 400; konversi (mis. rit → m³) tanggung jawab penginput. Kode MRQ-NNNNNN dibuat sistem.',
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['requestType', 'items'], properties: {
           requestType: { type: 'string', enum: ['internal_project', 'external_supply'] },
           subProjectId: { type: 'integer', description: 'Wajib untuk internal_project' },
@@ -1643,13 +1644,13 @@ const swaggerSpec = {
             materialTypeId: { type: 'integer' }, requestedQuantity: { type: 'number', example: 24.5 }, itemNotes: { type: 'string' },
           } } },
         } } } } },
-        responses: { 201: { description: 'Created' }, 400: { description: 'Validasi gagal' }, 403: { description: 'Bukan PIC supply' }, 409: { description: 'Konteks ditutup / PIC belum ada / material nonaktif' } },
+        responses: { 201: { description: 'Created' }, 400: { description: 'Validasi gagal' }, 409: { description: 'Konteks ditutup / material nonaktif' } },
       },
     },
     '/request-material/{id}': {
       get: {
         tags: ['Request Material'], summary: 'Detail request material',
-        description: 'Permission: material-request:read. Tiap item memuat `unit` (dari jenis material), `requestedQuantity`, `adminValidatedQuantity` (null = belum diubah Admin), `effectiveQuantity` (yang berlaku), dan `materialPoolItemId` (terisi setelah disetujui Finance). `costs` = rincian biaya, `totalCostAmount` = jumlahnya (tidak disimpan).',
+        description: 'Permission: material-request:read. Tiap item memuat `unit` (dari jenis material), `requestedQuantity`, `adminValidatedQuantity` (null = belum diubah Admin), `effectiveQuantity` (yang berlaku), `materialPoolItemId` (terisi setelah disetujui Finance), serta `deliveredQuantity`/`deliveryCount` (jumlahan delivery aktif, dihitung saat dibaca — boleh melebihi effectiveQuantity). `costs` = rincian biaya, `totalCostAmount` = jumlahnya (tidak disimpan).',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } },
       },
     },
@@ -1717,6 +1718,68 @@ const swaggerSpec = {
         tags: ['Request Material'], summary: 'Batalkan request material',
         description: 'Permission: material-request:create. Hanya pengaju, selama Finance belum memutuskan (submitted / waiting_finance_approval).',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Dibatalkan' }, 409: { description: 'Sudah diputuskan' } },
+      },
+    },
+
+    // RM-4 — docs/keputusan-desain-request-material.md G1–G5. Form + file surat
+    // jalan dikirim dalam SATU multipart (docs/keputusan-desain-lampiran.md L4).
+    '/material-deliveries': {
+      get: {
+        tags: ['Material Delivery'], summary: 'List delivery',
+        description: 'Permission: material-request:read. Satu baris = satu surat jalan = satu truk = satu material. `cancelled` tanpa diisi = semua.',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'materialRequestId', schema: { type: 'integer' } },
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'externalSupplyProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'supplierId', schema: { type: 'integer' } },
+          { in: 'query', name: 'cancelled', schema: { type: 'string', enum: ['true', 'false'] } }],
+        responses: { 200: { description: 'Paginated list' } },
+      },
+      post: {
+        tags: ['Material Delivery'], summary: 'Catat delivery + unggah surat jalan',
+        description: 'Permission: material-delivery:create (Divisi Lapangan, konstruksi & supply). Request harus `approved` dan project/tahapan/kontrak belum ditutup (409). File surat jalan WAJIB di field `deliveryNote`: PDF/JPG/PNG/WebP maks 10 MB, jenis diperiksa dari isi file; HEIC ditolak. Kuantitas dalam satuan jenis material (`unit` ditolak). Boleh melebihi kuantitas disetujui. Nomor surat jalan & nomor kendaraan dinormalisasi huruf besar; nomor surat jalan unik per supplier di antara delivery aktif (409). Kode DLV-NNNNNN dibuat sistem.',
+        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object',
+          required: ['materialRequestItemId', 'supplierId', 'deliveredQuantity', 'deliveryNoteNumber', 'deliveryNoteDate', 'vehicleNumber', 'driverName', 'deliveryNote'],
+          properties: {
+            materialRequestItemId: { type: 'integer', description: 'Item request yang dikirim; request-nya diturunkan dari sini' },
+            supplierId: { type: 'integer' }, deliveredQuantity: { type: 'number', example: 20.5 },
+            deliveryNoteNumber: { type: 'string', maxLength: 100 }, deliveryNoteDate: { type: 'string', format: 'date', description: 'Tidak boleh di masa depan' },
+            vehicleNumber: { type: 'string', maxLength: 30 }, driverName: { type: 'string', maxLength: 150 },
+            vehicleType: { type: 'string' }, driverPhone: { type: 'string' },
+            originLocation: { type: 'string' }, destinationLocation: { type: 'string' }, notes: { type: 'string' },
+            deliveryNote: { type: 'string', format: 'binary', description: 'File surat jalan' },
+          } } } } },
+        responses: { 201: { description: 'Created' }, 400: { description: 'Validasi / file tidak sah' }, 403: { description: 'Bukan Divisi Lapangan' }, 409: { description: 'Request belum approved / konteks ditutup / nomor surat jalan sudah tercatat' } },
+      },
+    },
+    '/material-deliveries/{id}': {
+      get: { tags: ['Material Delivery'], summary: 'Detail delivery', description: 'Permission: material-request:read. `deliveryNoteFile.id` dipakai untuk GET /files/{id}/url.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
+    },
+    '/material-deliveries/{id}/delivery-note': {
+      put: {
+        tags: ['Material Delivery'], summary: 'Ganti file surat jalan',
+        description: 'Permission: material-delivery:create, hanya pencatatnya, delivery belum dibatalkan. File lama TIDAK dihapus — status `superseded` dan tetap bisa diunduh.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['deliveryNote'], properties: { deliveryNote: { type: 'string', format: 'binary' } } } } } },
+        responses: { 200: { description: 'Diganti' }, 403: { description: 'Bukan pencatat' }, 409: { description: 'Sudah dibatalkan / diproses bersamaan' } },
+      },
+    },
+    '/material-deliveries/{id}/cancel': {
+      put: {
+        tags: ['Material Delivery'], summary: 'Batalkan delivery',
+        description: 'Permission: material-delivery:create, hanya pencatatnya, alasan wajib. Tidak ada edit bebas: koreksi = batalkan lalu catat ulang (nomor surat jalan yang sama boleh dipakai lagi). Delivery batal tidak dihitung di total terkirim.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pencatat' }, 409: { description: 'Sudah dibatalkan' } },
+      },
+    },
+    '/files/{id}/url': {
+      get: {
+        tags: ['Files'], summary: 'Signed URL untuk membuka/mengunduh lampiran',
+        description: 'Permission mengikuti modul pemilik file (surat jalan → material-request:read). URL berlaku 5 menit (`expiresInSeconds`); kalau kedaluwarsa, minta lagi. PDF & gambar dibuka inline, lainnya diunduh. File yang sudah diganti (`superseded`) tetap bisa diunduh.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: '{ id, originalName, mimeType, sizeBytes, status, url, expiresInSeconds }' }, 403: { description: 'Tidak berhak membaca modul pemilik' }, 404: { description: 'Tidak ada / tanpa pemilik' } },
       },
     },
 
