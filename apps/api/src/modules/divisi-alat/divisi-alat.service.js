@@ -29,24 +29,6 @@ const nextAssetCode = async (tx, typeId, typeCode) => {
   return buildAssetCode(typeCode, type.lastSequence);
 };
 
-/**
- * Kalau super_admin memasukkan kode manual yang kebetulan mengikuti pola
- * generate (mis. SSB-EXC-007), counter ikut dimajukan supaya generate
- * berikutnya tidak menabrak kode tersebut.
- */
-const syncSequenceWithManualCode = async (tx, type, assetCode) => {
-  const match = assetCode.match(new RegExp(`^${ASSET_CODE_PREFIX}-${type.typeCode}-(\\d+)$`));
-  if (!match) return;
-
-  const manualSequence = Number(match[1]);
-  if (manualSequence > type.lastSequence) {
-    await tx.equipmentType.update({
-      where: { id: type.id },
-      data: { lastSequence: manualSequence },
-    });
-  }
-};
-
 // Alat yang sedang ditangani tidak boleh diarsipkan. Penugasan proyek TIDAK
 // tercermin di current_status — itu murni KONDISI alat — jadi "sedang bertugas"
 // dibaca langsung dari sub_project_equipment_allocations dan equipment_pool_items
@@ -362,30 +344,18 @@ const ITEM_WRITABLE_FIELDS = [
 ];
 
 const createItem = async (payload, user) => {
-  const { equipmentTypeId, assetCode: manualAssetCode, defaultHourlyRate } = payload;
+  const { equipmentTypeId, defaultHourlyRate } = payload;
   const writable = pickWritable(payload, ITEM_WRITABLE_FIELDS);
-  const canOverrideAssetCode = user.roles.includes('super_admin');
 
   const type = await prisma.equipmentType.findUnique({ where: { id: equipmentTypeId } });
   if (!type) throw httpError(`Jenis alat dengan ID ${equipmentTypeId} tidak ditemukan`, 404);
   if (!type.isActive) throw httpError(`Jenis alat "${type.typeCode}" sedang nonaktif`, 409);
 
-  if (manualAssetCode && !canOverrideAssetCode) {
-    throw httpError('Kode aset dibuat otomatis oleh sistem dan tidak bisa diisi manual', 403);
-  }
-  if (manualAssetCode) {
-    const exists = await prisma.equipmentItem.findUnique({ where: { assetCode: manualAssetCode } });
-    if (exists) throw httpError(`Kode aset "${manualAssetCode}" sudah dipakai`, 409);
-  }
-
   // Catat status awal supaya audit trail alat lengkap sejak unit didaftarkan
   const item = await prisma.$transaction(async (tx) => {
-    let assetCode = manualAssetCode;
-    if (assetCode) {
-      await syncSequenceWithManualCode(tx, type, assetCode);
-    } else {
-      assetCode = await nextAssetCode(tx, type.id, type.typeCode);
-    }
+    // Kode aset SELALU dibuat sistem. Override manual (dulu khusus super_admin,
+    // untuk migrasi) dibuang 15 Okt 2026 — migrasi data lama lewat skrip impor.
+    const assetCode = await nextAssetCode(tx, type.id, type.typeCode);
 
     const created = await tx.equipmentItem.create({
       data: {
@@ -423,21 +393,13 @@ const createItem = async (payload, user) => {
  */
 const updateItem = async (id, payload, user) => {
   const item = await findItemOrFail(id);
-  const { equipmentTypeId, assetCode, defaultHourlyRate, isActive } = payload;
+  const { equipmentTypeId, defaultHourlyRate, isActive } = payload;
   const writable = pickWritable(payload, ITEM_WRITABLE_FIELDS);
 
   if (equipmentTypeId !== undefined && equipmentTypeId !== item.equipmentTypeId) {
     const type = await prisma.equipmentType.findUnique({ where: { id: equipmentTypeId } });
     if (!type) throw httpError(`Jenis alat dengan ID ${equipmentTypeId} tidak ditemukan`, 404);
     if (!type.isActive) throw httpError(`Jenis alat "${type.typeCode}" sedang nonaktif`, 409);
-  }
-
-  if (assetCode !== undefined && assetCode !== item.assetCode) {
-    if (!user.roles.includes('super_admin')) {
-      throw httpError('Kode aset dibuat otomatis oleh sistem dan tidak bisa diubah', 403);
-    }
-    const exists = await prisma.equipmentItem.findUnique({ where: { assetCode } });
-    if (exists) throw httpError(`Kode aset "${assetCode}" sudah dipakai`, 409);
   }
 
   // rate_updated_at hanya bergerak kalau nominal rate-nya memang berubah
@@ -450,7 +412,6 @@ const updateItem = async (id, payload, user) => {
       ...writable,
       ...(isActive !== undefined && { isActive }),
       ...(equipmentTypeId !== undefined && { equipmentTypeId }),
-      ...(assetCode !== undefined && { assetCode }),
       ...(defaultHourlyRate !== undefined && { defaultHourlyRate }),
       ...(rateChanged && { rateUpdatedAt: new Date() }),
     },

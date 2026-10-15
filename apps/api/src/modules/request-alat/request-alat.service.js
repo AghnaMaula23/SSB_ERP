@@ -137,7 +137,7 @@ const assertNotOwnRequest = (row, userId, action) => {
   }
 };
 
-const canReview = (user) => user.roles.includes('super_admin') || user.permissions.includes('equipment-request:review');
+const canReview = (user) => user.permissions.includes('equipment-request:review');
 
 // ============================================================
 // READ

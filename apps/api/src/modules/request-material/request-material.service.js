@@ -323,7 +323,7 @@ const reject = async (id, { notes }, user) => {
   const row = await findOrFail(id);
   const rule = REJECT_RULES[row.status];
   if (!rule) throw httpError(`Request berstatus "${row.status}" tidak bisa ditolak`, 409);
-  if (!user.roles.includes('super_admin') && !user.permissions.includes(rule.permission)) {
+  if (!user.permissions.includes(rule.permission)) {
     throw httpError(rule.deniedMessage, 403);
   }
   assertNotOwnRequest(row, user.id, 'menolaknya');

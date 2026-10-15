@@ -70,13 +70,10 @@ const itemOptionalRules = [
   body('notes').optional({ nullable: true }).trim(),
 ];
 
-// assetCode dibuat sistem (SSB-{typeCode}-{NNN}). Di sini hanya dicek bentuknya;
-// siapa yang boleh mengirimnya manual diputuskan di service (403 kalau bukan
-// super_admin), supaya kebijakannya cuma hidup di satu tempat.
-const assetCodeOverrideRule = body('assetCode')
-  .optional()
-  .trim().notEmpty().withMessage('Kode aset tidak boleh string kosong')
-  .isLength({ max: 50 }).withMessage('Kode aset maksimal 50 karakter');
+// assetCode SELALU dibuat sistem (SSB-{typeCode}-{NNN}) — ditolak kalau dikirim.
+// Override manual untuk migrasi dibuang 15 Okt 2026 (lewat skrip impor).
+const assetCodeOverrideRule = body('assetCode').not().exists()
+  .withMessage('Kode aset dibuat otomatis oleh sistem dan tidak bisa diisi manual');
 
 const createItemRules = [
   body('equipmentTypeId').isInt({ min: 1 }).withMessage('equipmentTypeId wajib diisi dan harus angka').toInt(),

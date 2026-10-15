@@ -59,7 +59,7 @@ async function seedDivisiAlatDemo(adminUserId) {
     return;
   }
 
-  const actor = { id: adminUserId, roles: ['super_admin'] };
+  const actor = { id: adminUserId, roles: [] };
 
   console.log('Seeding equipment types...');
   const typeDefs = [

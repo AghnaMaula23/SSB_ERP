@@ -199,7 +199,8 @@ const swaggerSpec = {
         responses: {
           200: { description: 'Role user diperbarui' },
           404: { description: 'User / role tidak ditemukan' },
-          409: { description: 'Melepas super_admin aktif terakhir' }
+          403: { description: 'Mengubah role akun sendiri' },
+          409: { description: 'Melepas super_admin aktif terakhir / super_admin digabung role lain (super_admin eksklusif)' }
         }
       },
       post: {
@@ -225,7 +226,8 @@ const swaggerSpec = {
         responses: {
           200: { description: 'Role dilepas' },
           404: { description: 'User tidak punya role ini' },
-          409: { description: 'Melepas super_admin aktif terakhir' }
+          403: { description: 'Mengubah role akun sendiri' },
+          409: { description: 'Melepas super_admin aktif terakhir / super_admin digabung role lain (super_admin eksklusif)' }
         }
       }
     },
@@ -278,7 +280,7 @@ const swaggerSpec = {
     },
     '/roles/{id}/permissions': {
       put: {
-        tags: ['Roles'], summary: 'Set ulang permission role', description: 'Permission: role:update. Mengganti semua permission role dengan daftar yang dikirim (untuk halaman matrix).',
+        tags: ['Roles'], summary: 'Set ulang permission role', description: 'Permission: role:update. Mengganti semua permission role dengan daftar yang dikirim (untuk halaman matrix). Permission role `super_admin` DIKUNCI (409) — diatur kebijakan sistem: read semua modul + CRUD manajemen akun.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['permissionIds'],
@@ -351,11 +353,10 @@ const swaggerSpec = {
       },
       post: {
         tags: ['Construction Projects'], summary: 'Buat construction project baru',
-        description: 'Permission: project:create. `projectCode` DIBUAT SISTEM (PRJ-000001) lewat counter atomik document_sequences — mengirimnya ditolak 403 kecuali super_admin (dipakai memigrasi project lama dengan kode aslinya). `status` ditolak 400 kalau dikirim: project baru selalu `planned`.',
+        description: 'Permission: project:create. `projectCode` DIBUAT SISTEM (PRJ-000001) lewat counter atomik document_sequences — mengirimnya ditolak 400 (override manual dibuang 15 Okt 2026; migrasi data lama lewat skrip impor). `status` ditolak 400 kalau dikirim: project baru selalu `planned`.',
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['projectName'],
           properties: {
-            projectCode: { type: 'string', example: 'LEGACY-2019-007', description: 'HANYA super_admin. Kosongkan supaya sistem membuatnya.' },
             projectName: { type: 'string', example: 'Jalan Tol Semarang' },
             clientName: { type: 'string', example: 'PT ABC' },
             location: { type: 'string', example: 'Semarang, Jawa Tengah' },
@@ -580,7 +581,6 @@ const swaggerSpec = {
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['rentalProjectName'],
           properties: {
-            rentalProjectCode: { type: 'string', description: 'HANYA super_admin — sistem membuat RNT-000001' },
             rentalProjectName: { type: 'string' },
             clientName: { type: 'string' }, contractNo: { type: 'string' },
             billingMethod: { type: 'string', enum: ['hourly','daily','monthly','contract'] },
@@ -615,7 +615,6 @@ const swaggerSpec = {
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['supplyProjectName'],
           properties: {
-            supplyProjectCode: { type: 'string', description: 'HANYA super_admin — sistem membuat SPL-000001' },
             supplyProjectName: { type: 'string' },
             clientName: { type: 'string' }, contractNo: { type: 'string' },
             contractStartDate: { type: 'string', format: 'date' }, contractEndDate: { type: 'string', format: 'date' },
@@ -885,12 +884,11 @@ const swaggerSpec = {
         responses: { 200: { description: 'Paginated list', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
       },
       post: {
-        tags: ['Equipment Items'], summary: 'Tambah unit alat', description: 'Role: divisi_alat. Permission: equipment:create. `assetCode` DIBUAT OTOMATIS oleh sistem dengan format SSB-{typeCode}-{NNN} (mis. SSB-EXC-001) — hanya super_admin yang boleh mengirimnya manual. Status awal `operational` dan otomatis tercatat di status log.',
+        tags: ['Equipment Items'], summary: 'Tambah unit alat', description: 'Role: divisi_alat. Permission: equipment:create. `assetCode` DIBUAT OTOMATIS oleh sistem dengan format SSB-{typeCode}-{NNN} (mis. SSB-EXC-001) — kiriman manual ditolak 400. Status awal `operational` dan otomatis tercatat di status log.',
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['equipmentTypeId'],
           properties: {
             equipmentTypeId: { type: 'integer' },
-            assetCode: { type: 'string', example: 'SSB-EXC-007', description: 'HANYA super_admin. Kosongkan agar sistem yang membuat. Kalau kodenya mengikuti pola generate, counter jenis alat ikut dimajukan.' },
             plateNumber: { type: 'string', description: 'Nullable — hanya alat berplat (dump truck dsb) yang mengisinya' }, serialNumber: { type: 'string' },
             brand: { type: 'string' }, model: { type: 'string' },
             manufactureYear: { type: 'integer', example: 2019 },
@@ -898,7 +896,7 @@ const swaggerSpec = {
             rateNotes: { type: 'string' }, notes: { type: 'string' }
           }
         }}}},
-        responses: { 201: { description: 'Created, assetCode terisi otomatis' }, 400: { description: 'Validasi gagal' }, 403: { description: 'assetCode manual dikirim oleh non-super_admin' }, 404: { description: 'Jenis alat tidak ditemukan' }, 409: { description: 'assetCode sudah dipakai / jenis alat nonaktif' } }
+        responses: { 201: { description: 'Created, assetCode terisi otomatis' }, 400: { description: 'Validasi gagal' }, 400: { description: 'Validasi gagal / assetCode dikirim' }, 404: { description: 'Jenis alat tidak ditemukan' }, 409: { description: 'assetCode sudah dipakai / jenis alat nonaktif' } }
       }
     },
     '/equipment/items/{id}': {
@@ -908,7 +906,7 @@ const swaggerSpec = {
         responses: { 200: { description: 'Detail + statusHistory + workhourSummary' }, 404: { description: 'Tidak ditemukan' } }
       },
       put: {
-        tags: ['Equipment Items'], summary: 'Update unit alat', description: 'Permission: equipment:update. `assetCode` hanya bisa diubah super_admin. `currentStatus` TIDAK bisa diubah di sini — pakai PUT /equipment/items/{id}/status. `rateUpdatedAt` otomatis terisi saat defaultHourlyRate berubah.',
+        tags: ['Equipment Items'], summary: 'Update unit alat', description: 'Permission: equipment:update. `assetCode` tidak bisa diubah (ditolak 400). `currentStatus` TIDAK bisa diubah di sini — pakai PUT /equipment/items/{id}/status. `rateUpdatedAt` otomatis terisi saat defaultHourlyRate berubah.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { content: { 'application/json': { schema: {
           type: 'object',
@@ -920,7 +918,7 @@ const swaggerSpec = {
             rateNotes: { type: 'string' }, notes: { type: 'string' }, isActive: { type: 'boolean' }
           }
         }}}},
-        responses: { 200: { description: 'Updated' }, 403: { description: 'Ubah assetCode oleh non-super_admin' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'assetCode sudah dipakai' } }
+        responses: { 200: { description: 'Updated' }, 400: { description: 'assetCode dikirim' }, 404: { description: 'Tidak ditemukan' } }
       },
       delete: {
         tags: ['Equipment Items'], summary: 'Soft delete unit alat', description: 'Permission: equipment:delete. Set isActive=false (penghapusan administratif, bukan penanda alat rusak/pensiun). Ditolak kalau alat sedang `maintenance`.',
@@ -1320,10 +1318,10 @@ const swaggerSpec = {
       }
     },
     '/equipment/purchase-requests/{id}/validate': {
-      put: { tags: ['Purchase Requests'], summary: 'Admin validasi', description: 'Role: admin SAJA — super_admin tidak di-bypass. submitted -> waiting_finance_approval. Tanpa body: catatan approval belum punya tempat penyimpanan (rencananya approval_task_logs di Approval Center).', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Validated' } } }
+      put: { tags: ['Purchase Requests'], summary: 'Admin validasi', description: 'Permission: purchase-request:validate (Admin). submitted -> waiting_finance_approval. Tanpa body: catatan approval belum punya tempat penyimpanan (rencananya approval_task_logs di Approval Center).', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Validated' } } }
     },
     '/equipment/purchase-requests/{id}/approve': {
-      put: { tags: ['Purchase Requests'], summary: 'Finance approve + cairkan', description: 'Role: finance SAJA — super_admin tidak di-bypass. Atomik: approval bersamaan hanya satu yang lolos (sisanya 409), dan database menolak baris kas kedua untuk order yang sama. Nominal aktual per baris WAJIB diisi, bukan menyalin estimasi. Boleh menyebabkan saldo Kas Alat negatif.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+      put: { tags: ['Purchase Requests'], summary: 'Finance approve + cairkan', description: 'Permission: purchase-request:approve (Finance). Atomik: approval bersamaan hanya satu yang lolos (sisanya 409), dan database menolak baris kas kedua untuk order yang sama. Nominal aktual per baris WAJIB diisi, bukan menyalin estimasi. Boleh menyebabkan saldo Kas Alat negatif.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: {
           approvedRepairItems: { type: 'array', items: { type: 'object', properties: { repairItemId: { type: 'integer' }, approvedServiceFee: { type: 'number' }, spareparts: { type: 'array', items: { type: 'object', properties: { sparepartId: { type: 'integer' }, approvedTotalPrice: { type: 'number' } } } } } } },
           approvedMaintenanceItems: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'integer' }, approvedPrice: { type: 'number' } } } },
@@ -1332,7 +1330,7 @@ const swaggerSpec = {
         responses: { 200: { description: 'Approved. total_approved_amount dijumlahkan dari baris, lalu cash-out Kas Alat dibuat dalam transaksi yang SAMA — kategori kasnya diturunkan dari orderCategory. Response menyertakan cashTransactionCreated + cashTransaction.' } } }
     },
     '/equipment/purchase-requests/{id}/reject': {
-      put: { tags: ['Purchase Requests'], summary: 'Tolak order', description: 'Permission: purchase-request:validate (saat submitted) atau purchase-request:approve (saat waiting_finance_approval) — diperiksa per permission, bukan nama role. super_admin tidak di-bypass. Penolakan bersamaan dengan aksi lain: yang kalah 409. CATATAN: alasan penolakan BELUM bisa disimpan — header PR tidak punya kolom teks dan Approval Center belum dibangun. Mengirim `notes` akan ditolak 400 supaya tidak hilang diam-diam.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Rejected' } } }
+      put: { tags: ['Purchase Requests'], summary: 'Tolak order', description: 'Permission: purchase-request:validate (saat submitted) atau purchase-request:approve (saat waiting_finance_approval) — diperiksa per permission, bukan nama role. Penolakan bersamaan dengan aksi lain: yang kalah 409. CATATAN: alasan penolakan BELUM bisa disimpan — header PR tidak punya kolom teks dan Approval Center belum dibangun. Mengirim `notes` akan ditolak 400 supaya tidak hilang diam-diam.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Rejected' } } }
     },
     '/equipment/purchase-requests/{id}/cancel': {
       put: { tags: ['Purchase Requests'], summary: 'Batalkan order', description: 'Role: divisi_alat, hanya pengaju sendiri, dan hanya SEBELUM approved. Order yang sudah approved ditolak 409 karena dananya sudah dicairkan — siapa yang berwenang mencatat dana kembali masuk belum diputuskan, jadi ditutup untuk MVP. Sementara ini pengembaliannya dicatat manual di Kas Alat sebagai cash-in `adjustment` kategori "Koreksi Masuk".', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Cancelled' } } }

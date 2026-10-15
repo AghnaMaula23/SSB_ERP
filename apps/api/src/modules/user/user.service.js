@@ -87,8 +87,27 @@ const assertNotLastSuperAdmin = async (userId, roleCodesAfter) => {
   }
 };
 
+/**
+ * Kebijakan 15 Okt 2026 (2b): super_admin read-only, tapi bisa CRUD akun. Dua
+ * kunci supaya ia tidak bisa memberi dirinya hak tulis:
+ * 1. Tidak ada yang boleh mengubah role AKUNNYA SENDIRI — perubahan role selalu
+ *    dilakukan orang lain.
+ * 2. Role super_admin EKSKLUSIF: tidak bisa digabung dengan role lain, sehingga
+ *    dua super_admin pun tidak bisa saling memberi role operasional.
+ */
+const assertNotSelf = (userId, actorId) => {
+  if (userId === actorId) throw httpError('Role akun sendiri tidak bisa diubah. Minta super_admin lain melakukannya.', 403);
+};
+
+const assertSuperAdminExclusive = (roleCodes) => {
+  if (roleCodes.includes(SUPER_ADMIN) && roleCodes.length > 1) {
+    throw httpError('Role super_admin tidak bisa digabung dengan role lain — super_admin hanya memantau dan mengelola akun', 409);
+  }
+};
+
 // Replace seluruh role user sekaligus
-const setRoles = async (userId, roleIds) => {
+const setRoles = async (userId, roleIds, actorId) => {
+  assertNotSelf(userId, actorId);
   await findUserOrFail(userId);
   const unique = [...new Set(roleIds)];
 
@@ -96,6 +115,7 @@ const setRoles = async (userId, roleIds) => {
   const missing = unique.filter((id) => !roles.some((r) => r.id === id));
   if (missing.length) throw httpError(`Role tidak ditemukan: ${missing.join(', ')}`, 404);
 
+  assertSuperAdminExclusive(roles.map((r) => r.code));
   await assertNotLastSuperAdmin(userId, roles.map((r) => r.code));
 
   await prisma.$transaction([
@@ -108,10 +128,14 @@ const setRoles = async (userId, roleIds) => {
   return shapeUser(await findUserOrFail(userId));
 };
 
-const addRole = async (userId, roleId) => {
+const addRole = async (userId, roleId, actorId) => {
+  assertNotSelf(userId, actorId);
   await findUserOrFail(userId);
   const role = await findRoleOrFail(roleId);
   if (!role.isActive) throw httpError(`Role "${role.code}" sedang nonaktif`, 409);
+
+  const current = await prisma.userRole.findMany({ where: { userId }, include: { role: { select: { code: true } } } });
+  assertSuperAdminExclusive([...current.map((ur) => ur.role.code), role.code]);
 
   const exists = await prisma.userRole.findUnique({ where: { userId_roleId: { userId, roleId } } });
   if (exists) throw httpError('User sudah memiliki role ini', 409);
@@ -120,7 +144,8 @@ const addRole = async (userId, roleId) => {
   return shapeUser(await findUserOrFail(userId));
 };
 
-const removeRole = async (userId, roleId) => {
+const removeRole = async (userId, roleId, actorId) => {
+  assertNotSelf(userId, actorId);
   await findUserOrFail(userId);
   const role = await findRoleOrFail(roleId);
 

@@ -101,7 +101,7 @@ pada kebetulan FE tidak mengirimnya.
 Mengirimnya sekarang dibalas 400 dengan pesan yang mengarahkan ke halaman
 Maintenance. Aturannya ditegakkan, bukan diharapkan.
 
-## E3. `hasPermission()` mem-bypass super_admin — akan bertabrakan dengan PR
+## E3. `hasPermission()` mem-bypass super_admin — WAJIB DIPERBAIKI (15 Okt 2026)
 
 `apps/web/src/services/permissions.js`:
 
@@ -109,17 +109,23 @@ Maintenance. Aturannya ditegakkan, bukan diharapkan.
 return user.roles?.includes('super_admin') || user.permissions?.includes(permission);
 ```
 
-Untuk semua modul lama ini benar. **Untuk purchase request ini salah**: backend
-memakai `authorizeStrict()` yang sengaja TIDAK mem-bypass super_admin pada
-`validate` dan `approve`.
+**Kebijakan backend berubah 15 Okt 2026: super_admin hanya memantau** — `*:read`
+di semua modul, CRUD hanya di manajemen akun. Backend tidak lagi punya bypass
+apa pun (`authorizeStrict` dihapus), dan 36 permission tulis super_admin sudah
+dicabut dari database.
 
-Akibatnya nanti: super_admin melihat tombol "Validasi" dan "Setujui", menekannya,
-lalu dapat 403. Diverifikasi lewat login sungguhan — permission super_admin
-memang hanya `read, create, update`.
+Akibatnya bypass di FE sekarang salah **di semua modul**: super_admin melihat
+tombol tambah/ubah/setujui di mana-mana, menekannya, lalu dapat 403 dengan pesan
+"super_admin hanya bisa melihat data dan mengelola akun sistem".
 
-Perbaikan saat membangun halaman approval: untuk dua aksi itu cek
-`user.permissions.includes(...)` langsung, jangan lewat `hasPermission()`. Atau
-tambahkan parameter kedua, mis. `hasPermission('purchase-request:approve', { allowSuperAdmin: false })`.
+Perbaikan: hapus `user.roles?.includes('super_admin') ||` — cukup
+`user.permissions?.includes(permission)`. Permission super_admin di
+`/api/auth/me` sudah mencerminkan hak aksesnya yang sebenarnya.
+`ModuleSelection.jsx` (`isSuperAdmin`) juga perlu ditinjau: super_admin boleh
+masuk semua modul, tapi hanya untuk melihat.
+
+Ikut berubah: role akun sendiri tidak bisa diubah (403), dan super_admin tidak
+bisa digabung role lain (409) — layar manajemen user perlu menampilkan pesan itu.
 
 ## E4. Integrasi Purchase Order — BERES (commit 2d6b0c9, 33d0070)
 

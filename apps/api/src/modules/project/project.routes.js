@@ -32,8 +32,7 @@ const statusBodyRule = (allowed) =>
 /**
  * Kolom yang dibuat sistem. Ditolak dengan 400 kalau dikirim klien daripada
  * diterima lalu dibuang diam-diam — pengirimnya harus tahu nilainya tidak dipakai.
- * Kode project TIDAK termasuk: super_admin boleh mengirimnya untuk migrasi data
- * lama, dan siapa yang boleh diputuskan di service (403 kalau bukan super_admin).
+ * Kode project juga termasuk — selalu dibuat sistem (override dibuang 15 Okt 2026).
  */
 const rejectSystemManaged = (...fields) =>
   fields.map((f) =>
@@ -74,10 +73,6 @@ const optionalNameRule = (field, label) =>
   body(field).optional().trim().notEmpty().withMessage(`${label} tidak boleh kosong`)
     .isLength({ max: 255 }).withMessage(`${label} maksimal 255 karakter`);
 
-const codeOverrideRule = (field) =>
-  body(field).optional().trim().notEmpty().withMessage('Kode project tidak boleh string kosong')
-    .isLength({ max: 50 }).withMessage('Kode project maksimal 50 karakter');
-
 /**
  * Daftarkan CRUD satu tipe project. Menambah tipe project baru = satu panggilan
  * di sini, bukan menyalin lima rute.
@@ -109,14 +104,14 @@ const mountProjectType = (path, kind, { createRules, updateRules }) => {
 };
 
 mountProjectType('construction', 'construction', {
-  createRules: [nameRule('projectName', 'Nama project'), codeOverrideRule('projectCode'),
+  createRules: [nameRule('projectName', 'Nama project'), ...rejectSystemManaged('projectCode'),
     ...commonProjectRules, ...constructionRules],
   updateRules: [optionalNameRule('projectName', 'Nama project'),
     ...commonProjectRules, ...constructionRules],
 });
 
 mountProjectType('external-rental', 'external-rental', {
-  createRules: [nameRule('rentalProjectName', 'Nama rental project'), codeOverrideRule('rentalProjectCode'),
+  createRules: [nameRule('rentalProjectName', 'Nama rental project'), ...rejectSystemManaged('rentalProjectCode'),
     ...commonProjectRules, ...contractRules,
     body('billingMethod').optional({ nullable: true }).isIn(BILLING_METHODS)
       .withMessage(`billingMethod harus salah satu dari: ${BILLING_METHODS.join(', ')}`)],
@@ -131,7 +126,7 @@ const fieldPicRule = body('fieldPicId').optional({ nullable: true }).isInt({ min
   .withMessage('fieldPicId harus ID user').toInt();
 
 mountProjectType('external-supply', 'external-supply', {
-  createRules: [nameRule('supplyProjectName', 'Nama supply project'), codeOverrideRule('supplyProjectCode'),
+  createRules: [nameRule('supplyProjectName', 'Nama supply project'), ...rejectSystemManaged('supplyProjectCode'),
     ...commonProjectRules, ...contractRules, fieldPicRule],
   updateRules: [optionalNameRule('supplyProjectName', 'Nama supply project'),
     ...commonProjectRules, ...contractRules, fieldPicRule],

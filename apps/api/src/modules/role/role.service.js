@@ -4,6 +4,18 @@ const { httpError } = require('../../utils/error.js');
 // Role bawaan sistem — tidak boleh dihapus / dinonaktifkan
 const PROTECTED_ROLES = ['super_admin'];
 
+/**
+ * Permission role super_admin DIKUNCI dari API (kebijakan 15 Okt 2026, 2b).
+ * super_admin bisa CRUD role — tanpa kunci ini ia cukup menambahkan permission
+ * tulis ke rolenya sendiri dan kebijakan read-only jadi tidak berarti. Daftarnya
+ * hanya hidup di seeder (ROLE_PERMISSIONS.super_admin).
+ */
+const assertPermissionsEditable = (role) => {
+  if (role.code === 'super_admin') {
+    throw httpError('Permission role super_admin dikunci kebijakan sistem (read-only + manajemen akun) dan tidak bisa diubah lewat API', 409);
+  }
+};
+
 const roleWithPermissions = {
   permissions: { include: { permission: true } },
   _count: { select: { userRoles: true } },
@@ -124,7 +136,7 @@ const assertPermissionsExist = async (permissionIds) => {
 
 // Replace seluruh permission milik role (bulk set dari halaman matrix permission)
 const setPermissions = async (roleId, permissionIds) => {
-  await findRoleOrFail(roleId);
+  assertPermissionsEditable(await findRoleOrFail(roleId));
   const unique = [...new Set(permissionIds)];
   if (unique.length) await assertPermissionsExist(unique);
 
@@ -139,7 +151,7 @@ const setPermissions = async (roleId, permissionIds) => {
 };
 
 const addPermission = async (roleId, permissionId) => {
-  await findRoleOrFail(roleId);
+  assertPermissionsEditable(await findRoleOrFail(roleId));
   await assertPermissionsExist([permissionId]);
 
   const exists = await prisma.rolePermission.findUnique({
@@ -152,7 +164,7 @@ const addPermission = async (roleId, permissionId) => {
 };
 
 const removePermission = async (roleId, permissionId) => {
-  await findRoleOrFail(roleId);
+  assertPermissionsEditable(await findRoleOrFail(roleId));
 
   const exists = await prisma.rolePermission.findUnique({
     where: { roleId_permissionId: { roleId, permissionId } },

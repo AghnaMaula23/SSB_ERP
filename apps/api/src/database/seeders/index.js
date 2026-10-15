@@ -81,7 +81,7 @@ const PERMISSIONS = [
   { module: 'damage',      action: 'update', label: 'Ubah, selesaikan, dan batalkan laporan kerusakan' },
   // Purchase request: tiga aksi pertama milik Divisi Alat sebagai pengaju.
   // `validate` dan `approve` sengaja dipisah karena pemiliknya divisi berbeda —
-  // dan super_admin TIDAK boleh memegang keduanya (lihat authorizeStrict).
+  // dan super_admin tidak memegang keduanya (super_admin read-only).
   { module: 'purchase-request', action: 'read',     label: 'Lihat purchase request alat' },
   { module: 'purchase-request', action: 'create',   label: 'Ajukan purchase request alat' },
   { module: 'purchase-request', action: 'update',   label: 'Ubah dan batalkan purchase request sendiri' },
@@ -113,16 +113,18 @@ const CASH_CATEGORIES = [
   { categoryName: 'Koreksi Keluar',                     transactionType: 'cash_out', orderCategory: null,          description: 'Koreksi saldo yang tercatat kelebihan' },
 ];
 
-// super_admin di-bypass di authorize(), tapi TIDAK di authorizeStrict() — dan
-// permission-nya tetap diisi supaya GET /auth/me memantulkan hak akses yang
-// sebenarnya ke frontend.
+// Modul manajemen akun — satu-satunya tempat super_admin boleh menulis.
+const ACCOUNT_MODULES = ['user', 'role', 'permission'];
+
+// Tidak ada role yang mem-bypass authorize() — hak akses sepenuhnya dari daftar
+// ini, sehingga GET /auth/me memantulkan hak akses yang sebenarnya ke frontend.
 const ROLE_PERMISSIONS = {
-  // super_admin memegang semua KECUALI dua aksi approval finansial. Ini bukan
-  // kelalaian: keputusan 27 Sep 2026 menetapkan super_admin hanya memantau,
-  // dan authorizeStrict() tidak mem-bypass-nya di endpoint itu.
+  // Kebijakan 15 Okt 2026: super_admin MEMANTAU. Read di semua modul, CRUD hanya
+  // di manajemen akun. Permission role ini dikunci dari API (role.service) dan
+  // DISINKRONKAN di bawah — permission tulis yang terlanjur terpetakan dicabut.
   super_admin: PERMISSIONS
-    .map((p) => `${p.module}:${p.action}`)
-    .filter((key) => key !== 'purchase-request:validate' && key !== 'purchase-request:approve'),
+    .filter((p) => p.action === 'read' || ACCOUNT_MODULES.includes(p.module))
+    .map((p) => `${p.module}:${p.action}`),
   admin: [
     'user:read', 'role:read', 'permission:read',
     'equipment:read', 'workhour:read', 'maintenance:read', 'damage:read',
@@ -218,6 +220,18 @@ async function main() {
 
   for (const [roleCode, keys] of Object.entries(ROLE_PERMISSIONS)) {
     const role = await prisma.role.findUnique({ where: { code: roleCode } });
+
+    // Role lain hanya ditambah (Admin boleh menambah permission lewat API).
+    // super_admin DISINKRONKAN: permission-nya dikunci dari API, jadi daftar di
+    // atas adalah satu-satunya sumber — sisanya dicabut.
+    if (roleCode === 'super_admin') {
+      const allowedIds = keys.map((k) => permissionByKey.get(k)?.id).filter(Boolean);
+      const { count } = await prisma.rolePermission.deleteMany({
+        where: { roleId: role.id, permissionId: { notIn: allowedIds } },
+      });
+      if (count) console.log(`  super_admin: ${count} permission di luar kebijakan dicabut`);
+    }
+
     for (const key of keys) {
       const permission = permissionByKey.get(key);
       if (!permission) continue;
@@ -249,9 +263,8 @@ async function main() {
     create: { userId: admin.id, roleId: superRole.id },
   });
 
-  // User demo per role. Tanpa ini alur persetujuan purchase request TIDAK BISA
-  // diuji sama sekali: super_admin sengaja tidak memegang validate/approve,
-  // jadi hanya user ber-role admin dan finance yang bisa menjalankannya.
+  // User demo per role. Tanpa ini alur operasional TIDAK BISA diuji sama
+  // sekali: super_admin read-only, jadi semua aksi tulis dijalankan role-nya.
   console.log('Seeding user demo per role...');
   const DEMO_USERS = [
     { username: 'admin',   fullName: 'Admin Kantor',      email: 'admin.kantor@ssb-inc.com', role: 'admin' },

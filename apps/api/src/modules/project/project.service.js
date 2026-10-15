@@ -151,24 +151,15 @@ const assertDateOrder = (config, merged) => {
 const create = async (kind, payload, user) => {
   const config = typeConfigOrFail(kind);
   const writable = coerceDates(pickWritable(payload, config.writable), config.dateFields);
-  const manualCode = payload[config.codeField];
-
-  // Kode project dibuat sistem. Override hanya untuk super_admin, dipakai saat
-  // memigrasi project lama yang harus tetap memakai kode aslinya. Kebijakan ini
-  // hidup di service saja — pola yang sama dengan assetCode alat.
-  if (manualCode && !user.roles.includes('super_admin')) {
-    throw httpError(`${config.codeField} dibuat otomatis oleh sistem dan tidak bisa diisi manual`, 403);
-  }
-  if (manualCode) {
-    const exists = await prisma[config.model].findUnique({ where: { [config.codeField]: manualCode } });
-    if (exists) throw httpError(`Kode "${manualCode}" sudah dipakai`, 409);
-  }
+  // Kode project SELALU dibuat sistem. Override manual (dulu khusus super_admin,
+  // untuk migrasi data lama) dibuang 15 Okt 2026: super_admin kini read-only, dan
+  // migrasi data lama dikerjakan lewat skrip impor sekali jalan, bukan API.
 
   assertDateOrder(config, writable);
   await assertFieldPic(writable);
 
   const row = await prisma.$transaction(async (tx) => {
-    const code = manualCode || await nextDocumentNumber(tx, config.docType, { pad: PROJECT_DOC_PAD });
+    const code = await nextDocumentNumber(tx, config.docType, { pad: PROJECT_DOC_PAD });
     return tx[config.model].create({
       data: { ...writable, [config.codeField]: code, createdBy: user.id },
       include: includeFor(config),

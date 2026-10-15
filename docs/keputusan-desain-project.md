@@ -75,7 +75,9 @@ isian klien (`PRJ-001`); itu **diperbaiki**, bukan diikuti, karena bertentangan
 dengan aturan nomor dokumen di CLAUDE.md dan membuka pintu kode kembar saat dua
 orang input bersamaan.
 
-Override manual hanya untuk `super_admin`, dipakai memigrasi project lama yang
+~~Override manual hanya untuk `super_admin`~~ — **dibuang 15 Okt 2026**: super_admin
+kini read-only, dan migrasi data lama dikerjakan lewat skrip impor sekali jalan.
+Kode yang dikirim klien ditolak 400. Dulu: override dipakai memigrasi project lama yang
 harus tetap memakai kode aslinya. Kebijakannya hidup di service (403 kalau bukan
 super_admin), validator hanya memeriksa bentuknya — pola identik dengan `assetCode`.
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
-const { authenticate, authorize, authorizeStrict } = require('../../middleware/auth.js');
+const { authenticate, authorize } = require('../../middleware/auth.js');
 const validate = require('../../middleware/validate.js');
 const controller = require('./purchase-request.controller.js');
 
@@ -139,15 +139,15 @@ router.put('/:id/cancel',
   validate([idParam, notesNotSupported]),
   controller.cancel);
 
-// authorizeStrict: super_admin TIDAK di-bypass di dua endpoint berikut.
-// Pemisahan wewenang mengalahkan bypass — keputusan 27 September 2026.
+// Validasi Admin & approval Finance. super_admin tidak memegang permission ini
+// (read-only kecuali manajemen akun, kebijakan 15 Okt 2026).
 router.put('/:id/validate',
-  authorizeStrict('purchase-request:validate'),
+  authorize('purchase-request:validate'),
   validate([idParam, notesNotSupported]),
   controller.validateByAdmin);
 
 router.put('/:id/approve',
-  authorizeStrict('purchase-request:approve'),
+  authorize('purchase-request:approve'),
   validate([
     idParam,
     notesNotSupported,
@@ -174,9 +174,9 @@ router.put('/:id/approve',
   controller.approve);
 
 // Penolakan dipegang Admin (saat submitted) atau Finance (saat menunggu
-// pencairan). Keduanya aksi berwenang, jadi ikut authorizeStrict.
+// pencairan); aturan per status diperiksa di service.
 router.put('/:id/reject',
-  authorizeStrict('purchase-request:validate', 'purchase-request:approve'),
+  authorize('purchase-request:validate', 'purchase-request:approve'),
   validate([idParam, notesNotSupported]),
   controller.reject);
 

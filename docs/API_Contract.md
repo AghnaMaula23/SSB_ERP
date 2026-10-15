@@ -101,15 +101,15 @@ maupun email:
 
 | Kode | Keterangan |
 |---|---|
-| `super_admin` | Akses semua, KECUALI `purchase-request:validate` dan `:approve` — keputusan 27 Sep 2026, super_admin hanya memantau transaksi keuangan |
+| `super_admin` | **Hanya memantau** (kebijakan 15 Okt 2026): `*:read` di semua modul, CRUD hanya di manajemen akun (`user`, `role`, `permission`). Role eksklusif (tidak bisa digabung role lain); permission-nya dikunci dari API |
 | `admin` | Admin kantor. Memiliki project dan kontrak tahapan; memvalidasi progress |
 | `finance` | Menyetujui pencairan dana; baca saja untuk operasional |
 | `divisi_alat` | Master alat, pool, alokasi, Kas Alat |
 | `lapangan` | Mencatat progress harian, jam kerja, dan menerima alat di lokasi |
 
 Permission berformat `module:action`, dicek `authorize('module:action')`.
-`authorizeStrict()` TIDAK mem-bypass super_admin — dipakai di endpoint yang
-menuntut pemisahan wewenang.
+**Tidak ada role yang mem-bypass** — hak akses sepenuhnya dari daftar permission
+(`GET /api/auth/me`). Tidak ada yang bisa mengubah role akunnya sendiri (403).
 
 ## Cakupan endpoint saat ini
 

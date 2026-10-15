@@ -23,21 +23,21 @@ const detail = async (req, res, next) => {
 
 const setRoles = async (req, res, next) => {
   try {
-    const user = await service.setRoles(Number(req.params.id), req.body.roleIds);
+    const user = await service.setRoles(Number(req.params.id), req.body.roleIds, req.user.id);
     return success(res, user, 'Role user berhasil diperbarui');
   } catch (err) { next(err); }
 };
 
 const addRole = async (req, res, next) => {
   try {
-    const user = await service.addRole(Number(req.params.id), Number(req.body.roleId));
+    const user = await service.addRole(Number(req.params.id), Number(req.body.roleId), req.user.id);
     return created(res, user, 'Role berhasil ditugaskan ke user');
   } catch (err) { next(err); }
 };
 
 const removeRole = async (req, res, next) => {
   try {
-    const user = await service.removeRole(Number(req.params.id), Number(req.params.roleId));
+    const user = await service.removeRole(Number(req.params.id), Number(req.params.roleId), req.user.id);
     return success(res, user, 'Role berhasil dilepas dari user');
   } catch (err) { next(err); }
 };
