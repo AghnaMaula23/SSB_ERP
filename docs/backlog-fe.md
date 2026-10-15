@@ -355,3 +355,33 @@ Saat API RM-4 tersedia:
 - `suggestNoteNo` di mock tidak punya padanan: nomor surat jalan diterbitkan
   supplier, jadi diketik dari dokumen fisiknya.
 
+---
+
+## E16. Penerimaan material & Inventory tahapan pakai API (16 Okt 2026)
+
+API RM-5 tersedia (Swagger tag *Material Receipt* & *Material Stock*).
+
+**Penerimaan** — layar baru di menu Lapangan, dari daftar delivery yang `receipt: null`:
+- `POST /api/material-receipts` **multipart**: `materialDeliveryId`, `receivedAt`
+  (waktu), `receivedQuantity` (yang datang), `acceptedQuantity` (diterima baik),
+  bukti **wajib 1–5 file** di field `proofs`. Supply: `externalReceiverName` wajib
+  (penerima di klien); konstruksi: jangan kirim kolom penerima eksternal.
+- Delivery yang sudah diterima tidak bisa dibatalkan/diganti surat jalannya — sembunyikan
+  tombolnya kalau `delivery.receipt` terisi.
+
+**Inventory tahapan** (`admin/project/pages/Inventory*.jsx` + `fieldMockService.js`)
+perlu dirombak, bukan sekadar diganti endpoint:
+- Tidak ada "Tambah Barang": material berasal dari **master jenis material**, dan
+  baris stok muncul sendiri begitu ada receipt atau mutasi. Nama bebas, kategori,
+  satuan sendiri, dan **stok awal** dibuang — stok awal = `adjustment_in` beralasan.
+- **Stok minimum** belum ada di backend (future feature) — sembunyikan dulu.
+- Saldo: `GET /api/material-stock?subProjectId=` → `received`, `adjustmentIn`,
+  `used`, `adjustmentOut`, `balance` per material.
+- Mutasi: `POST /api/material-stock/movements` dengan `movementType`
+  `used` | `adjustment_in` | `adjustment_out` (koreksi wajib `notes`). Stok tidak
+  boleh minus → 409, tampilkan pesannya.
+- Salah input: `PUT /api/material-stock/movements/:id/cancel` `{ reason }` — bukan
+  mencatat mutasi lawan.
+- Riwayat stok masuk = `GET /api/material-receipts?subProjectId=`; riwayat mutasi =
+  `GET /api/material-stock/movements?subProjectId=`. Gabungkan di layar kalau perlu.
+

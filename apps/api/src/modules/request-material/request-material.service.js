@@ -61,7 +61,7 @@ const rejectedBy = (row) => {
   return row.financeReviewedAt ? 'finance' : 'admin';
 };
 
-const shapeItem = (item, delivered) => {
+const shapeItem = (item, fulfillment) => {
   const requested = toNumber(item.requestedQuantity);
   const validated = toNumber(item.adminValidatedQuantity);
   return {
@@ -76,10 +76,11 @@ const shapeItem = (item, delivered) => {
     materialPoolItemId: item.materialPoolItemId,
     itemNotes: item.itemNotes,
     adminNotes: item.adminNotes,
-    // RM-4: jumlahan delivery aktif, dihitung saat dibaca (G4). Boleh melebihi
-    // effectiveQuantity — truk yang datang tetap dicatat; penandaannya future feature (G5).
-    deliveredQuantity: delivered?.quantity ?? 0,
-    deliveryCount: delivered?.count ?? 0,
+    // Jumlahan delivery aktif (G4) & receipt aktif (RM-5), dihitung saat dibaca.
+    // Boleh melebihi effectiveQuantity — truk yang datang tetap dicatat (G5).
+    deliveredQuantity: fulfillment?.delivered ?? 0,
+    deliveryCount: fulfillment?.count ?? 0,
+    acceptedQuantity: fulfillment?.accepted ?? 0,
   };
 };
 
@@ -113,9 +114,9 @@ const shapeHeader = (row) => ({
   createdAt: row.createdAt,
 });
 
-// `deliveredByItem` hanya terisi saat dibaca: delivery baru ada setelah approved,
+// `fulfillmentByItem` hanya terisi saat dibaca: delivery baru ada setelah approved,
 // dan setelah approved tidak ada aksi lain yang mengembalikan detail.
-const shapeDetail = (row, deliveredByItem = new Map()) => ({
+const shapeDetail = (row, fulfillmentByItem = new Map()) => ({
   ...shapeHeader(row),
   adminReviewedBy: shapeActor(row.adminReviewedByUser),
   adminReviewedAt: row.adminReviewedAt,
@@ -125,7 +126,7 @@ const shapeDetail = (row, deliveredByItem = new Map()) => ({
   financeNotes: row.financeNotes,
   cancelledBy: shapeActor(row.cancelledByUser),
   cancelledAt: row.cancelledAt,
-  items: row.items.map((item) => shapeItem(item, deliveredByItem.get(item.id))),
+  items: row.items.map((item) => shapeItem(item, fulfillmentByItem.get(item.id))),
   costs: row.costs.map(shapeCost),
   totalCostAmount: sumAmounts(row.costs.map((c) => c.amount)),
 });
@@ -170,7 +171,7 @@ const list = async ({ page = 1, limit = 20, status, requestType, subProjectId, e
 
 const getById = async (id) => {
   const row = await findOrFail(id);
-  return shapeDetail(row, row.status === 'approved' ? await deliveryService.deliveredByItem(id) : undefined);
+  return shapeDetail(row, row.status === 'approved' ? await deliveryService.fulfillmentByItem(id) : undefined);
 };
 
 // ============================================================

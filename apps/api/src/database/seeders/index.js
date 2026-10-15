@@ -68,6 +68,9 @@ const PERMISSIONS = [
   { module: 'material-request', action: 'validate', label: 'Validasi Admin: sesuaikan kuantitas atau tolak request material' },
   { module: 'material-request', action: 'approve',  label: 'Approval Finance: setujui atau tolak paket dana request material' },
   { module: 'material-delivery', action: 'create', label: 'Catat delivery + surat jalan, ganti file, batalkan' },
+  { module: 'material-receipt', action: 'create', label: 'Catat penerimaan material + bukti, batalkan' },
+  { module: 'material-stock', action: 'read',   label: 'Lihat stok material per tahapan' },
+  { module: 'material-stock', action: 'create', label: 'Catat pemakaian & koreksi stok material, batalkan' },
   { module: 'equipment',  action: 'read',   label: 'Lihat master alat' },
   { module: 'equipment',  action: 'create', label: 'Tambah jenis/unit alat' },
   { module: 'equipment',  action: 'update', label: 'Ubah data dan status alat' },
@@ -152,6 +155,8 @@ const ROLE_PERMISSIONS = {
     // biaya, teruskan ke Finance. Tanpa create (pengaju = Lapangan) dan
     // tanpa approve (milik Finance)
     'material-request:read', 'material-request:validate',
+    // Admin memantau stok material tahapan (RM-5) — tanpa mencatat mutasi
+    'material-stock:read',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
@@ -163,7 +168,9 @@ const ROLE_PERMISSIONS = {
     // Finance menyetujui dana material (RM-3), jadi perlu membaca master & pool
     'material:read', 'supplier:read', 'material-pool:read', 'material-request:read',
     // Finance memutuskan paket dana request material (RM-3) — super_admin TIDAK
-    'material-request:approve'],
+    'material-request:approve',
+    // Pemakaian material = biaya proyek yang akan dibaca GL
+    'material-stock:read'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
@@ -204,7 +211,9 @@ const ROLE_PERMISSIONS = {
     'material-request:read', 'material-request:create',
     // Lapangan memegang surat jalan, jadi mencatat delivery untuk semua jenis
     // request (RM-4, G3). Admin cukup melihat lewat material-request:read.
-    'material-delivery:create'],
+    'material-delivery:create',
+    // Lapangan yang menerima material dan memakainya di lokasi (RM-5)
+    'material-receipt:create', 'material-stock:read', 'material-stock:create'],
 };
 
 async function main() {

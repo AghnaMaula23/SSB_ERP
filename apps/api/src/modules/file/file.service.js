@@ -26,6 +26,11 @@ const OWNERS = [
     permission: 'material-request:read',
     find: (fileId) => prisma.materialDelivery.findUnique({ where: { deliveryNoteFileId: fileId }, select: { id: true } }),
   },
+  {
+    prefix: 'receipt-proofs',
+    permission: 'material-request:read',
+    find: (fileId) => prisma.materialReceiptAttachment.findUnique({ where: { fileId }, select: { id: true } }),
+  },
 ];
 
 const buildKey = (prefix, ext) => {
@@ -34,37 +39,50 @@ const buildKey = (prefix, ext) => {
   return `${prefix}/${now.getUTCFullYear()}/${month}/${crypto.randomUUID()}.${ext}`;
 };
 
+const removeQuietly = (keys) => Promise.all(keys.map((key) => storage.remove(key)
+  .catch((e) => console.error(`[FILE] gagal menghapus file yatim ${key}: ${e.message}`))));
+
 /**
- * Unggah file lalu jalankan `fn(tx, fileRow)` di SATU transaksi bersama baris
- * `files`-nya (L4). File & database tidak bisa satu transaksi, jadi kalau
- * transaksi gagal, objek storage dihapus di sini. Kalau server mati tepat di
- * antaranya, sisanya disapu `sweepOrphans`.
+ * Unggah file lalu jalankan `fn(tx, fileRows)` di SATU transaksi bersama baris
+ * `files`-nya (L4). File & database tidak bisa satu transaksi, jadi kalau unggah
+ * atau transaksi gagal, objek storage yang sudah masuk dihapus di sini. Kalau
+ * server mati tepat di antaranya, sisanya disapu `sweepOrphans`.
  *
- * `upload` = hasil middleware upload: { buffer, originalName, type }.
+ * `uploads` = hasil middleware upload: [{ buffer, originalName, type }].
  */
-const withUploadedFile = async (upload, { prefix, userId }, fn) => {
+const withUploadedFiles = async (uploads, { prefix, userId }, fn) => {
   if (!OWNERS.some((o) => o.prefix === prefix)) throw new Error(`Prefix lampiran "${prefix}" belum terdaftar di OWNERS`);
-  const key = buildKey(prefix, upload.type.ext);
-  await storage.put(key, upload.buffer, upload.type.mime);
+  const stored = [];
   try {
+    for (const upload of uploads) {
+      const key = buildKey(prefix, upload.type.ext);
+      await storage.put(key, upload.buffer, upload.type.mime);
+      stored.push({ key, upload });
+    }
     return await prisma.$transaction(async (tx) => {
-      const file = await tx.file.create({
-        data: {
-          storageKey: key,
-          originalName: upload.originalName,
-          mimeType: upload.type.mime,
-          sizeBytes: upload.buffer.length,
-          sha256: crypto.createHash('sha256').update(upload.buffer).digest('hex'),
-          uploadedBy: userId,
-        },
-      });
-      return fn(tx, file);
+      const files = [];
+      for (const { key, upload } of stored) {
+        files.push(await tx.file.create({
+          data: {
+            storageKey: key,
+            originalName: upload.originalName,
+            mimeType: upload.type.mime,
+            sizeBytes: upload.buffer.length,
+            sha256: crypto.createHash('sha256').update(upload.buffer).digest('hex'),
+            uploadedBy: userId,
+          },
+        }));
+      }
+      return fn(tx, files);
     });
   } catch (err) {
-    await storage.remove(key).catch((e) => console.error(`[FILE] gagal menghapus file yatim ${key}: ${e.message}`));
+    await removeQuietly(stored.map((s) => s.key));
     throw err;
   }
 };
+
+/** Bentuk satu file: `fn(tx, fileRow)`. */
+const withUploadedFile = (upload, options, fn) => withUploadedFiles([upload], options, (tx, [file]) => fn(tx, file));
 
 /** File lama dipertahankan sebagai riwayat, ditandai penggantinya (L6). */
 const markSuperseded = (tx, oldFileId, newFileId) =>
@@ -126,4 +144,4 @@ const sweepOrphans = async () => {
   return { removed };
 };
 
-module.exports = { withUploadedFile, markSuperseded, getDownloadUrl, sweepOrphans, shapeFile };
+module.exports = { withUploadedFile, withUploadedFiles, markSuperseded, getDownloadUrl, sweepOrphans, shapeFile };

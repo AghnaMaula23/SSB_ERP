@@ -52,15 +52,19 @@ model User {
   equipmentRequestsEquipmentReviewed EquipmentRequest[] @relation("EqRequestEquipmentReviewedBy")
   equipmentRequestsCancelled         EquipmentRequest[] @relation("EqRequestCancelledBy")
 
-  materialPoolsCreated            MaterialPool[]     @relation("MaterialPoolCreatedBy")
-  materialRequestsCreated         MaterialRequest[]  @relation("MatRequestRequestedBy")
-  materialRequestsAdminReviewed   MaterialRequest[]  @relation("MatRequestAdminReviewedBy")
-  materialRequestsFinanceReviewed MaterialRequest[]  @relation("MatRequestFinanceReviewedBy")
-  materialRequestsCancelled       MaterialRequest[]  @relation("MatRequestCancelledBy")
-  materialDeliveriesCreated       MaterialDelivery[] @relation("MatDeliveryCreatedBy")
-  materialDeliveriesCancelled     MaterialDelivery[] @relation("MatDeliveryCancelledBy")
-  filesUploaded                   File[]             @relation("FileUploadedBy")
-  filesTrashed                    File[]             @relation("FileTrashedBy")
+  materialPoolsCreated            MaterialPool[]          @relation("MaterialPoolCreatedBy")
+  materialRequestsCreated         MaterialRequest[]       @relation("MatRequestRequestedBy")
+  materialRequestsAdminReviewed   MaterialRequest[]       @relation("MatRequestAdminReviewedBy")
+  materialRequestsFinanceReviewed MaterialRequest[]       @relation("MatRequestFinanceReviewedBy")
+  materialRequestsCancelled       MaterialRequest[]       @relation("MatRequestCancelledBy")
+  materialDeliveriesCreated       MaterialDelivery[]      @relation("MatDeliveryCreatedBy")
+  materialDeliveriesCancelled     MaterialDelivery[]      @relation("MatDeliveryCancelledBy")
+  filesUploaded                   File[]                  @relation("FileUploadedBy")
+  filesTrashed                    File[]                  @relation("FileTrashedBy")
+  materialReceiptsCreated         MaterialReceipt[]       @relation("MatReceiptCreatedBy")
+  materialReceiptsCancelled       MaterialReceipt[]       @relation("MatReceiptCancelledBy")
+  stockMovementsCreated           MaterialStockMovement[] @relation("StockMovementCreatedBy")
+  stockMovementsCancelled         MaterialStockMovement[] @relation("StockMovementCancelledBy")
 
   @@map("users")
 }
@@ -947,6 +951,7 @@ model SubProject {
   equipmentAllocations SubProjectEquipmentAllocation[]
   equipmentRequests    EquipmentRequest[]
   materialRequests     MaterialRequest[]
+  stockMovements       MaterialStockMovement[]
 
   // Satu construction project hanya boleh punya satu tahapan per tipe
   @@unique([constructionProjectId, subProjectType])
@@ -1231,8 +1236,9 @@ model MaterialType {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  poolItems    MaterialPoolItem[]
-  requestItems MaterialRequestItem[]
+  poolItems      MaterialPoolItem[]
+  requestItems   MaterialRequestItem[]
+  stockMovements MaterialStockMovement[]
 
   @@map("material_types")
 }
@@ -1496,11 +1502,12 @@ model File {
   trashedBy    Int?       @map("trashed_by")
   trashedAt    DateTime?  @map("trashed_at")
 
-  replacedBy     File?             @relation("FileReplacedBy", fields: [replacedById], references: [id], onDelete: Restrict)
-  replaces       File?             @relation("FileReplacedBy")
-  uploadedByUser User              @relation("FileUploadedBy", fields: [uploadedBy], references: [id])
-  trashedByUser  User?             @relation("FileTrashedBy", fields: [trashedBy], references: [id])
+  replacedBy     File?                      @relation("FileReplacedBy", fields: [replacedById], references: [id], onDelete: Restrict)
+  replaces       File?                      @relation("FileReplacedBy")
+  uploadedByUser User                       @relation("FileUploadedBy", fields: [uploadedBy], references: [id])
+  trashedByUser  User?                      @relation("FileTrashedBy", fields: [trashedBy], references: [id])
   deliveryNoteOf MaterialDelivery?
+  receiptProofOf MaterialReceiptAttachment?
 
   @@index([status, trashedAt])
   @@map("files")
@@ -1552,9 +1559,106 @@ model MaterialDelivery {
   deliveryNoteFile    File                @relation(fields: [deliveryNoteFileId], references: [id])
   createdByUser       User                @relation("MatDeliveryCreatedBy", fields: [createdBy], references: [id])
   cancelledByUser     User?               @relation("MatDeliveryCancelledBy", fields: [cancelledBy], references: [id])
+  receipts            MaterialReceipt[]
 
   @@unique([supplierId, deliveryNoteNumber, cancelledAt])
   @@index([materialRequestId])
   @@index([materialRequestItemId, materialRequestId])
   @@map("material_deliveries")
+}
+
+// ============================================================
+// REQUEST MATERIAL — receipt + stok (RM-5).
+// Lihat docs/keputusan-desain-request-material.md (H1–H6)
+// ============================================================
+
+/// Penerimaan satu delivery (= satu truk) — paling banyak SATU receipt aktif per
+/// delivery (index unik NULLS NOT DISTINCT pada cancelled_at, ditulis manual di
+/// migrasi), jadi material_receipt_items dari ERD TIDAK dibuat (H1). Tanpa status
+/// validasi (H2): sah begitu dicatat Lapangan bersama buktinya; koreksi = batalkan
+/// lalu catat ulang.
+///
+/// `rejected_quantity` tidak disimpan (= received - accepted) dan `receiver_type`
+/// tidak disimpan (terbaca dari request_type). Untuk konstruksi,
+/// `accepted_quantity` adalah stok MASUK tahapan — tidak disalin ke
+/// material_stock_movements (H4). Untuk supply, dasar tagihan Income.
+model MaterialReceipt {
+  id                    Int       @id @default(autoincrement())
+  receiptCode           String    @unique @map("receipt_code") @db.VarChar(50)
+  materialDeliveryId    Int       @map("material_delivery_id")
+  receivedAt            DateTime  @map("received_at")
+  receivedQuantity      Decimal   @map("received_quantity") @db.Decimal(18, 2)
+  acceptedQuantity      Decimal   @map("accepted_quantity") @db.Decimal(18, 2)
+  externalReceiverName  String?   @map("external_receiver_name") @db.VarChar(150)
+  externalReceiverPhone String?   @map("external_receiver_phone") @db.VarChar(50)
+  notes                 String?   @db.Text
+  createdBy             Int       @map("created_by")
+  cancelledBy           Int?      @map("cancelled_by")
+  cancelledAt           DateTime? @map("cancelled_at")
+  cancelReason          String?   @map("cancel_reason") @db.Text
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  materialDelivery MaterialDelivery            @relation(fields: [materialDeliveryId], references: [id])
+  createdByUser    User                        @relation("MatReceiptCreatedBy", fields: [createdBy], references: [id])
+  cancelledByUser  User?                       @relation("MatReceiptCancelledBy", fields: [cancelledBy], references: [id])
+  attachments      MaterialReceiptAttachment[]
+
+  @@unique([materialDeliveryId, cancelledAt])
+  @@map("material_receipts")
+}
+
+/// Bukti penerimaan — WAJIB minimal satu untuk konstruksi maupun supply (H3).
+/// Penghubung ke `files` (lampiran L1).
+model MaterialReceiptAttachment {
+  id                Int      @id @default(autoincrement())
+  materialReceiptId Int      @map("material_receipt_id")
+  fileId            Int      @unique @map("file_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  materialReceipt MaterialReceipt @relation(fields: [materialReceiptId], references: [id])
+  file            File            @relation(fields: [fileId], references: [id])
+
+  @@index([materialReceiptId])
+  @@map("material_receipt_attachments")
+}
+
+/// Hanya mutasi MANUAL (H4): `received` tidak ada di sini karena stok masuk sudah
+/// tercatat di material_receipts.accepted_quantity — menyalinnya berarti dua
+/// sumber yang bisa bertentangan. `returned` dibuang (belum ada alur pengembalian).
+enum MaterialMovementType {
+  used
+  adjustment_in
+  adjustment_out
+
+  @@map("material_movement_type")
+}
+
+/// Ledger stok manual per tahapan per jenis material. Tabel
+/// sub_project_material_inventory dari ERD TIDAK dibuat (H5): saldo =
+/// SUM(receipt diterima) + SUM(adjustment_in) - SUM(used) - SUM(adjustment_out),
+/// dihitung saat dibaca dari baris yang tidak dibatalkan. Stok tidak boleh minus
+/// (H6) — dijaga service dengan mengunci baris sub_projects.
+model MaterialStockMovement {
+  id             Int                  @id @default(autoincrement())
+  subProjectId   Int                  @map("sub_project_id")
+  materialTypeId Int                  @map("material_type_id")
+  movementType   MaterialMovementType @map("movement_type")
+  quantity       Decimal              @db.Decimal(18, 2)
+  movementDate   DateTime             @map("movement_date") @db.Date
+  notes          String?              @db.Text
+  createdBy      Int                  @map("created_by")
+  cancelledBy    Int?                 @map("cancelled_by")
+  cancelledAt    DateTime?            @map("cancelled_at")
+  cancelReason   String?              @map("cancel_reason") @db.Text
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  subProject      SubProject   @relation(fields: [subProjectId], references: [id])
+  materialType    MaterialType @relation(fields: [materialTypeId], references: [id])
+  createdByUser   User         @relation("StockMovementCreatedBy", fields: [createdBy], references: [id])
+  cancelledByUser User?        @relation("StockMovementCancelledBy", fields: [cancelledBy], references: [id])
+
+  @@index([subProjectId, materialTypeId])
+  @@map("material_stock_movements")
 }

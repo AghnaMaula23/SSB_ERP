@@ -12,7 +12,9 @@ const fileService = require('../file/file.service.js');
 //
 // Satu delivery = satu surat jalan = satu truk = satu material. Tanpa kolom
 // status: aktif atau dibatalkan (cancelled_*); diterima/belum diturunkan dari
-// receipt di RM-5. Dicatat Divisi Lapangan untuk semua jenis request (G3).
+// receipt (RM-5). Dicatat Divisi Lapangan untuk semua jenis request (G3).
+// Begitu punya receipt aktif, delivery terkunci: tidak bisa dibatalkan dan file
+// surat jalannya tidak bisa diganti (H1).
 // Koreksi = batalkan (alasan wajib) lalu catat ulang — tidak ada edit bebas.
 // ============================================================
 
@@ -34,6 +36,8 @@ const INCLUDE = {
   deliveryNoteFile: true,
   createdByUser: { select: ACTOR_SELECT },
   cancelledByUser: { select: ACTOR_SELECT },
+  // Paling banyak satu receipt aktif per delivery (index unik)
+  receipts: { where: { cancelledAt: null }, select: { id: true, receiptCode: true, acceptedQuantity: true, receivedAt: true } },
 };
 
 const shape = (row) => ({
@@ -63,6 +67,10 @@ const shape = (row) => ({
   cancelReason: row.cancelReason,
   createdBy: shapeActor(row.createdByUser),
   createdAt: row.createdAt,
+  // Ringkasan penerimaan — null = belum diterima
+  receipt: row.receipts[0]
+    ? { ...row.receipts[0], acceptedQuantity: toNumber(row.receipts[0].acceptedQuantity) }
+    : null,
 });
 
 const findOrFail = async (id, client = prisma) => {
@@ -179,17 +187,33 @@ const assertOwnActiveDelivery = (row, userId, action) => {
   if (row.createdBy !== userId) throw httpError(`Hanya pencatat delivery ini yang boleh ${action}`, 403);
 };
 
+/** Kunci baris delivery: pencatatan receipt vs pembatalan/ganti file antre di sini. */
+const lockDelivery = (tx, id) => tx.$queryRaw`SELECT id FROM material_deliveries WHERE id = ${id} FOR UPDATE`;
+
+/**
+ * Delivery yang sudah diterima terkunci (H1). Dicek SETELAH baris dikunci, di
+ * transaksi yang sama — receipt yang dicatat bersamaan ikut mengunci baris ini.
+ */
+const assertNotReceived = async (tx, id, action) => {
+  await lockDelivery(tx, id);
+  const receipt = await tx.materialReceipt.findFirst({ where: { materialDeliveryId: id, cancelledAt: null }, select: { receiptCode: true } });
+  if (receipt) {
+    throw httpError(`Delivery ini sudah diterima (${receipt.receiptCode}), jadi tidak bisa ${action}. Batalkan receipt-nya dulu kalau memang salah.`, 409);
+  }
+};
+
 /**
  * Ganti file surat jalan (salah foto, buram). File lama TIDAK dihapus: ditandai
  * `superseded` dan menunjuk penggantinya (L6). Klaim baris memakai file lama di
  * WHERE, supaya dua penggantian bersamaan tidak saling menimpa diam-diam.
- * RM-5: ditolak juga kalau delivery sudah punya receipt.
+ * Ditolak kalau delivery sudah diterima.
  */
 const replaceDeliveryNote = async (id, upload, userId) => {
   const row = await findOrFail(id);
   assertOwnActiveDelivery(row, userId, 'mengganti surat jalannya');
 
   const updated = await fileService.withUploadedFile(upload, { prefix: FILE_PREFIX, userId }, async (tx, file) => {
+    await assertNotReceived(tx, id, 'diganti surat jalannya');
     await claimTransition(tx.materialDelivery,
       { id, cancelledAt: null, deliveryNoteFileId: row.deliveryNoteFileId },
       { deliveryNoteFileId: file.id });
@@ -199,13 +223,14 @@ const replaceDeliveryNote = async (id, upload, userId) => {
   return shape(updated);
 };
 
-/** RM-5: ditolak kalau delivery sudah punya receipt. */
+/** Ditolak kalau delivery sudah diterima. */
 const cancel = async (id, { reason }, userId) => {
   const row = await findOrFail(id);
   assertOwnActiveDelivery(row, userId, 'membatalkannya');
   if (!reason?.trim()) throw httpError('Alasan pembatalan wajib diisi', 400);
 
   const updated = await prisma.$transaction(async (tx) => {
+    await assertNotReceived(tx, id, 'dibatalkan');
     await claimTransition(tx.materialDelivery, { id, cancelledAt: null },
       { cancelledAt: new Date(), cancelledBy: userId, cancelReason: reason.trim() });
     return findOrFail(id, tx);
@@ -213,12 +238,22 @@ const cancel = async (id, { reason }, userId) => {
   return shape(updated);
 };
 
-/** Total terkirim per item request, delivery batal tidak dihitung (G4). Dihitung saat dibaca. */
-const deliveredByItem = async (materialRequestId) => {
-  const sums = await prisma.materialDelivery.groupBy({
-    by: ['materialRequestItemId'], where: { materialRequestId, cancelledAt: null }, _sum: { deliveredQuantity: true }, _count: true,
-  });
-  return new Map(sums.map((s) => [s.materialRequestItemId, { quantity: toNumber(s._sum.deliveredQuantity), count: s._count }]));
+/**
+ * Per item request: total terkirim (G4) dan total diterima baik (RM-5), dari
+ * delivery & receipt aktif. Dihitung saat dibaca. Satu delivery paling banyak
+ * punya satu receipt aktif, jadi LEFT JOIN tidak menggandakan baris.
+ */
+const fulfillmentByItem = async (materialRequestId) => {
+  const rows = await prisma.$queryRaw`
+    SELECT d.material_request_item_id AS item_id, COUNT(*)::int AS delivery_count,
+      SUM(d.delivered_quantity) AS delivered, COALESCE(SUM(r.accepted_quantity), 0) AS accepted
+    FROM material_deliveries d
+    LEFT JOIN material_receipts r ON r.material_delivery_id = d.id AND r.cancelled_at IS NULL
+    WHERE d.material_request_id = ${materialRequestId} AND d.cancelled_at IS NULL
+    GROUP BY d.material_request_item_id`;
+  return new Map(rows.map((r) => [r.item_id, {
+    delivered: toNumber(r.delivered), count: r.delivery_count, accepted: toNumber(r.accepted),
+  }]));
 };
 
-module.exports = { list, getById, create, replaceDeliveryNote, cancel, deliveredByItem };
+module.exports = { list, getById, create, replaceDeliveryNote, cancel, fulfillmentByItem, lockDelivery };

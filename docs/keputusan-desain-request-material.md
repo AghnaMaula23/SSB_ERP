@@ -14,7 +14,7 @@ sejak 15 Okt 2026 sisanya langsung di `module/project` (satu commit per tahap):
 | RM-3 | Biaya + approval paket oleh Finance | **Dibangun 15 Okt 2026** — lihat bagian RM-3 di bawah |
 | — | Lampiran bersama (surat jalan, bukti receipt, damage, PR, project files) | **Fondasi dibangun 16 Okt 2026** — `docs/keputusan-desain-lampiran.md` |
 | RM-4 | Delivery + surat jalan | **Dibangun 16 Okt 2026** — lihat bagian RM-4 |
-| RM-5 | Receipt + inventori + stock movement (dibaca Income) | Belum |
+| RM-5 | Receipt + stok material per tahapan (dibaca Income) | **Dibangun 16 Okt 2026** — lihat bagian RM-5 |
 
 ---
 
@@ -378,3 +378,82 @@ terakhir tidak bisa setengah muat. Sistem **tidak menolak** — truk yang benar-
 datang harus bisa dicatat. Penandaan "lebih X m³" untuk Finance dan penyelesaian
 uangnya (lewat `financial_correction_requests`) ditunda sebagai fitur antisipasi.
 
+---
+
+# RM-5 — Dibangun 16 Oktober 2026 (migrasi `20261016120000_add_material_receipts_and_stock`)
+
+Endpoint: `/api/material-receipts` (list, detail, catat + bukti, batal) dan
+`/api/material-stock` (saldo per tahapan, list/catat/batal mutasi manual).
+
+## H1. Satu receipt aktif per delivery, tanpa tabel item
+
+Delivery = satu truk, dibongkar sekali — penerimaan bertahap ERD (1:N) tidak terjadi.
+`material_receipt_items` tidak dibuat; kuantitas langsung di header:
+`received_quantity` (yang datang) dan `accepted_quantity` (diterima baik, 0..received,
+CHECK). `rejected_quantity` tidak disimpan (= selisihnya); `receiver_type` tidak
+disimpan (terbaca dari `request_type`). Index unik `(material_delivery_id,
+cancelled_at) NULLS NOT DISTINCT`: koreksi = batalkan lalu catat ulang.
+
+Begitu diterima, delivery terkunci — tidak bisa dibatalkan atau diganti surat
+jalannya. Pencatatan receipt dan aksi delivery sama-sama mengunci baris delivery
+(`FOR UPDATE`), jadi keduanya tidak bisa lolos bersamaan.
+
+## H2. Tanpa status validasi
+
+Enum `material_receipt_status` (submitted/validated/rejected) dari ERD tidak dibuat
+(diputuskan 16 Okt 2026). Receipt sah begitu dicatat Lapangan bersama buktinya.
+Untuk supply, pemeriksaan terjadi di Income (Admin menyusun tagihan, Finance
+memverifikasi) — validasi di receipt hanya mengulangnya.
+
+## H3. Bukti wajib, konstruksi & supply
+
+1–5 file profil `evidence` di `material_receipt_attachments` (penghubung ke `files`).
+Supply: `external_receiver_name` wajib (penerima di pihak klien = dasar tagihan);
+konstruksi: kolom penerima eksternal ditolak — penerimanya Lapangan (`created_by`).
+`received_at` tidak di masa depan dan tidak sebelum tanggal surat jalan.
+
+## H4. Stok masuk TIDAK disalin ke ledger
+
+ERD membuat movement `received` dari setiap receipt valid. Itu menyimpan kuantitas
+yang sama di dua tempat — dan receipt yang dibatalkan harus diingat untuk ikut
+menghapus movement-nya. Revisi: stok masuk dibaca langsung dari
+`material_receipts.accepted_quantity` (receipt aktif, delivery aktif, request
+konstruksi). `material_stock_movements` hanya berisi mutasi MANUAL: `used`,
+`adjustment_in`, `adjustment_out` (koreksi wajib beralasan, CHECK). `returned`
+dibuang — belum ada alur pengembalian. `source_type/source_id` polymorphic tidak
+diperlukan lagi.
+
+Salah input mutasi dikoreksi dengan **membatalkan barisnya** (alasan wajib, hanya
+pencatatnya), bukan baris lawan — supaya total pemakaian tetap benar.
+
+## H5. Tanpa tabel `sub_project_material_inventory`
+
+Seluruh isinya (`total_received/used`, `remaining`, `total_allocated`) adalah
+jumlahan — saldo dihitung saat dibaca, seperti Kas Alat (prinsip yang sama dengan D3):
+`received + adjustment_in - used - adjustment_out` per tahapan per material.
+Material supply tidak masuk stok (ERD aturan 15).
+
+## H6. Stok tidak boleh minus
+
+Ditegakkan untuk semua aksi yang mengurangi stok: pemakaian, koreksi keluar,
+membatalkan koreksi masuk, membatalkan receipt konstruksi. Polanya satu: kunci
+baris `sub_projects` → tulis → hitung ulang saldo → minus = transaksi batal (409).
+Terbukti: dua pemakaian bersamaan yang masing-masing muat tapi berdua melebihi saldo
+→ satu 201, satu 409.
+
+## Wewenang
+
+| Permission | Pemegang |
+|---|---|
+| `material-receipt:create` | lapangan |
+| `material-stock:read` | lapangan, admin, finance (+ super_admin via read) |
+| `material-stock:create` | lapangan |
+
+Membaca receipt & bukti memakai `material-request:read`.
+
+## Yang sengaja belum
+
+- **Stok minimum** (ada di form FE) — future feature; polanya seperti
+  `warning_lead_value` perawatan alat.
+- **Kunci receipt supply yang sudah ditagihkan** — dipasang saat Income dibangun.
+- Pengembalian material (`returned`) dan pindah stok antar tahapan.

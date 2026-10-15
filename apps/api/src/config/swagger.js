@@ -89,6 +89,8 @@ const swaggerSpec = {
     { name: 'Request Alat', description: 'Permintaan alat dari Lapangan' },
     { name: 'Request Material', description: 'Permintaan material dari Lapangan' },
     { name: 'Material Delivery', description: 'Delivery + surat jalan per truk (RM-4)' },
+    { name: 'Material Receipt', description: 'Penerimaan material per delivery (RM-5)' },
+    { name: 'Material Stock', description: 'Stok material per tahapan konstruksi (RM-5)' },
     { name: 'Files', description: 'Unduh lampiran lewat signed URL' },
     { name: 'Approval Center', description: 'Approval terpusat lintas modul' },
     { name: 'Income Records', description: 'Pencatatan pendapatan dan billing' },
@@ -1650,7 +1652,7 @@ const swaggerSpec = {
     '/request-material/{id}': {
       get: {
         tags: ['Request Material'], summary: 'Detail request material',
-        description: 'Permission: material-request:read. Tiap item memuat `unit` (dari jenis material), `requestedQuantity`, `adminValidatedQuantity` (null = belum diubah Admin), `effectiveQuantity` (yang berlaku), `materialPoolItemId` (terisi setelah disetujui Finance), serta `deliveredQuantity`/`deliveryCount` (jumlahan delivery aktif, dihitung saat dibaca — boleh melebihi effectiveQuantity). `costs` = rincian biaya, `totalCostAmount` = jumlahnya (tidak disimpan).',
+        description: 'Permission: material-request:read. Tiap item memuat `unit` (dari jenis material), `requestedQuantity`, `adminValidatedQuantity` (null = belum diubah Admin), `effectiveQuantity` (yang berlaku), `materialPoolItemId` (terisi setelah disetujui Finance), serta `deliveredQuantity`/`deliveryCount` (jumlahan delivery aktif) dan `acceptedQuantity` (jumlahan receipt aktif yang diterima baik) — dihitung saat dibaca, boleh melebihi effectiveQuantity. `costs` = rincian biaya, `totalCostAmount` = jumlahnya (tidak disimpan).',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } },
       },
     },
@@ -1753,13 +1755,13 @@ const swaggerSpec = {
       },
     },
     '/material-deliveries/{id}': {
-      get: { tags: ['Material Delivery'], summary: 'Detail delivery', description: 'Permission: material-request:read. `deliveryNoteFile.id` dipakai untuk GET /files/{id}/url.',
+      get: { tags: ['Material Delivery'], summary: 'Detail delivery', description: 'Permission: material-request:read. `deliveryNoteFile.id` dipakai untuk GET /files/{id}/url. `receipt` = ringkasan receipt aktif (null = belum diterima).',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
     },
     '/material-deliveries/{id}/delivery-note': {
       put: {
         tags: ['Material Delivery'], summary: 'Ganti file surat jalan',
-        description: 'Permission: material-delivery:create, hanya pencatatnya, delivery belum dibatalkan. File lama TIDAK dihapus — status `superseded` dan tetap bisa diunduh.',
+        description: 'Permission: material-delivery:create, hanya pencatatnya, delivery belum dibatalkan dan BELUM diterima (409). File lama TIDAK dihapus — status `superseded` dan tetap bisa diunduh.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['deliveryNote'], properties: { deliveryNote: { type: 'string', format: 'binary' } } } } } },
         responses: { 200: { description: 'Diganti' }, 403: { description: 'Bukan pencatat' }, 409: { description: 'Sudah dibatalkan / diproses bersamaan' } },
@@ -1768,16 +1770,95 @@ const swaggerSpec = {
     '/material-deliveries/{id}/cancel': {
       put: {
         tags: ['Material Delivery'], summary: 'Batalkan delivery',
-        description: 'Permission: material-delivery:create, hanya pencatatnya, alasan wajib. Tidak ada edit bebas: koreksi = batalkan lalu catat ulang (nomor surat jalan yang sama boleh dipakai lagi). Delivery batal tidak dihitung di total terkirim.',
+        description: 'Permission: material-delivery:create, hanya pencatatnya, alasan wajib, delivery BELUM diterima (409 — batalkan receipt-nya dulu). Tidak ada edit bebas: koreksi = batalkan lalu catat ulang (nomor surat jalan yang sama boleh dipakai lagi). Delivery batal tidak dihitung di total terkirim.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } },
         responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pencatat' }, 409: { description: 'Sudah dibatalkan' } },
       },
     },
+    // RM-5 — docs/keputusan-desain-request-material.md H1–H6
+    '/material-receipts': {
+      get: {
+        tags: ['Material Receipt'], summary: 'List receipt',
+        description: 'Permission: material-request:read. `rejectedQuantity` = received - accepted (turunan, tidak disimpan).',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          ...['materialRequestId', 'materialDeliveryId', 'subProjectId', 'externalSupplyProjectId'].map((name) => ({ in: 'query', name, schema: { type: 'integer' } })),
+          { in: 'query', name: 'cancelled', schema: { type: 'string', enum: ['true', 'false'] } }],
+        responses: { 200: { description: 'Paginated list' } },
+      },
+      post: {
+        tags: ['Material Receipt'], summary: 'Catat penerimaan satu delivery + bukti',
+        description: 'Permission: material-receipt:create (Divisi Lapangan). Satu receipt AKTIF per delivery (409). Tanpa validasi: sah begitu dicatat. Bukti WAJIB 1–5 file di field `proofs` (PDF/JPG/PNG/WebP, maks 10 MB per file; HEIC ditolak). `acceptedQuantity` ≤ `receivedQuantity`; boleh 0 (semua ditolak). `receivedAt` tidak di masa depan dan tidak sebelum tanggal surat jalan. Supply: `externalReceiverName` WAJIB (penerima di pihak klien — dasar tagihan). Konstruksi: kolom penerima eksternal ditolak; `acceptedQuantity` menjadi stok masuk tahapan. Kode RCV-NNNNNN dibuat sistem. Begitu diterima, delivery tidak bisa dibatalkan/diganti surat jalannya.',
+        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object',
+          required: ['materialDeliveryId', 'receivedAt', 'receivedQuantity', 'acceptedQuantity', 'proofs'],
+          properties: {
+            materialDeliveryId: { type: 'integer' }, receivedAt: { type: 'string', format: 'date-time' },
+            receivedQuantity: { type: 'number', description: 'Yang datang' }, acceptedQuantity: { type: 'number', description: 'Yang diterima baik' },
+            externalReceiverName: { type: 'string', description: 'Wajib untuk supply, dilarang untuk konstruksi' },
+            externalReceiverPhone: { type: 'string' }, notes: { type: 'string' },
+            proofs: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'string', format: 'binary' } },
+          } } } } },
+        responses: { 201: { description: 'Created' }, 400: { description: 'Validasi / bukti tidak sah' }, 403: { description: 'Bukan Divisi Lapangan' }, 409: { description: 'Delivery batal / sudah diterima' } },
+      },
+    },
+    '/material-receipts/{id}': {
+      get: { tags: ['Material Receipt'], summary: 'Detail receipt', description: 'Permission: material-request:read. `attachments[].id` dipakai untuk GET /files/{id}/url.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
+    },
+    '/material-receipts/{id}/cancel': {
+      put: {
+        tags: ['Material Receipt'], summary: 'Batalkan receipt',
+        description: 'Permission: material-receipt:create, hanya pencatatnya, alasan wajib. Konstruksi: ditolak 409 kalau material itu sudah terpakai (stok jadi minus). Koreksi = batalkan lalu catat ulang untuk delivery yang sama.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pencatat' }, 409: { description: 'Sudah dibatalkan / stok jadi minus' } },
+      },
+    },
+    '/material-stock': {
+      get: {
+        tags: ['Material Stock'], summary: 'Saldo stok material satu tahapan',
+        description: 'Permission: material-stock:read. Per jenis material: `received` (receipt konstruksi aktif) + `adjustmentIn` - `used` - `adjustmentOut` = `balance`. Dihitung saat dibaca — tidak ada kolom saldo. Material supply tidak masuk stok.',
+        parameters: [{ in: 'query', name: 'subProjectId', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Array saldo per material' } },
+      },
+    },
+    '/material-stock/movements': {
+      get: {
+        tags: ['Material Stock'], summary: 'List mutasi stok manual',
+        description: 'Permission: material-stock:read. Hanya mutasi manual (used, adjustment_in, adjustment_out). Stok masuk dari penerimaan dibaca lewat GET /material-receipts?subProjectId=.',
+        parameters: [{ in: 'query', name: 'subProjectId', required: true, schema: { type: 'integer' } },
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'materialTypeId', schema: { type: 'integer' } },
+          { in: 'query', name: 'movementType', schema: { type: 'string', enum: ['used', 'adjustment_in', 'adjustment_out'] } }],
+        responses: { 200: { description: 'Paginated list' } },
+      },
+      post: {
+        tags: ['Material Stock'], summary: 'Catat pemakaian / koreksi stok',
+        description: 'Permission: material-stock:create (Divisi Lapangan). `used` & `adjustment_out` ditolak 409 kalau membuat saldo kurang dari nol (dijaga juga untuk pencatatan bersamaan). Koreksi (`adjustment_*`) wajib `notes`. Kuantitas dalam satuan jenis material (`unit` ditolak).',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object',
+          required: ['subProjectId', 'materialTypeId', 'movementType', 'quantity', 'movementDate'],
+          properties: {
+            subProjectId: { type: 'integer' }, materialTypeId: { type: 'integer' },
+            movementType: { type: 'string', enum: ['used', 'adjustment_in', 'adjustment_out'] },
+            quantity: { type: 'number' }, movementDate: { type: 'string', format: 'date', description: 'Tidak di masa depan' },
+            notes: { type: 'string', description: 'Wajib untuk adjustment_*' },
+          } } } } },
+        responses: { 201: { description: 'Created' }, 400: { description: 'Validasi gagal' }, 409: { description: 'Stok tidak cukup' } },
+      },
+    },
+    '/material-stock/movements/{id}/cancel': {
+      put: {
+        tags: ['Material Stock'], summary: 'Batalkan mutasi stok',
+        description: 'Permission: material-stock:create, hanya pencatatnya, alasan wajib. Salah input dikoreksi dengan membatalkan barisnya (bukan baris lawan) supaya total pemakaian tetap benar. Membatalkan adjustment_in ditolak 409 kalau saldo jadi minus.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pencatat' }, 409: { description: 'Sudah dibatalkan / stok jadi minus' } },
+      },
+    },
     '/files/{id}/url': {
       get: {
         tags: ['Files'], summary: 'Signed URL untuk membuka/mengunduh lampiran',
-        description: 'Permission mengikuti modul pemilik file (surat jalan → material-request:read). URL berlaku 5 menit (`expiresInSeconds`); kalau kedaluwarsa, minta lagi. PDF & gambar dibuka inline, lainnya diunduh. File yang sudah diganti (`superseded`) tetap bisa diunduh.',
+        description: 'Permission mengikuti modul pemilik file (surat jalan & bukti penerimaan → material-request:read). URL berlaku 5 menit (`expiresInSeconds`); kalau kedaluwarsa, minta lagi. PDF & gambar dibuka inline, lainnya diunduh. File yang sudah diganti (`superseded`) tetap bisa diunduh.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         responses: { 200: { description: '{ id, originalName, mimeType, sizeBytes, status, url, expiresInSeconds }' }, 403: { description: 'Tidak berhak membaca modul pemilik' }, 404: { description: 'Tidak ada / tanpa pemilik' } },
       },
