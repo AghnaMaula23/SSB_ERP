@@ -1369,6 +1369,7 @@ model MaterialRequest {
   financeReviewedByUser User?                  @relation("MatRequestFinanceReviewedBy", fields: [financeReviewedBy], references: [id])
   cancelledByUser       User?                  @relation("MatRequestCancelledBy", fields: [cancelledBy], references: [id])
   items                 MaterialRequestItem[]
+  costs                 MaterialRequestCost[]
 
   @@index([requestType, status])
   @@index([subProjectId, requestDate])
@@ -1396,12 +1397,59 @@ model MaterialRequestItem {
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
-  materialRequest  MaterialRequest   @relation(fields: [materialRequestId], references: [id])
-  materialType     MaterialType      @relation(fields: [materialTypeId], references: [id])
-  materialPoolItem MaterialPoolItem? @relation(fields: [materialPoolItemId], references: [id])
+  materialRequest  MaterialRequest      @relation(fields: [materialRequestId], references: [id])
+  materialType     MaterialType         @relation(fields: [materialTypeId], references: [id])
+  materialPoolItem MaterialPoolItem?    @relation(fields: [materialPoolItemId], references: [id])
+  materialCost     MaterialRequestCost?
 
   @@unique([materialRequestId, materialTypeId])
   @@index([materialTypeId])
   @@index([materialPoolItemId])
   @@map("material_request_items")
+}
+
+// ============================================================
+// REQUEST MATERIAL — biaya & approval Finance (RM-3).
+// Lihat docs/keputusan-desain-request-material.md (F1–F5)
+// ============================================================
+
+/// 6 nilai ERD dipertahankan (F2) — kelak dipakai GL memilih akun.
+enum MaterialCostType {
+  material_cost
+  driver_fee
+  delivery_fee
+  loading_unloading_fee
+  fuel_cost
+  other
+
+  @@map("material_cost_type")
+}
+
+/// Rincian biaya paket dana sebuah request. Tabel header
+/// `material_funding_requests` dari ERD TIDAK dibuat (F1): hubungannya 1:1
+/// dengan request dan setiap kolomnya sudah dijawab tempat lain — status
+/// mengikuti request, reviewer ada di `finance_reviewed_*`, total dihitung saat
+/// dibaca, dan Finance tidak mengisi nominal aktual. `approved_amount` dan
+/// `payee_type` dibuang (F2).
+///
+/// `material_cost` WAJIB menunjuk item, biaya lain TIDAK (CHECK); satu
+/// material_cost per item (unique). Nominal > 0 (CHECK). Admin mengganti seluruh
+/// daftar selama request `submitted`; setelah diteruskan ke Finance terkunci.
+model MaterialRequestCost {
+  id                    Int              @id @default(autoincrement())
+  materialRequestId     Int              @map("material_request_id")
+  costType              MaterialCostType @map("cost_type")
+  materialRequestItemId Int?             @unique @map("material_request_item_id")
+  description           String           @db.Text
+  amount                Decimal          @db.Decimal(18, 2)
+  payeeName             String?          @map("payee_name") @db.VarChar(150)
+  notes                 String?          @db.Text
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+
+  materialRequest     MaterialRequest      @relation(fields: [materialRequestId], references: [id])
+  materialRequestItem MaterialRequestItem? @relation(fields: [materialRequestItemId], references: [id], onDelete: Restrict)
+
+  @@index([materialRequestId, costType])
+  @@map("material_request_costs")
 }

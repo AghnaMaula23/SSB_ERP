@@ -54,7 +54,7 @@ boleh ditampilkan apa adanya.
 
 | Prioritas | Butir | Kenapa |
 |---|---|---|
-| 1 | **E3** `hasPermission` | Akan bikin super_admin dapat 403 saat layar approval dibuat |
+| 1 | **E3** `hasPermission` | super_admin kini read-only: bypass FE membuat semua tombol tulis berakhir 403 |
 | 2 | **E4d** `maintenanceThresholdService` | Backend-nya SUDAH ADA, tapi FE masih localStorage penuh |
 | 3 | **E4e** `maintenanceService` hibrida | Separuh API separuh localStorage — paling rawan salah baca |
 | 1 | **E8** pool item "Jumlah" | **Memblokir migrasi contract** pool item |

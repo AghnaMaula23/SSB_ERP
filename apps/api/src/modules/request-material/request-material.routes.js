@@ -10,6 +10,7 @@ router.use(authenticate);
 
 const REQUEST_TYPES = ['internal_project', 'external_supply'];
 const REQUEST_STATUSES = ['submitted', 'waiting_finance_approval', 'approved', 'rejected', 'cancelled'];
+const COST_TYPES = ['material_cost', 'driver_fee', 'delivery_fee', 'loading_unloading_fee', 'fuel_cost', 'other'];
 
 const idParam = param('id').isInt({ min: 1 }).withMessage('ID tidak valid').toInt();
 
@@ -67,11 +68,34 @@ const adminValidationRules = [
   body('items.*.unit').not().exists().withMessage('Satuan mengikuti jenis material dan tidak bisa dikirim'),
 ];
 
+// Mengganti SELURUH daftar biaya; array kosong = mengosongkan
+const costRules = [
+  idParam,
+  body('costs').isArray().withMessage('costs wajib berupa array'),
+  body('costs.*.costType').isIn(COST_TYPES).withMessage(`costType harus salah satu dari: ${COST_TYPES.join(', ')}`),
+  body('costs.*.materialRequestItemId').optional({ nullable: true }).isInt({ min: 1 }).withMessage('materialRequestItemId tidak valid').toInt(),
+  body('costs.*.description').isString().trim().notEmpty().withMessage('description wajib diisi'),
+  body('costs.*.amount').isFloat({ gt: 0, max: 9999999999999 }).withMessage('amount harus angka lebih dari 0').toFloat(),
+  body('costs.*.payeeName').optional({ nullable: true }).isString().trim().isLength({ max: 150 }).withMessage('payeeName maksimal 150 karakter'),
+  notesRule('costs.*.notes'),
+  // Finance tidak mengisi nominal aktual (F2) — kolom ERD ini tidak dibuat
+  body('costs.*.approvedAmount').not().exists().withMessage('approvedAmount tidak dipakai: yang disetujui Finance = yang diajukan'),
+];
+
+const approveRules = [
+  idParam,
+  notesRule('notes'),
+  body('materialPoolId').optional({ nullable: true }).isInt({ min: 1 }).withMessage('materialPoolId tidak valid').toInt(),
+];
+
 router.get('/', authorize('material-request:read'), validate(listRules), controller.list);
 router.get('/:id', authorize('material-request:read'), validate([idParam]), controller.detail);
 router.post('/', authorize('material-request:create'), validate(createRules), controller.create);
 router.put('/:id/cancel', authorize('material-request:create'), validate([idParam]), controller.cancel);
 router.put('/:id/admin-validation', authorize('material-request:validate'), validate(adminValidationRules), controller.adminValidate);
+router.put('/:id/costs', authorize('material-request:validate'), validate(costRules), controller.replaceCosts);
+router.put('/:id/submit-to-finance', authorize('material-request:validate'), validate([idParam, notesRule('notes')]), controller.submitToFinance);
+router.put('/:id/approve', authorize('material-request:approve'), validate(approveRules), controller.approve);
 // Siapa yang boleh menolak bergantung status request — diperiksa per permission di service
 router.put('/:id/reject', authorize('material-request:validate', 'material-request:approve'),
   validate([idParam, body('notes').isString().trim().notEmpty().withMessage('Alasan penolakan wajib diisi')]),

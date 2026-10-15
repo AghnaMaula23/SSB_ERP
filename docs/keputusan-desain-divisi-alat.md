@@ -202,7 +202,8 @@ lewat `damage_log_id` / `maintenance_setting_id` yang sama.
   `manufacture_year` (mengikuti kontrak swagger).
 - `asset_code` dibuat sistem dengan format `SSB-{typeCode}-{NNN}`, counter atomik
   per jenis alat di `equipment_types.last_sequence`. Nomor tidak pernah didaur
-  ulang. Hanya super_admin yang boleh mengisi manual (untuk alat warisan).
+  ulang. ~~Hanya super_admin yang boleh mengisi manual~~ — override dibuang 15 Okt 2026
+  (super_admin read-only); alat warisan dimigrasikan lewat skrip impor.
 - `maintenance_records.equipment_item_id` ditambahkan dan wajib, supaya riwayat
   per alat tetap utuh untuk record yang lahir dari damage log.
 - `document_sequences`: tabel counter nomor dokumen. Dipakai `MTN-NNNNNN`,

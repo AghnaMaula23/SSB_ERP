@@ -44,6 +44,27 @@ const adminValidate = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const replaceCosts = async (req, res, next) => {
+  try {
+    const data = await service.replaceCosts(req.params.id, req.body, req.user.id);
+    return success(res, data, 'Rincian biaya disimpan');
+  } catch (err) { next(err); }
+};
+
+const submitToFinance = async (req, res, next) => {
+  try {
+    const data = await service.submitToFinance(req.params.id, req.body, req.user.id);
+    return success(res, data, 'Request material diteruskan ke Finance');
+  } catch (err) { next(err); }
+};
+
+const approve = async (req, res, next) => {
+  try {
+    const data = await service.approve(req.params.id, req.body, req.user.id);
+    return success(res, data, 'Request material disetujui');
+  } catch (err) { next(err); }
+};
+
 const reject = async (req, res, next) => {
   try {
     const data = await service.reject(req.params.id, req.body, req.user);
@@ -51,4 +72,4 @@ const reject = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, detail, create, cancel, adminValidate, reject };
+module.exports = { list, detail, create, cancel, adminValidate, replaceCosts, submitToFinance, approve, reject };

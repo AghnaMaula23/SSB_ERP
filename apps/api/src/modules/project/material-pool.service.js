@@ -105,14 +105,17 @@ const create = async ({ ownerType, constructionProjectId, externalSupplyProjectI
   const owner = await prisma[config.model].findUnique({ where: { id: ownerId } });
   if (!owner) throw httpError(`${config.label} dengan ID ${ownerId} tidak ditemukan`, 404);
 
-  const pool = await prisma.$transaction(async (tx) => {
-    const poolCode = await nextDocumentNumber(tx, POOL_DOC_TYPE, { pad: POOL_DOC_PAD });
-    return tx.materialPool.create({
-      data: { ownerType, [config.fkField]: ownerId, poolCode, createdBy: userId },
-      include: POOL_INCLUDE,
-    });
-  });
+  const pool = await prisma.$transaction((tx) => createInTx(tx, ownerType, ownerId, userId));
   return shapePool(pool);
+};
+
+/** Dipakai juga approval Finance request material (RM-3) di transaksinya sendiri. */
+const createInTx = async (tx, ownerType, ownerId, userId) => {
+  const poolCode = await nextDocumentNumber(tx, POOL_DOC_TYPE, { pad: POOL_DOC_PAD });
+  return tx.materialPool.create({
+    data: { ownerType, [OWNER_CONFIG[ownerType].fkField]: ownerId, poolCode, createdBy: userId },
+    include: POOL_INCLUDE,
+  });
 };
 
 const changeStatus = async (id, status) => {
@@ -162,15 +165,18 @@ const addItem = async (poolId, { materialTypeId, notes }) => {
 };
 
 /**
- * Hapus material dari pool. Di RM-1 belum ada yang merujuk pool item; begitu
- * request (RM-2) dan inventori (RM-5) ada, item yang sudah dirujuk wajib
- * ditolak di sini — FK RESTRICT di database juga akan menolaknya.
+ * Hapus material dari pool. Item yang sudah dirujuk request yang disetujui
+ * Finance (RM-3) ditolak: FK-nya ON DELETE SET NULL, jadi tanpa pengecekan ini
+ * jejak "material ini masuk pool lewat request mana" hilang diam-diam.
+ * Inventori (RM-5) menambah pengecekan yang sama.
  */
 const removeItem = async (poolId, itemId) => {
   assertPoolLive(await findPoolOrFail(poolId));
   const item = await findItemOrFail(poolId, itemId);
+  const usedBy = await prisma.materialRequestItem.count({ where: { materialPoolItemId: itemId } });
+  if (usedBy) throw httpError(`"${item.materialType.materialName}" sudah dirujuk ${usedBy} request material yang disetujui, tidak bisa dihapus`, 409);
   await prisma.materialPoolItem.delete({ where: { id: itemId } });
   return shapeItem(item);
 };
 
-module.exports = { list, getById, create, changeStatus, addItem, removeItem, shapePool, shapeItem };
+module.exports = { list, getById, create, createInTx, changeStatus, addItem, removeItem, shapePool, shapeItem, LIVE_POOL_STATUSES };

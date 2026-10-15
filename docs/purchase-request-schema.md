@@ -216,8 +216,8 @@ Melibatkan tabel lain atau status yang berubah, jadi tidak bisa jadi CHECK:
 10. **Saldo kas:** saat submit, kalau `total_estimated_amount` melebihi saldo
     Kas Alat, tampilkan peringatan (bukan blokir). Layar approval Finance
     menampilkan proyeksi saldo setelah pencairan.
-11. **`super_admin` tidak boleh validate/approve.** Bypass `authorize()`
-    dimatikan khusus di dua endpoint itu — super_admin hanya memantau.
+11. **`super_admin` tidak boleh validate/approve.** Sejak 15 Okt 2026 berlaku
+    untuk SEMUA aksi tulis di luar manajemen akun — tidak ada bypass sama sekali.
 12. **Setelah `approved`:** item tidak boleh diubah. Pembatalan membuat
     `adjustment` cash-in dengan `source_id` = id PR.
 13. **Menyelesaikan kerusakan TIDAK mereset jadwal servis.** Reset perawatan

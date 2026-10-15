@@ -4,14 +4,14 @@ Acuan ERD: `docs/claude_knowledge/ERD/MD File/Dokementasi ERD Request Material.m
 (Final v2, 27 Agustus 2026) dan bagian material pada
 `Dokumentasi_ERD_Project.md`.
 
-Modul dipecah menjadi lima tahap, masing-masing di branch `feature/rm-*` dari
-`module/project`:
+Modul dipecah menjadi lima tahap. RM-1 & RM-2 dikerjakan di branch `feature/rm-*`;
+sejak 15 Okt 2026 sisanya langsung di `module/project` (satu commit per tahap):
 
 | Tahap | Isi | Status |
 |---|---|---|
 | RM-1 | Master jenis material & supplier, material pool, PIC supply project | **Dibangun 13 Okt 2026** |
 | RM-2 | Material request + meja Admin (sesuaikan kuantitas / tolak) | **Dibangun 14 Okt 2026** |
-| RM-3 | Funding + approval paket oleh Finance | Belum — keputusan dasar sudah ada, lihat bagian RM-3 |
+| RM-3 | Biaya + approval paket oleh Finance | **Dirancang & disetujui 15 Okt 2026**, belum dibangun — lihat bagian RM-3 di bawah |
 | — | Desain lampiran bersama (surat jalan, bukti receipt, damage, PR, project files) | **Wajib sebelum RM-4** — arah penyimpanan sudah diputuskan, lihat bagian Lampiran |
 | RM-4 | Delivery + surat jalan | Belum |
 | RM-5 | Receipt + inventori + stock movement (dibaca Income) | Belum |
@@ -239,3 +239,60 @@ Dengan itu, pindah ke AWS S3 / Cloudflare R2 / MinIO cukup mengganti
 konfigurasi `.env` dan menyalin file lama. Rincian lain (tabel generic vs per
 modul, batas ukuran/jenis, siapa boleh mengunduh) diputuskan di sesi desain
 lampiran sebelum RM-4.
+
+---
+
+# RM-3 — Rancangan yang disetujui (15 Oktober 2026), BELUM dibangun
+
+Skema rinci (DBML + CHECK) ada di `claude_knowledge/ERD/Revisi/05_Request_Material.md`.
+
+## F1. Tabel header `material_funding_requests` TIDAK dibuat
+
+Hubungannya 1:1 dengan request, dan setiap kolom headernya sudah dijawab tempat lain:
+
+| Kolom ERD | Kenapa tidak perlu |
+|---|---|
+| `status` | Cermin status request — ERD sendiri: "disetujui/ditolak sebagai satu paket" |
+| `reviewed_by/at`, `finance_notes` | Sudah ada `material_requests.finance_reviewed_*` |
+| `approved_total_amount` | Finance tidak mengisi nominal aktual → selalu = total diajukan |
+| `requested_total_amount` | Jumlahan baris biaya, dihitung saat dibaca (D3) |
+| `funding_code` | = `request_code` (MRQ-…) |
+
+Gantinya satu tabel **`material_request_costs`** yang menempel ke request. Saat Approval
+Center dibangun, sumbernya `material_request` pada tahap Finance (bukan
+`material_funding_request` seperti di ERD Approval Center).
+
+## F2. Jenis biaya
+
+6 nilai ERD dipertahankan (`material_cost`, `driver_fee`, `delivery_fee`,
+`loading_unloading_fee`, `fuel_cost`, `other`) — kelak dipakai GL memilih akun.
+`approved_amount` per baris dan `payee_type` dibuang.
+
+## F3. Syarat "lengkap" sebelum diteruskan ke Finance
+
+- Setiap item material punya **tepat satu** baris `material_cost` yang menunjuk item itu
+  (unique). Biaya lain opsional dan TIDAK menunjuk item (CHECK).
+- Semua nominal > 0 (CHECK).
+- Admin menyusun biaya selama `submitted`, mengganti seluruh daftar sekaligus. Setelah
+  diteruskan, kuantitas dan biaya terkunci.
+
+## F4. Alur & wewenang
+
+- `PUT /:id/costs` dan `PUT /:id/submit-to-finance` — Admin (`material-request:validate`).
+- `PUT /:id/approve` — Finance (**permission baru `material-request:approve`**). Satu
+  transaksi: status → `approved`, `finance_reviewed_*`, material masuk material pool.
+- `PUT /:id/reject` — tambah aturan untuk `waiting_finance_approval` → `material-request:approve`.
+- Tidak ada "kembalikan ke Admin": revisi = request baru (ERD aturan 10).
+- super_admin TIDAK memegang approve (kebijakan read-only 15 Okt 2026).
+
+## F5. Pool saat approval
+
+Konstruksi → pool milik construction project dari tahapannya; supply → pool milik supply
+project. Dibuat otomatis kalau belum ada; lebih dari satu pool hidup → wajib
+`materialPoolId`; material yang sudah ada di pool memakai pool item yang sama
+(`@@unique(material_pool_id, material_type_id)`).
+
+## Uji yang wajib saat dibangun
+
+Approve ganda bersamaan → satu 200, satu 409, pool item tidak dobel. Approve + cancel
+bersamaan. CHECK lewat SQL mentah. Tabel baru `ENABLE ROW LEVEL SECURITY`.

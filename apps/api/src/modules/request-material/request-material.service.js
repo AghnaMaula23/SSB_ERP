@@ -4,20 +4,20 @@ const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const { claimTransition } = require('../../utils/status-transition.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
+const materialPoolService = require('../project/material-pool.service.js');
 
 // ============================================================
-// REQUEST MATERIAL — RM-2: pengajuan & meja Admin.
-// Keputusan desain: docs/keputusan-desain-request-material.md (R1–R5).
+// REQUEST MATERIAL — RM-2 (pengajuan & meja Admin) + RM-3 (biaya & Finance).
+// Keputusan desain: docs/keputusan-desain-request-material.md (R1–R5, F1–F5).
 //
 // Alur status (5 nilai, diciutkan dari 6 nilai ERD):
-//   submitted --(RM-3: Admin susun dana + teruskan)--> waiting_finance_approval
-//             --(RM-3: Finance)--> approved | rejected
+//   submitted --Admin susun biaya + teruskan--> waiting_finance_approval
+//             --Finance--> approved | rejected
 //   submitted --Admin tolak--> rejected
 //   submitted | waiting_finance_approval --pengaju--> cancelled
 //
-// Di RM-2 Admin hanya menyesuaikan kuantitas (status tetap `submitted`) atau
-// menolak. Meneruskan ke Finance menuntut paket dana (ERD aturan 4–5), jadi
-// lahir bersama funding di RM-3.
+// Selama `submitted` Admin bebas menyesuaikan kuantitas dan menyusun biaya.
+// Begitu diteruskan, keduanya terkunci — revisi = request baru (ERD aturan 10).
 // ============================================================
 
 const REQUEST_DOC_TYPE = 'MRQ';
@@ -29,8 +29,8 @@ const CLOSED_CONTEXT_STATUSES = ['completed', 'cancelled'];
 const CANCELLABLE_STATUSES = ['submitted', 'waiting_finance_approval'];
 
 const CONTEXT_BY_TYPE = {
-  internal_project: { fkField: 'subProjectId', otherField: 'externalSupplyProjectId' },
-  external_supply: { fkField: 'externalSupplyProjectId', otherField: 'subProjectId' },
+  internal_project: { fkField: 'subProjectId', otherField: 'externalSupplyProjectId', poolOwnerType: 'construction_project' },
+  external_supply: { fkField: 'externalSupplyProjectId', otherField: 'subProjectId', poolOwnerType: 'external_supply_project' },
 };
 
 // `unit` ikut di setiap item supaya FE menampilkannya di samping angka (D1).
@@ -44,6 +44,7 @@ const DETAIL_INCLUDE = {
   financeReviewedByUser: { select: ACTOR_SELECT },
   cancelledByUser: { select: ACTOR_SELECT },
   items: { include: { materialType: { select: MATERIAL_TYPE_SELECT } }, orderBy: { id: 'asc' } },
+  costs: { orderBy: { id: 'asc' } },
 };
 
 const LIST_INCLUDE = {
@@ -77,6 +78,19 @@ const shapeItem = (item) => {
   };
 };
 
+const shapeCost = (cost) => ({
+  id: cost.id,
+  costType: cost.costType,
+  materialRequestItemId: cost.materialRequestItemId,
+  description: cost.description,
+  amount: toNumber(cost.amount),
+  payeeName: cost.payeeName,
+  notes: cost.notes,
+});
+
+/** Total paket dana dihitung saat dibaca (F1/D3) — tidak disimpan di mana pun. */
+const sumAmounts = (amounts) => Math.round(amounts.reduce((acc, a) => acc + Number(a ?? 0), 0) * 100) / 100;
+
 const shapeHeader = (row) => ({
   id: row.id,
   requestCode: row.requestCode,
@@ -105,6 +119,8 @@ const shapeDetail = (row) => ({
   cancelledBy: shapeActor(row.cancelledByUser),
   cancelledAt: row.cancelledAt,
   items: row.items.map(shapeItem),
+  costs: row.costs.map(shapeCost),
+  totalCostAmount: sumAmounts(row.costs.map((c) => c.amount)),
 });
 
 const findOrFail = async (id, client = prisma) => {
@@ -134,8 +150,13 @@ const list = async ({ page = 1, limit = 20, status, requestType, subProjectId, e
     prisma.materialRequest.findMany({ where, include: LIST_INCLUDE, orderBy: { id: 'desc' }, skip: (page - 1) * limit, take: limit }),
     prisma.materialRequest.count({ where }),
   ]);
+  // Total biaya per baris untuk antrean Finance — satu query untuk satu halaman
+  const sums = await prisma.materialRequestCost.groupBy({
+    by: ['materialRequestId'], where: { materialRequestId: { in: rows.map((r) => r.id) } }, _sum: { amount: true },
+  });
+  const totalById = new Map(sums.map((s) => [s.materialRequestId, sumAmounts([s._sum.amount])]));
   return {
-    data: rows.map((row) => ({ ...shapeHeader(row), itemCount: row._count.items })),
+    data: rows.map((row) => ({ ...shapeHeader(row), itemCount: row._count.items, totalCostAmount: totalById.get(row.id) ?? 0 })),
     total, page, limit,
   };
 };
@@ -307,15 +328,180 @@ const adminValidate = async (id, { items: changes }, userId) => {
 };
 
 /**
+ * Admin menyusun rincian biaya (F3): mengganti SELURUH daftar sekaligus, hanya
+ * selama `submitted`. `material_cost` wajib menunjuk satu item request ini
+ * (maksimal satu per item); jenis biaya lain tidak menunjuk item. Kelengkapan
+ * (setiap item punya material_cost) baru dituntut saat diteruskan ke Finance,
+ * supaya Admin bisa menyimpan bertahap.
+ */
+const replaceCosts = async (id, { costs }, userId) => {
+  const row = await findOrFail(id);
+  if (row.status !== 'submitted') {
+    throw httpError(`Request berstatus "${row.status}" — biaya hanya bisa disusun selama di antrean Admin`, 409);
+  }
+  assertNotOwnRequest(row, userId, 'menyusun biayanya');
+
+  const costedItems = new Set();
+  for (const cost of costs) {
+    const itemId = cost.materialRequestItemId ?? null;
+    if (cost.costType !== 'material_cost') {
+      if (itemId !== null) throw httpError(`Biaya "${cost.costType}" berlaku untuk seluruh request dan tidak menunjuk item`, 400);
+      continue;
+    }
+    if (itemId === null) throw httpError('Biaya material_cost wajib menunjuk item lewat materialRequestItemId', 400);
+    const item = row.items.find((i) => i.id === itemId);
+    if (!item) throw httpError(`Item ${itemId} bukan milik request ini`, 400);
+    if (costedItems.has(itemId)) {
+      throw httpError(`${item.materialType.materialName} punya lebih dari satu material_cost. Satu item, satu baris harga material.`, 400);
+    }
+    costedItems.add(itemId);
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    // Klaim header: penggantian tidak boleh mendarat pada request yang baru saja
+    // diteruskan, ditolak, atau dibatalkan di saat yang sama.
+    await claimTransition(tx.materialRequest, { id, status: 'submitted' }, { updatedAt: new Date() });
+    await tx.materialRequestCost.deleteMany({ where: { materialRequestId: id } });
+    await tx.materialRequestCost.createMany({
+      data: costs.map((c) => ({
+        materialRequestId: id,
+        costType: c.costType,
+        materialRequestItemId: c.materialRequestItemId ?? null,
+        description: c.description,
+        amount: c.amount,
+        payeeName: c.payeeName ?? null,
+        notes: c.notes ?? null,
+      })),
+    });
+    return findOrFail(id, tx);
+  });
+  return shapeDetail(updated);
+};
+
+/**
+ * Admin meneruskan paket ke Finance. Syarat lengkap (F3) diperiksa DI DALAM
+ * transaksi setelah klaim, supaya penyusunan biaya yang berjalan bersamaan
+ * tidak bisa menyelipkan daftar yang belum lengkap.
+ */
+const submitToFinance = async (id, { notes }, userId) => {
+  const row = await findOrFail(id);
+  if (row.status !== 'submitted') throw httpError(`Request berstatus "${row.status}", bukan antrean Admin`, 409);
+  assertNotOwnRequest(row, userId, 'meneruskannya');
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await claimTransition(tx.materialRequest, { id, status: 'submitted' }, {
+      status: 'waiting_finance_approval',
+      adminReviewedBy: userId,
+      adminReviewedAt: new Date(),
+      adminNotes: notes ?? null,
+    });
+
+    const current = await findOrFail(id, tx);
+    const costed = new Set(current.costs.filter((c) => c.costType === 'material_cost').map((c) => c.materialRequestItemId));
+    const uncosted = current.items.filter((i) => !costed.has(i.id));
+    if (uncosted.length) {
+      throw httpError(`Biaya belum lengkap. Item tanpa harga material: ${uncosted.map((i) => i.materialType.materialName).join(', ')}`, 400);
+    }
+    return current;
+  });
+  return shapeDetail(updated);
+};
+
+// ============================================================
+// APPROVAL FINANCE
+// ============================================================
+
+/**
+ * Kunci baris project pemilik pool (FOR UPDATE). Tanpa kunci, dua approval
+ * bersamaan untuk project yang belum punya pool sama-sama melihat "0 pool" dan
+ * membuat dua pool — dan approval berikutnya macet menuntut materialPoolId.
+ */
+const lockPoolOwner = async (tx, ownerType, ownerId) => {
+  if (ownerType === 'construction_project') {
+    await tx.$queryRaw`SELECT id FROM construction_projects WHERE id = ${ownerId} FOR UPDATE`;
+  } else {
+    await tx.$queryRaw`SELECT id FROM external_supply_projects WHERE id = ${ownerId} FOR UPDATE`;
+  }
+};
+
+/**
+ * Pool tujuan (F5): pool hidup milik construction project tahapan / supply
+ * project. Tidak ada -> dibuat; lebih dari satu -> klien wajib memilih lewat
+ * materialPoolId, sistem tidak menebak. Sama dengan Request Alat.
+ */
+const resolvePool = async (tx, row, materialPoolId, userId) => {
+  const ownerType = CONTEXT_BY_TYPE[row.requestType].poolOwnerType;
+  const ownerId = row.requestType === 'internal_project' ? row.subProject.constructionProjectId : row.externalSupplyProjectId;
+  const ownerWhere = ownerType === 'construction_project' ? { constructionProjectId: ownerId } : { externalSupplyProjectId: ownerId };
+
+  await lockPoolOwner(tx, ownerType, ownerId);
+  const livePools = await tx.materialPool.findMany({
+    where: { ownerType, ...ownerWhere, status: { in: materialPoolService.LIVE_POOL_STATUSES } }, orderBy: { id: 'asc' },
+  });
+
+  if (materialPoolId) {
+    const pool = livePools.find((p) => p.id === materialPoolId);
+    if (!pool) throw httpError(`Material pool ${materialPoolId} bukan pool aktif milik project request ini`, 400);
+    return pool;
+  }
+  if (livePools.length === 1) return livePools[0];
+  if (livePools.length > 1) {
+    throw httpError(
+      `Project ini punya ${livePools.length} material pool aktif (${livePools.map((p) => p.poolCode).join(', ')}). Pilih salah satu lewat materialPoolId.`,
+      400
+    );
+  }
+  return materialPoolService.createInTx(tx, ownerType, ownerId, userId);
+};
+
+/**
+ * Finance menyetujui paket (F4). Satu transaksi: status -> approved, jejak
+ * Finance, dan setiap material masuk pool project (pool item yang sudah ada
+ * dipakai ulang). Nominal tidak diisi ulang — yang disetujui = yang diajukan;
+ * selisih realisasi dikoreksi lewat financial_correction_requests (GL).
+ */
+const approve = async (id, { notes, materialPoolId }, userId) => {
+  const row = await findOrFail(id);
+  if (row.status !== 'waiting_finance_approval') throw httpError(`Request berstatus "${row.status}", bukan antrean Finance`, 409);
+  assertNotOwnRequest(row, userId, 'menyetujuinya');
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await claimTransition(tx.materialRequest, { id, status: 'waiting_finance_approval' }, {
+      status: 'approved',
+      financeReviewedBy: userId,
+      financeReviewedAt: new Date(),
+      financeNotes: notes ?? null,
+    });
+
+    const pool = await resolvePool(tx, row, materialPoolId, userId);
+    for (const item of row.items) {
+      const poolItem = await tx.materialPoolItem.upsert({
+        where: { materialPoolId_materialTypeId: { materialPoolId: pool.id, materialTypeId: item.materialTypeId } },
+        create: { materialPoolId: pool.id, materialTypeId: item.materialTypeId },
+        update: {},
+      });
+      await tx.materialRequestItem.update({ where: { id: item.id }, data: { materialPoolItemId: poolItem.id } });
+    }
+    return findOrFail(id, tx);
+  });
+  return shapeDetail(updated);
+};
+
+/**
  * Penolakan diatur per status dan per PERMISSION (bukan nama role), pola yang
- * sama dengan purchase request. RM-3 menambah aturan `waiting_finance_approval`
- * untuk Finance di sini. Alasan wajib (ERD aturan 9).
+ * sama dengan purchase request. Alasan wajib (ERD aturan 9). Tidak ada
+ * "kembalikan ke Admin" — revisi = request baru.
  */
 const REJECT_RULES = {
   submitted: {
     permission: 'material-request:validate',
     deniedMessage: 'Request di antrean Admin hanya bisa ditolak pemegang wewenang validasi Admin',
     data: (userId, notes) => ({ status: 'rejected', adminReviewedBy: userId, adminReviewedAt: new Date(), adminNotes: notes }),
+  },
+  waiting_finance_approval: {
+    permission: 'material-request:approve',
+    deniedMessage: 'Request di antrean Finance hanya bisa ditolak pemegang wewenang approval Finance',
+    data: (userId, notes) => ({ status: 'rejected', financeReviewedBy: userId, financeReviewedAt: new Date(), financeNotes: notes }),
   },
 };
 
@@ -336,4 +522,4 @@ const reject = async (id, { notes }, user) => {
   return shapeDetail(updated);
 };
 
-module.exports = { list, getById, create, cancel, adminValidate, reject };
+module.exports = { list, getById, create, cancel, adminValidate, replaceCosts, submitToFinance, approve, reject };

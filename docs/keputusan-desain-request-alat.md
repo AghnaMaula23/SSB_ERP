@@ -124,7 +124,7 @@ dengan DROP kolom workhour 5 Oktober.
 | lapangan | read, create | Pengaju internal |
 | admin | read, create, review | Mereview internal; membuat external rental. Tanpa `approve` |
 | divisi_alat | read, approve | Memutuskan kuantitas. Tanpa `create`/`review` |
-| super_admin | semua | Lewat bypass `authorize` biasa |
+| super_admin | read | Sejak 15 Okt 2026 hanya memantau (tanpa bypass) |
 
 **External rental hanya boleh dibuat pemegang `equipment-request:review`.** Request
 itu melewati review Admin karena pembuatnya Admin. Tanpa syarat ini, siapa pun

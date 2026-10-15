@@ -1616,12 +1616,12 @@ const swaggerSpec = {
     // ========================================
     // 5. REQUEST MATERIAL
     // ========================================
-    // Tahap RM-2 (pengajuan & meja Admin). Dana, approval Finance, delivery, dan
-    // receipt menyusul di RM-3..RM-5 — lihat docs/keputusan-desain-request-material.md
+    // RM-2 (pengajuan & meja Admin) + RM-3 (biaya & approval Finance). Delivery
+    // dan receipt menyusul di RM-4..RM-5 — lihat docs/keputusan-desain-request-material.md
     '/request-material': {
       get: {
         tags: ['Request Material'], summary: 'List request material',
-        description: 'Permission: material-request:read. `rejectedBy` (admin/finance) adalah field TURUNAN — pengganti status rejected_by_* dari ERD (R1).',
+        description: 'Permission: material-request:read. `rejectedBy` (admin/finance) adalah field TURUNAN — pengganti status rejected_by_* dari ERD (R1). `totalCostAmount` = jumlah rincian biaya, dihitung saat dibaca (0 kalau belum disusun).',
         parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
           { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'waiting_finance_approval', 'approved', 'rejected', 'cancelled'] } },
           { in: 'query', name: 'requestType', schema: { type: 'string', enum: ['internal_project', 'external_supply'] } },
@@ -1649,14 +1649,14 @@ const swaggerSpec = {
     '/request-material/{id}': {
       get: {
         tags: ['Request Material'], summary: 'Detail request material',
-        description: 'Permission: material-request:read. Tiap item memuat `unit` (dari jenis material), `requestedQuantity`, `adminValidatedQuantity` (null = belum diubah Admin), dan `effectiveQuantity` (yang berlaku).',
+        description: 'Permission: material-request:read. Tiap item memuat `unit` (dari jenis material), `requestedQuantity`, `adminValidatedQuantity` (null = belum diubah Admin), `effectiveQuantity` (yang berlaku), dan `materialPoolItemId` (terisi setelah disetujui Finance). `costs` = rincian biaya, `totalCostAmount` = jumlahnya (tidak disimpan).',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } },
       },
     },
     '/request-material/{id}/admin-validation': {
       put: {
         tags: ['Request Material'], summary: 'Admin menyesuaikan kuantitas',
-        description: 'Permission: material-request:validate. Hanya status `submitted`; status TIDAK berubah (meneruskan ke Finance butuh paket dana — RM-3). Kuantitas boleh dikurangi, tidak boleh melebihi permintaan dan tidak boleh 0 (R4, dijaga CHECK). `adminValidatedQuantity: null` mengembalikan ke kuantitas diminta. Pengaju tidak boleh memvalidasi request sendiri.',
+        description: 'Permission: material-request:validate. Hanya status `submitted`; status TIDAK berubah (meneruskan ke Finance lewat submit-to-finance). Kuantitas boleh dikurangi, tidak boleh melebihi permintaan dan tidak boleh 0 (R4, dijaga CHECK). `adminValidatedQuantity: null` mengembalikan ke kuantitas diminta. Pengaju tidak boleh memvalidasi request sendiri.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['items'], properties: {
           items: { type: 'array', items: { type: 'object', required: ['itemId'], properties: {
@@ -1666,10 +1666,47 @@ const swaggerSpec = {
         responses: { 200: { description: 'Disimpan' }, 400: { description: 'Melebihi permintaan / item bukan milik request' }, 409: { description: 'Bukan antrean Admin' } },
       },
     },
+    '/request-material/{id}/costs': {
+      put: {
+        tags: ['Request Material'], summary: 'Admin menyusun rincian biaya',
+        description: 'Permission: material-request:validate. Hanya status `submitted`; MENGGANTI seluruh daftar (array kosong = mengosongkan). `material_cost` wajib menunjuk satu item request ini lewat `materialRequestItemId` (maksimal satu per item); jenis biaya lain TIDAK boleh menunjuk item. `amount` > 0 (dijaga CHECK). `approvedAmount` ditolak — Finance tidak mengisi nominal aktual. Pengaju tidak boleh menyusun biaya request sendiri.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['costs'], properties: {
+          costs: { type: 'array', items: { type: 'object', required: ['costType', 'description', 'amount'], properties: {
+            costType: { type: 'string', enum: ['material_cost', 'driver_fee', 'delivery_fee', 'loading_unloading_fee', 'fuel_cost', 'other'] },
+            materialRequestItemId: { type: 'integer', nullable: true, description: 'Wajib untuk material_cost, dilarang untuk lainnya' },
+            description: { type: 'string' }, amount: { type: 'number', example: 1500000 },
+            payeeName: { type: 'string', maxLength: 150 }, notes: { type: 'string' },
+          } } },
+        } } } } },
+        responses: { 200: { description: 'Disimpan' }, 400: { description: 'Item tidak sah / material_cost dobel / nominal tidak sah' }, 409: { description: 'Bukan antrean Admin' } },
+      },
+    },
+    '/request-material/{id}/submit-to-finance': {
+      put: {
+        tags: ['Request Material'], summary: 'Admin meneruskan paket ke Finance',
+        description: 'Permission: material-request:validate. `submitted` → `waiting_finance_approval`. Syarat: setiap item punya tepat satu `material_cost` (400 menyebut item yang kurang). Setelah ini kuantitas dan biaya terkunci.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Diteruskan' }, 400: { description: 'Biaya belum lengkap' }, 409: { description: 'Bukan antrean Admin' } },
+      },
+    },
+    '/request-material/{id}/approve': {
+      put: {
+        tags: ['Request Material'], summary: 'Finance menyetujui paket dana',
+        description: 'Permission: material-request:approve (Finance; super_admin TIDAK). `waiting_finance_approval` → `approved`. Nominal yang disetujui = yang diajukan. Di transaksi yang sama setiap material masuk material pool project (konstruksi: pool construction project tahapan; supply: pool supply project). Pool dibuat otomatis kalau belum ada; lebih dari satu pool aktif → `materialPoolId` wajib. Material yang sudah ada di pool memakai pool item yang sama. Approve ganda / approve + cancel bersamaan: yang kalah 409.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: {
+          notes: { type: 'string' },
+          materialPoolId: { type: 'integer', description: 'Wajib hanya kalau project punya lebih dari satu material pool aktif' },
+        } } } } },
+        responses: { 200: { description: 'Disetujui' }, 400: { description: 'Pool tidak sah / perlu memilih pool' }, 403: { description: 'Bukan Finance' }, 409: { description: 'Bukan antrean Finance / sudah diproses' } },
+      },
+    },
     '/request-material/{id}/reject': {
       put: {
         tags: ['Request Material'], summary: 'Tolak request material',
-        description: 'Permission diperiksa per status: `submitted` → material-request:validate (Admin). Aturan untuk Finance menyusul di RM-3. Alasan wajib. Revisi = request baru (ERD). Aksi bersamaan: yang kalah 409.',
+        description: 'Permission diperiksa per status: `submitted` → material-request:validate (Admin); `waiting_finance_approval` → material-request:approve (Finance). Alasan wajib. Tidak ada "kembalikan ke Admin" — revisi = request baru (ERD). Aksi bersamaan: yang kalah 409.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string' } } } } } },
         responses: { 200: { description: 'Ditolak' }, 403: { description: 'Tidak berwenang di status ini' } },
