@@ -63,6 +63,9 @@ const PERMISSIONS = [
   { module: 'material-pool', action: 'read',   label: 'Lihat material pool project' },
   { module: 'material-pool', action: 'create', label: 'Buat material pool' },
   { module: 'material-pool', action: 'update', label: 'Ubah status dan isi material pool' },
+  { module: 'material-request', action: 'read',     label: 'Lihat request material' },
+  { module: 'material-request', action: 'create',   label: 'Ajukan dan batalkan request material' },
+  { module: 'material-request', action: 'validate', label: 'Validasi Admin: sesuaikan kuantitas atau tolak request material' },
   { module: 'equipment',  action: 'read',   label: 'Lihat master alat' },
   { module: 'equipment',  action: 'create', label: 'Tambah jenis/unit alat' },
   { module: 'equipment',  action: 'update', label: 'Ubah data dan status alat' },
@@ -141,6 +144,9 @@ const ROLE_PERMISSIONS = {
     'material:read', 'material:create', 'material:update',
     'supplier:read', 'supplier:create', 'supplier:update',
     'material-pool:read', 'material-pool:create', 'material-pool:update',
+    // Admin di meja validasi request material (RM-2) — tanpa create, yang
+    // mengajukan adalah Lapangan/PIC
+    'material-request:read', 'material-request:validate',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
@@ -150,7 +156,7 @@ const ROLE_PERMISSIONS = {
   finance: ['purchase-request:read', 'purchase-request:approve', 'equipment:read', 'cash:read',
     'project:read', 'sub-project:read', 'progress:read',
     // Finance menyetujui dana material (RM-3), jadi perlu membaca master & pool
-    'material:read', 'supplier:read', 'material-pool:read'],
+    'material:read', 'supplier:read', 'material-pool:read', 'material-request:read'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
@@ -186,7 +192,9 @@ const ROLE_PERMISSIONS = {
     // Lapangan pengaju request internal — tanpa review/approve
     'equipment-request:read', 'equipment-request:create',
     // Lapangan memilih material saat mengajukan request (RM-2) — baca saja
-    'material:read', 'supplier:read', 'material-pool:read'],
+    'material:read', 'supplier:read', 'material-pool:read',
+    // Lapangan & PIC supply mengajukan request material — tanpa validate
+    'material-request:read', 'material-request:create'],
 };
 
 async function main() {

@@ -32,7 +32,7 @@ app.use('/api/permissions',        require('./modules/permission/permission.rout
 app.use('/api/projects',           require('./modules/project/project.routes.js'));
 app.use('/api/materials',          require('./modules/material/material.routes.js'));
 app.use('/api/request-alat',       require('./modules/request-alat/request-alat.routes.js'));
-// app.use('/api/request-material',   require('./modules/request-material/request-material.routes.js'));
+app.use('/api/request-material',   require('./modules/request-material/request-material.routes.js'));
 // app.use('/api/approvals',          require('./modules/approval-center/approval.routes.js'));
 // Didaftarkan SEBELUM /api/equipment supaya jelas mana yang menangani
 // /purchase-requests — bukan bergantung pada fall-through router.

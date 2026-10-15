@@ -171,6 +171,8 @@ npx prisma migrate diff --from-schema-datasource prisma/schema.prisma \
   --to-schema-datamodel prisma/schema.prisma --script
 # 3. Baca SQL-nya, simpan manual ke prisma/migrations/<timestamp>_<nama>/migration.sql
 #    (tempel CHECK constraint kalau ada — Prisma tidak bisa menyatakannya)
+#    Tabel baru WAJIB: ALTER TABLE "<nama>" ENABLE ROW LEVEL SECURITY;
+#    (menutup REST API publik Supabase; backend tidak terdampak)
 # 4. Terapkan
 npx prisma migrate deploy
 ```

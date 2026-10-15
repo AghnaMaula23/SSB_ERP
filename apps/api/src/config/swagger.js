@@ -474,7 +474,7 @@ const swaggerSpec = {
     '/projects/construction/{projectId}/sub-projects/{id}/status': {
       put: {
         tags: ['Sub-Projects'], summary: 'Ubah status tahapan',
-        description: 'Permission: sub-project:update. Mengaktifkan tahapan yang pendahulunya belum selesai BERHASIL, tapi response memuat `sequenceWarning` berisi daftar tahapan pendahulu yang masih terbuka — urutan tidak diblokir karena ERD menyebut "atau berdasarkan kesepakatan kontrak baru". Menutup tahapan DITOLAK 409 kalau masih ada alat teralokasi.',
+        description: 'Permission: sub-project:update. Mengaktifkan tahapan yang pendahulunya belum selesai BERHASIL, tapi response memuat `sequenceWarning` berisi daftar tahapan pendahulu yang masih terbuka — urutan tidak diblokir karena ERD menyebut "atau berdasarkan kesepakatan kontrak baru". Yang DIBLOKIR (409) adalah KEBERSAMAAN: dalam satu project hanya satu tahapan boleh `active` — aktifkan tahapan berikutnya setelah yang aktif ditutup (dikonfirmasi 14 Okt 2026). Menutup tahapan DITOLAK 409 kalau masih ada alat teralokasi.',
         parameters: [
           { in: 'path', name: 'projectId', required: true, schema: { type: 'integer' } },
           { in: 'path', name: 'id', required: true, schema: { type: 'integer' } }
@@ -1618,36 +1618,71 @@ const swaggerSpec = {
     // ========================================
     // 5. REQUEST MATERIAL
     // ========================================
+    // Tahap RM-2 (pengajuan & meja Admin). Dana, approval Finance, delivery, dan
+    // receipt menyusul di RM-3..RM-5 — lihat docs/keputusan-desain-request-material.md
     '/request-material': {
-      get: { tags: ['Request Material'], summary: 'List request material', parameters: [{ $ref: '#/components/parameters/PageParam' }, { in: 'query', name: 'status', schema: { type: 'string' } }], responses: { 200: { description: 'Paginated list' } } },
+      get: {
+        tags: ['Request Material'], summary: 'List request material',
+        description: 'Permission: material-request:read. `rejectedBy` (admin/finance) adalah field TURUNAN — pengganti status rejected_by_* dari ERD (R1).',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'waiting_finance_approval', 'approved', 'rejected', 'cancelled'] } },
+          { in: 'query', name: 'requestType', schema: { type: 'string', enum: ['internal_project', 'external_supply'] } },
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'externalSupplyProjectId', schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Paginated list' } },
+      },
       post: {
-        tags: ['Request Material'], summary: 'Buat request material', description: 'Role: lapangan',
-        requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['subProjectId', 'requestDate', 'items'],
-          properties: {
-            subProjectId: { type: 'integer' }, requestDate: { type: 'string', format: 'date' },
-            items: { type: 'array', items: { type: 'object', required: ['materialTypeId', 'requestedQuantity', 'unit'],
-              properties: { materialTypeId: { type: 'integer' }, requestedQuantity: { type: 'number' }, unit: { type: 'string' }, notes: { type: 'string' } }
-            }}
-          }
-        }}}},
-        responses: { 201: { description: 'Created' } }
-      }
+        tags: ['Request Material'], summary: 'Ajukan request material',
+        description: 'Permission: material-request:create. `internal_project` dari tahapan berstatus planned/active. `external_supply` HANYA oleh PIC Lapangan supply project itu (403 selain PIC, 409 kalau PIC belum ditentukan). Material dipilih bebas dari master (tidak wajib ada di pool), harus aktif, sekali per request. Kuantitas dalam SATUAN JENIS MATERIAL — `unit` ditolak 400; konversi (mis. rit → m³) tanggung jawab penginput. Kode MRQ-NNNNNN dibuat sistem.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['requestType', 'items'], properties: {
+          requestType: { type: 'string', enum: ['internal_project', 'external_supply'] },
+          subProjectId: { type: 'integer', description: 'Wajib untuk internal_project' },
+          externalSupplyProjectId: { type: 'integer', description: 'Wajib untuk external_supply' },
+          requestDate: { type: 'string', format: 'date', description: 'Default hari ini; tidak boleh di masa depan' },
+          neededDate: { type: 'string', format: 'date', description: 'Tidak boleh sebelum requestDate' },
+          requestNotes: { type: 'string' },
+          items: { type: 'array', minItems: 1, items: { type: 'object', required: ['materialTypeId', 'requestedQuantity'], properties: {
+            materialTypeId: { type: 'integer' }, requestedQuantity: { type: 'number', example: 24.5 }, itemNotes: { type: 'string' },
+          } } },
+        } } } } },
+        responses: { 201: { description: 'Created' }, 400: { description: 'Validasi gagal' }, 403: { description: 'Bukan PIC supply' }, 409: { description: 'Konteks ditutup / PIC belum ada / material nonaktif' } },
+      },
     },
-    '/request-material/{id}': { get: { tags: ['Request Material'], summary: 'Detail', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail + items + funding status' } } } },
-    '/request-material/{id}/funding-request': {
-      post: { tags: ['Request Material'], summary: 'Admin buat funding request ke Finance', description: 'Role: admin', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['items'], properties: { items: { type: 'array', items: { type: 'object', properties: { materialRequestItemId: { type: 'integer' }, fundingCategory: { type: 'string', enum: ['material_cost','delivery_fee','driver_fee','fuel_cost','other'] }, estimatedAmount: { type: 'number' } } } } } } } } },
-        responses: { 201: { description: 'Created' } } }
+    '/request-material/{id}': {
+      get: {
+        tags: ['Request Material'], summary: 'Detail request material',
+        description: 'Permission: material-request:read. Tiap item memuat `unit` (dari jenis material), `requestedQuantity`, `adminValidatedQuantity` (null = belum diubah Admin), dan `effectiveQuantity` (yang berlaku).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } },
+      },
     },
-    '/request-material/{id}/funding-approve': { put: { tags: ['Request Material'], summary: 'Finance approve funding', description: 'Role: finance', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Approved' } } } },
-    '/request-material/{id}/deliveries': {
-      post: { tags: ['Request Material'], summary: 'Catat pengiriman', description: 'Role: admin', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object' } } } }, responses: { 201: { description: 'Created' } } }
+    '/request-material/{id}/admin-validation': {
+      put: {
+        tags: ['Request Material'], summary: 'Admin menyesuaikan kuantitas',
+        description: 'Permission: material-request:validate. Hanya status `submitted`; status TIDAK berubah (meneruskan ke Finance butuh paket dana — RM-3). Kuantitas boleh dikurangi, tidak boleh melebihi permintaan dan tidak boleh 0 (R4, dijaga CHECK). `adminValidatedQuantity: null` mengembalikan ke kuantitas diminta. Pengaju tidak boleh memvalidasi request sendiri.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['items'], properties: {
+          items: { type: 'array', items: { type: 'object', required: ['itemId'], properties: {
+            itemId: { type: 'integer' }, adminValidatedQuantity: { type: 'number', nullable: true }, adminNotes: { type: 'string' },
+          } } },
+        } } } } },
+        responses: { 200: { description: 'Disimpan' }, 400: { description: 'Melebihi permintaan / item bukan milik request' }, 409: { description: 'Bukan antrean Admin' } },
+      },
     },
-    '/request-material/deliveries/{deliveryId}/receipts': {
-      post: { tags: ['Request Material'], summary: 'Lapangan input penerimaan material', description: 'Role: lapangan', parameters: [{ in: 'path', name: 'deliveryId', required: true, schema: { type: 'integer' } }],
-        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', properties: { items: { type: 'string', description: 'JSON array of receipt items' }, attachments: { type: 'array', items: { type: 'string', format: 'binary' } } } } } } },
-        responses: { 201: { description: 'Created' } } }
+    '/request-material/{id}/reject': {
+      put: {
+        tags: ['Request Material'], summary: 'Tolak request material',
+        description: 'Permission diperiksa per status: `submitted` → material-request:validate (Admin). Aturan untuk Finance menyusul di RM-3. Alasan wajib. Revisi = request baru (ERD). Aksi bersamaan: yang kalah 409.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Ditolak' }, 403: { description: 'Tidak berwenang di status ini' } },
+      },
+    },
+    '/request-material/{id}/cancel': {
+      put: {
+        tags: ['Request Material'], summary: 'Batalkan request material',
+        description: 'Permission: material-request:create. Hanya pengaju, selama Finance belum memutuskan (submitted / waiting_finance_approval).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Dibatalkan' }, 409: { description: 'Sudah diputuskan' } },
+      },
     },
 
     // ========================================
