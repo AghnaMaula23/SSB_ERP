@@ -2,7 +2,8 @@ const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const maintenance = require('./maintenance.service.js');
-const { toNumber, toDateOnly, pickWritable } = require('../../utils/shape.js');
+const { toNumber, toDateOnly, pickWritable, ACTOR_SELECT } = require('../../utils/shape.js');
+const { claimTransition } = require('../../utils/status-transition.js');
 
 const MAX_WORKHOUR_PER_DAY = 24;
 
@@ -311,12 +312,12 @@ const getItemById = async (id) => {
       take: 10,
     }),
     prisma.equipmentWorkhourLog.aggregate({
-      where: { equipmentItemId: id },
+      where: { equipmentItemId: id, isVoided: false },
       _sum: { totalWorkhour: true },
       _count: true,
     }),
     prisma.equipmentWorkhourLog.findFirst({
-      where: { equipmentItemId: id },
+      where: { equipmentItemId: id, isVoided: false },
       orderBy: [{ workDate: 'desc' }, { id: 'desc' }],
       select: { workDate: true },
     }),
@@ -520,7 +521,15 @@ const removeItem = async (id) => {
 
 // ============================================================
 // WORKHOUR LOGS
+// Log tidak pernah diubah atau dihapus. Salah input -> dibatalkan (void) lalu
+// dicatat ulang; pembatalan menarik kembali jam alat & counter servis.
 // ============================================================
+
+const WORKHOUR_INCLUDE = {
+  equipmentItem: true,
+  createdByUser: { select: ACTOR_SELECT },
+  voidedByUser: { select: ACTOR_SELECT },
+};
 
 const shapeWorkhourLog = (log) => ({
   id: log.id,
@@ -533,6 +542,7 @@ const shapeWorkhourLog = (log) => ({
   subProjectEquipmentAllocationId: log.subProjectEquipmentAllocationId,
   equipmentPoolItemId: log.equipmentPoolItemId,
   workDate: toDateOnly(log.workDate),
+  workSession: log.workSession,
   startedAt: log.startedAt,
   stoppedAt: log.stoppedAt,
   pausedDurationMinutes: log.pausedDurationMinutes,
@@ -540,16 +550,12 @@ const shapeWorkhourLog = (log) => ({
   sourceType: log.sourceType,
   description: log.description,
   createdAt: log.createdAt,
-  createdBy: log.createdByUser
-    ? { id: log.createdByUser.id, username: log.createdByUser.username, fullName: log.createdByUser.fullName }
-    : null,
+  createdBy: log.createdByUser ?? null,
+  isVoided: log.isVoided,
+  voidReason: log.voidReason,
+  voidedAt: log.voidedAt,
+  voidedBy: log.voidedByUser ?? null,
 });
-
-// Hanya `description` dan `pausedDurationMinutes` yang bebas ditulis klien.
-// Konteks (allocation/pool item) divalidasi sendiri karena menentukan
-// equipment_item_id, dan equipment_item_id TIDAK boleh datang dari request
-// untuk dua sourceType yang punya konteks.
-const WORKHOUR_WRITABLE_FIELDS = ['description', 'pausedDurationMinutes'];
 
 /**
  * Konteks wajib per sourceType — cerminan CHECK constraint di database.
@@ -568,6 +574,41 @@ const CONTEXT_BY_SOURCE = {
     label: 'item pool alat rental',
   },
   manual_adjustment: { required: null, forbidden: null, label: 'koreksi manual' },
+};
+
+// Jam kerja boleh dicatat (dan dibatalkan) selama PEKERJAANNYA masih berjalan,
+// walau alatnya sudah ditarik: catatan yang terlambat atau salah ketik baru
+// ketahuan setelah alat pulang. Begitu tahapan / kontrak rental ditutup, datanya
+// terkunci. Alokasi `cancelled` dan pool item yang tidak pernah jalan tidak
+// pernah menghasilkan jam.
+const RECORDABLE_ALLOCATION_STATUSES = ['assigned', 'completed', 'returned'];
+const RECORDABLE_POOL_ITEM_STATUSES = ['available', 'completed'];
+
+const loadAllocationContext = (client, id) => client.subProjectEquipmentAllocation.findUnique({
+  where: { id },
+  include: { subProject: { select: { id: true, subProjectType: true, status: true } } },
+});
+
+const loadPoolItemContext = (client, id) => client.equipmentPoolItem.findUnique({
+  where: { id },
+  include: {
+    equipmentPool: {
+      select: { id: true, ownerType: true, externalRentalProject: { select: { id: true, rentalProjectCode: true, status: true } } },
+    },
+  },
+});
+
+/** Tahapan / kontrak rental pemilik log masih terbuka? Dipakai catat & batal. */
+const assertContextOpen = (sourceType, context) => {
+  if (sourceType === 'internal_project' && context.subProject.status !== 'active') {
+    throw httpError(`Tahapan berstatus "${context.subProject.status}" — jam kerjanya sudah terkunci`, 409);
+  }
+  if (sourceType === 'external_rental') {
+    const rental = context.equipmentPool.externalRentalProject;
+    if (rental.status !== 'active') {
+      throw httpError(`Kontrak rental ${rental.rentalProjectCode} berstatus "${rental.status}" — jam kerjanya hanya bisa dicatat/dibatalkan saat kontrak aktif`, 409);
+    }
+  }
 };
 
 /**
@@ -603,27 +644,15 @@ const resolveWorkhourContext = async (payload) => {
     throw httpError(`sourceType "${sourceType}" wajib mengirim ${rule.required} (${rule.label})`, 400);
   }
 
-  let derivedItemId;
   let context;
-
   if (sourceType === 'internal_project') {
-    context = await prisma.subProjectEquipmentAllocation.findUnique({
-      where: { id: contextId },
-      include: { subProject: { select: { id: true, subProjectType: true, status: true } } },
-    });
+    context = await loadAllocationContext(prisma, contextId);
     if (!context) throw httpError(`Alokasi alat dengan ID ${contextId} tidak ditemukan`, 404);
-    if (context.status !== 'assigned') {
-      throw httpError(
-        `Alokasi berstatus "${context.status}" — jam kerja hanya bisa dicatat pada alokasi yang masih berjalan`,
-        409
-      );
+    if (!RECORDABLE_ALLOCATION_STATUSES.includes(context.status)) {
+      throw httpError(`Alokasi berstatus "${context.status}" — alat tidak pernah bekerja di alokasi ini`, 409);
     }
-    derivedItemId = context.equipmentItemId;
   } else {
-    context = await prisma.equipmentPoolItem.findUnique({
-      where: { id: contextId },
-      include: { equipmentPool: { select: { id: true, ownerType: true, status: true } } },
-    });
+    context = await loadPoolItemContext(prisma, contextId);
     if (!context) throw httpError(`Pool item dengan ID ${contextId} tidak ditemukan`, 404);
     // sourceType dan pemilik pool harus searah. Pool milik construction project
     // jam kerjanya dicatat lewat alokasi, bukan lewat pool item.
@@ -634,9 +663,13 @@ const resolveWorkhourContext = async (payload) => {
         400
       );
     }
-    derivedItemId = context.equipmentItemId;
+    if (!RECORDABLE_POOL_ITEM_STATUSES.includes(context.status)) {
+      throw httpError(`Pool item berstatus "${context.status}" — unit ini tidak pernah bekerja di kontrak ini`, 409);
+    }
   }
+  assertContextOpen(sourceType, context);
 
+  const derivedItemId = context.equipmentItemId;
   if (!derivedItemId) {
     throw httpError(
       `${rule.label} ini belum terikat unit alat spesifik. Tentukan unitnya dulu sebelum mencatat jam kerja.`,
@@ -658,106 +691,202 @@ const resolveWorkhourContext = async (payload) => {
   };
 };
 
+const round2 = (n) => Math.round(n * 100) / 100;
+
+/** Jam bersih dari rentang - jeda; null kalau jamnya tidak dicatat. */
+const netHours = ({ startedAt, stoppedAt, pausedDurationMinutes = 0 }) => {
+  if (!startedAt) return null;
+  return round2(((new Date(stoppedAt) - new Date(startedAt)) / 60000 - Number(pausedDurationMinutes)) / 60);
+};
+
+/**
+ * Aturan satu entri jam kerja — cerminan CHECK di database
+ * (equipment_workhour_logs_times_check / _total_check).
+ */
+const assertEntryTimes = (entry, label = '') => {
+  const { startedAt, stoppedAt, totalWorkhour } = entry;
+  const paused = Number(entry.pausedDurationMinutes ?? 0);
+  if (!startedAt !== !stoppedAt) throw httpError(`${label}startedAt dan stoppedAt diisi berpasangan`, 400);
+  if (!startedAt) return;
+
+  const spanMinutes = (new Date(stoppedAt) - new Date(startedAt)) / 60000;
+  if (spanMinutes <= 0) throw httpError(`${label}stoppedAt harus lebih besar dari startedAt`, 400);
+  // Tanpa ini jam kerja bersih bisa negatif tanpa ada yang menolak
+  if (paused > spanMinutes) {
+    throw httpError(`${label}Jeda ${paused} menit melebihi rentang kerja ${Math.round(spanMinutes)} menit (startedAt sampai stoppedAt)`, 400);
+  }
+  const expected = netHours(entry);
+  if (Math.abs(Number(totalWorkhour) - expected) > 0.01) {
+    throw httpError(`${label}totalWorkhour ${totalWorkhour} tidak sama dengan rentang dikurangi jeda (${expected} jam)`, 400);
+  }
+};
+
+const lockEquipmentItem = (tx, id) => tx.$queryRaw`SELECT id FROM equipment_items WHERE id = ${id} FOR UPDATE`;
+
+/**
+ * Inti pencatatan, dipakai log tunggal maupun sheet rental: semua entri satu
+ * unit satu tanggal masuk dalam SATU transaksi, atau tidak sama sekali.
+ *
+ * Baris alat dikunci lebih dulu, baru jumlah jam hari itu dihitung — dua input
+ * bersamaan tidak bisa sama-sama lolos batas 24 jam (versi lama menghitungnya
+ * di luar transaksi).
+ */
+const recordEntries = async (context, sourceType, workDate, entries, userId) => {
+  const { equipmentItemId } = context;
+  const work = assertNotFuture(workDate, 'Tanggal kerja');
+  const newHours = round2(entries.reduce((sum, e) => sum + Number(e.totalWorkhour), 0));
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await lockEquipmentItem(tx, equipmentItemId);
+      const item = await tx.equipmentItem.findUnique({ where: { id: equipmentItemId } });
+      if (!item) throw httpError(`Unit alat dengan ID ${equipmentItemId} tidak ditemukan`, 404);
+      if (!item.isActive) throw httpError(`Alat "${item.assetCode}" nonaktif dan tidak bisa dipakai transaksi baru`, 409);
+      // Alat di bengkel atau sudah pensiun tidak mungkin menghasilkan jam kerja.
+      // Kalau dibiarkan, counter maintenance ikut jalan dan alat yang baru selesai
+      // servis langsung terlihat mendekati jatuh tempo lagi.
+      if (NON_OPERATIONAL_STATUSES.includes(item.currentStatus)) {
+        throw httpError(`Alat "${item.assetCode}" berstatus "${item.currentStatus}" sehingga jam kerjanya tidak bisa dicatat`, 409);
+      }
+
+      const existing = await tx.equipmentWorkhourLog.aggregate({
+        where: { equipmentItemId, workDate: work, isVoided: false },
+        _sum: { totalWorkhour: true },
+      });
+      const accumulated = round2((toNumber(existing._sum.totalWorkhour) ?? 0) + newHours);
+      if (accumulated > MAX_WORKHOUR_PER_DAY) {
+        throw httpError(
+          `Total workhour alat ini pada ${toDateOnly(work)} jadi ${accumulated} jam, melebihi batas ${MAX_WORKHOUR_PER_DAY} jam per hari`,
+          409
+        );
+      }
+
+      const logs = [];
+      for (const entry of entries) {
+        logs.push(await tx.equipmentWorkhourLog.create({
+          data: {
+            // Seluruh konteks (equipmentItemId + FK alokasi/pool item) berasal dari
+            // resolveWorkhourContext, bukan dari request body.
+            ...context,
+            workDate: work,
+            workSession: entry.workSession ?? null,
+            startedAt: entry.startedAt ? new Date(entry.startedAt) : null,
+            stoppedAt: entry.stoppedAt ? new Date(entry.stoppedAt) : null,
+            pausedDurationMinutes: Number(entry.pausedDurationMinutes ?? 0),
+            totalWorkhour: entry.totalWorkhour,
+            sourceType,
+            description: entry.description?.trim() || null,
+            createdBy: userId,
+          },
+          include: WORKHOUR_INCLUDE,
+        }));
+      }
+
+      // Log workhour dan akumulator total_workhour pada alat bergerak bersama
+      await tx.equipmentItem.update({ where: { id: equipmentItemId }, data: { totalWorkhour: { increment: newHours } } });
+      // Jam kerja yang sama ikut menggerakkan hitung mundur maintenance alat ini
+      const affected = await maintenance.applyWorkhourToSettings(tx, equipmentItemId, newHours);
+      return { logs, affected };
+    });
+  } catch (err) {
+    if (err.code === 'P2002') {
+      throw httpError(`Sesi tersebut sudah tercatat untuk unit ini pada ${toDateOnly(work)}. Batalkan log lamanya dulu kalau mau mengganti.`, 409);
+    }
+    throw err;
+  }
+};
+
+const assertSessionAllowed = (sourceType, workSession) => {
+  if (workSession && sourceType !== 'external_rental') {
+    throw httpError('workSession hanya untuk sourceType external_rental', 400);
+  }
+};
+
 const createWorkhourLog = async (payload, userId) => {
-  const { workDate, startedAt, stoppedAt, totalWorkhour, sourceType } = payload;
-  const writable = pickWritable(payload, WORKHOUR_WRITABLE_FIELDS);
+  const { workDate, sourceType } = payload;
+  assertSessionAllowed(sourceType, payload.workSession);
+  assertEntryTimes(payload);
 
   // Konteks diselesaikan DULU: dia yang menentukan unit alatnya untuk
   // internal_project dan external_rental.
   const context = await resolveWorkhourContext(payload);
-  const { equipmentItemId } = context;
-
-  const item = await prisma.equipmentItem.findUnique({ where: { id: equipmentItemId } });
-  if (!item) throw httpError(`Unit alat dengan ID ${equipmentItemId} tidak ditemukan`, 404);
-  if (!item.isActive) throw httpError(`Alat "${item.assetCode}" nonaktif dan tidak bisa dipakai transaksi baru`, 409);
-  // Alat di bengkel atau sudah pensiun tidak mungkin menghasilkan jam kerja.
-  // Kalau dibiarkan, counter maintenance ikut jalan dan alat yang baru selesai
-  // servis langsung terlihat mendekati jatuh tempo lagi.
-  if (NON_OPERATIONAL_STATUSES.includes(item.currentStatus)) {
-    throw httpError(
-      `Alat "${item.assetCode}" berstatus "${item.currentStatus}" sehingga jam kerjanya tidak bisa dicatat`,
-      409
-    );
-  }
-
-  const work = assertNotFuture(workDate, 'Tanggal kerja');
-
-  if (startedAt && stoppedAt && new Date(stoppedAt) <= new Date(startedAt)) {
-    throw httpError('stoppedAt harus lebih besar dari startedAt', 400);
-  }
-
-  // Jeda tidak boleh lebih panjang dari rentang kerjanya sendiri. Tanpa ini,
-  // paused_duration_minutes bisa diisi angka yang membuat jam kerja bersih
-  // menjadi negatif tanpa ada yang menolak.
-  const paused = Number(writable.pausedDurationMinutes ?? 0);
-  if (startedAt && stoppedAt && paused > 0) {
-    const spanMinutes = (new Date(stoppedAt) - new Date(startedAt)) / 60000;
-    if (paused > spanMinutes) {
-      throw httpError(
-        `Jeda ${paused} menit melebihi rentang kerja ${Math.round(spanMinutes)} menit (startedAt sampai stoppedAt)`,
-        400
-      );
-    }
-  }
-
-  // Total jam kerja per alat per hari tidak boleh melebihi 24 jam
-  const existing = await prisma.equipmentWorkhourLog.aggregate({
-    where: { equipmentItemId, workDate: work },
-    _sum: { totalWorkhour: true },
-  });
-  const accumulated = (toNumber(existing._sum.totalWorkhour) ?? 0) + Number(totalWorkhour);
-  if (accumulated > MAX_WORKHOUR_PER_DAY) {
-    throw httpError(
-      `Total workhour alat ini pada ${toDateOnly(work)} jadi ${accumulated} jam, melebihi batas ${MAX_WORKHOUR_PER_DAY} jam per hari`,
-      409
-    );
-  }
-
-  // Log workhour dan akumulator total_workhour pada alat harus bergerak bersama
-  const log = await prisma.$transaction(async (tx) => {
-    const created = await tx.equipmentWorkhourLog.create({
-      data: {
-        // Seluruh konteks (equipmentItemId + FK alokasi/pool item) berasal dari
-        // resolveWorkhourContext, bukan dari request body.
-        ...context,
-        workDate: work,
-        startedAt: startedAt ? new Date(startedAt) : null,
-        stoppedAt: stoppedAt ? new Date(stoppedAt) : null,
-        totalWorkhour,
-        sourceType,
-        ...writable,
-        createdBy: userId,
-      },
-      include: {
-        equipmentItem: true,
-        createdByUser: { select: { id: true, username: true, fullName: true } },
-      },
-    });
-
-    await tx.equipmentItem.update({
-      where: { id: equipmentItemId },
-      data: { totalWorkhour: { increment: totalWorkhour } },
-    });
-
-    // Jam kerja yang sama ikut menggerakkan hitung mundur maintenance alat ini
-    const affected = await maintenance.applyWorkhourToSettings(tx, equipmentItemId, totalWorkhour);
-
-    return { created, affected };
-  });
+  const { logs, affected } = await recordEntries(context, sourceType, workDate, [payload], userId);
 
   return {
-    ...shapeWorkhourLog(log.created),
-    // Supaya operator langsung tahu kalau input ini memicu jadwal servis
-    maintenanceImpact: log.affected,
+    ...shapeWorkhourLog(logs[0]),
+    // Supaya pencatat langsung tahu kalau input ini memicu jadwal servis
+    maintenanceImpact: affected,
   };
 };
 
-const listWorkhourLogsByItem = async (itemId, { page = 1, limit = 20, startDate, endDate, sourceType }) => {
+/**
+ * Timesheet rental satu unit satu tanggal: 1–3 sesi (pagi/siang/overtime)
+ * sekaligus. Menggantikan beberapa POST terpisah yang bisa gagal di tengah dan
+ * meninggalkan sebagian sesi tercatat. Total jam dihitung sistem dari jamnya.
+ */
+const createRentalSheet = async (payload, userId) => {
+  const { equipmentPoolItemId, workDate, sessions } = payload;
+
+  const seen = new Set();
+  for (const s of sessions) {
+    if (seen.has(s.workSession)) throw httpError(`Sesi "${s.workSession}" dikirim lebih dari sekali`, 400);
+    seen.add(s.workSession);
+  }
+  const entries = sessions.map((s) => ({ ...s, totalWorkhour: netHours(s) }));
+  entries.forEach((e) => assertEntryTimes(e, `Sesi ${e.workSession}: `));
+  entries.forEach((e) => {
+    if (!(e.totalWorkhour > 0)) throw httpError(`Sesi ${e.workSession}: jam kerja bersih harus lebih dari 0`, 400);
+  });
+  const ordered = [...entries].sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt));
+  for (let i = 1; i < ordered.length; i++) {
+    if (new Date(ordered[i].startedAt) < new Date(ordered[i - 1].stoppedAt)) {
+      throw httpError(`Sesi ${ordered[i - 1].workSession} dan ${ordered[i].workSession} bertumpuk jamnya`, 400);
+    }
+  }
+
+  const context = await resolveWorkhourContext({ sourceType: 'external_rental', equipmentPoolItemId });
+  const { logs, affected } = await recordEntries(context, 'external_rental', workDate, entries, userId);
+  return { logs: logs.map(shapeWorkhourLog), maintenanceImpact: affected };
+};
+
+/**
+ * Batalkan log yang salah input. Jam alat dan counter servis yang masih memuat
+ * jam ini ikut dikurangi (lihat revertWorkhourFromSettings). Koreksinya:
+ * batalkan, lalu catat ulang yang benar.
+ */
+const voidWorkhourLog = async (id, { reason }, userId) => {
+  const log = await prisma.equipmentWorkhourLog.findUnique({ where: { id } });
+  if (!log) throw httpError('Workhour log tidak ditemukan', 404);
+  if (log.isVoided) throw httpError('Workhour log ini sudah dibatalkan', 409);
+
+  if (log.subProjectEquipmentAllocationId) {
+    assertContextOpen('internal_project', await loadAllocationContext(prisma, log.subProjectEquipmentAllocationId));
+  } else if (log.equipmentPoolItemId) {
+    assertContextOpen('external_rental', await loadPoolItemContext(prisma, log.equipmentPoolItemId));
+  }
+
+  const hours = toNumber(log.totalWorkhour);
+  const result = await prisma.$transaction(async (tx) => {
+    await lockEquipmentItem(tx, log.equipmentItemId);
+    await claimTransition(tx.equipmentWorkhourLog, { id, isVoided: false }, {
+      isVoided: true, voidReason: reason, voidedBy: userId, voidedAt: new Date(),
+    });
+    await tx.equipmentItem.update({ where: { id: log.equipmentItemId }, data: { totalWorkhour: { decrement: hours } } });
+    const affected = await maintenance.revertWorkhourFromSettings(tx, log.equipmentItemId, hours, log.createdAt);
+    const updated = await tx.equipmentWorkhourLog.findUnique({ where: { id }, include: WORKHOUR_INCLUDE });
+    return { updated, affected };
+  });
+
+  return { ...shapeWorkhourLog(result.updated), maintenanceImpact: result.affected };
+};
+
+const listWorkhourLogsByItem = async (itemId, { page = 1, limit = 20, startDate, endDate, sourceType, includeVoided = false }) => {
   await findItemOrFail(itemId);
 
   const where = {
     equipmentItemId: itemId,
     ...(sourceType && { sourceType }),
+    ...(!includeVoided && { isVoided: false }),
     ...((startDate || endDate) && {
       workDate: {
         ...(startDate && { gte: new Date(startDate) }),
@@ -769,13 +898,14 @@ const listWorkhourLogsByItem = async (itemId, { page = 1, limit = 20, startDate,
   const [rows, total, agg] = await Promise.all([
     prisma.equipmentWorkhourLog.findMany({
       where,
-      include: { createdByUser: { select: { id: true, username: true, fullName: true } } },
+      include: WORKHOUR_INCLUDE,
       orderBy: [{ workDate: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * limit,
       take: limit,
     }),
     prisma.equipmentWorkhourLog.count({ where }),
-    prisma.equipmentWorkhourLog.aggregate({ where, _sum: { totalWorkhour: true } }),
+    // Log yang dibatalkan tidak pernah ikut dijumlahkan, walau ditampilkan
+    prisma.equipmentWorkhourLog.aggregate({ where: { ...where, isVoided: false }, _sum: { totalWorkhour: true } }),
   ]);
 
   return {
@@ -791,5 +921,5 @@ const listWorkhourLogsByItem = async (itemId, { page = 1, limit = 20, startDate,
 module.exports = {
   listTypes, getTypeById, createType, updateType, removeType,
   listItems, getItemById, createItem, updateItem, changeItemStatus, listItemStatusLogs, removeItem,
-  createWorkhourLog, listWorkhourLogsByItem,
+  createWorkhourLog, createRentalSheet, voidWorkhourLog, listWorkhourLogsByItem,
 };

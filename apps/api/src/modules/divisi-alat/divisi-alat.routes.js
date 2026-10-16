@@ -12,6 +12,10 @@ router.use(authenticate);
 
 const EQUIPMENT_STATUSES = ['operational', 'maintenance', 'retired'];
 const WORKHOUR_SOURCE_TYPES = ['internal_project', 'external_rental', 'manual_adjustment'];
+const WORK_SESSIONS = ['pagi', 'siang', 'overtime'];
+// Kolom pembatalan hanya diisi lewat PUT /workhour-logs/:id/void
+const VOID_FIELDS_REJECTED = ['isVoided', 'voidReason', 'voidedBy', 'voidedAt'].map((f) =>
+  body(f).not().exists().withMessage(`${f} dikelola sistem — batalkan log lewat PUT /workhour-logs/:id/void`));
 
 const idParam = param('id').isInt({ min: 1 }).withMessage('ID tidak valid').toInt();
 const pageRules = [
@@ -165,9 +169,45 @@ router.post('/workhour-logs',
       .withMessage('projectId sudah tidak dipakai — kirim subProjectEquipmentAllocationId untuk internal_project'),
     body('subProjectId').not().exists()
       .withMessage('subProjectId sudah tidak dipakai — kirim subProjectEquipmentAllocationId untuk internal_project'),
+    // Sesi hanya untuk external_rental (service & CHECK database). Opsional
+    // sampai FE rental pindah ke /workhour-logs/rental-sheet (backlog-fe).
+    body('workSession').optional({ nullable: true }).isIn(WORK_SESSIONS)
+      .withMessage(`workSession harus salah satu dari: ${WORK_SESSIONS.join(', ')}`),
     body('description').optional({ nullable: true }).trim(),
+    ...VOID_FIELDS_REJECTED,
   ]),
   controller.createWorkhourLog);
+
+// Timesheet rental satu unit satu tanggal: semua sesi masuk dalam satu transaksi.
+// totalWorkhour dihitung sistem dari jam mulai/selesai dikurangi jeda.
+router.post('/workhour-logs/rental-sheet',
+  authorize('workhour:create'),
+  validate([
+    body('equipmentPoolItemId').isInt({ min: 1 }).withMessage('equipmentPoolItemId wajib diisi').toInt(),
+    body('workDate').notEmpty().withMessage('Tanggal kerja wajib diisi')
+      .isISO8601().withMessage('workDate harus format tanggal YYYY-MM-DD'),
+    body('sessions').isArray({ min: 1, max: WORK_SESSIONS.length })
+      .withMessage(`sessions wajib berisi 1–${WORK_SESSIONS.length} sesi`),
+    body('sessions.*.workSession').isIn(WORK_SESSIONS)
+      .withMessage(`workSession harus salah satu dari: ${WORK_SESSIONS.join(', ')}`),
+    body('sessions.*.startedAt').isISO8601().withMessage('startedAt wajib, format tanggal-waktu ISO'),
+    body('sessions.*.stoppedAt').isISO8601().withMessage('stoppedAt wajib, format tanggal-waktu ISO'),
+    body('sessions.*.pausedDurationMinutes').optional().isInt({ min: 0 })
+      .withMessage('pausedDurationMinutes tidak boleh negatif').toInt(),
+    body('sessions.*.totalWorkhour').not().exists()
+      .withMessage('totalWorkhour dihitung sistem dari jam mulai/selesai — jangan dikirim'),
+    body('sessions.*.description').optional({ nullable: true }).trim(),
+  ]),
+  controller.createRentalSheet);
+
+// Log tidak pernah diubah: salah input dibatalkan, lalu dicatat ulang
+router.put('/workhour-logs/:id/void',
+  authorize('workhour:update'),
+  validate([
+    idParam,
+    body('reason').trim().notEmpty().withMessage('Alasan pembatalan wajib diisi'),
+  ]),
+  controller.voidWorkhourLog);
 
 router.get('/items/:itemId/workhour-logs',
   authorize('workhour:read'),
@@ -177,6 +217,7 @@ router.get('/items/:itemId/workhour-logs',
     query('startDate').optional().isISO8601().withMessage('startDate harus format tanggal YYYY-MM-DD'),
     query('endDate').optional().isISO8601().withMessage('endDate harus format tanggal YYYY-MM-DD'),
     query('sourceType').optional().isIn(WORKHOUR_SOURCE_TYPES).withMessage(`sourceType harus salah satu dari: ${WORKHOUR_SOURCE_TYPES.join(', ')}`),
+    query('includeVoided').optional().isIn(['true', 'false']).withMessage('includeVoided harus true atau false'),
   ]),
   controller.listWorkhourLogsByItem);
 

@@ -22,7 +22,8 @@ model User {
   userRoles  UserRole[]
 
   equipmentStatusLogs   EquipmentStatusLog[]
-  equipmentWorkhourLogs EquipmentWorkhourLog[]
+  equipmentWorkhourLogs EquipmentWorkhourLog[] @relation("WorkhourCreatedBy")
+  workhourLogsVoided    EquipmentWorkhourLog[] @relation("WorkhourVoidedBy")
   maintenanceRecords    MaintenanceRecord[]
   damageLogsReported    DamageLog[]            @relation("DamageReportedBy")
   damageLogsReviewed    DamageLog[]            @relation("DamageReviewedBy")
@@ -142,6 +143,15 @@ enum WorkhourSourceType {
   @@map("workhour_source_type")
 }
 
+/// Sesi kerja rental. Diisi apa adanya dari form timesheet, tidak ditebak dari jam.
+enum WorkSession {
+  pagi
+  siang
+  overtime
+
+  @@map("work_session")
+}
+
 model EquipmentType {
   id                    Int                                 @id @default(autoincrement())
   typeCode              String                              @unique @map("type_code") @db.VarChar(50)
@@ -249,13 +259,26 @@ model EquipmentWorkhourLog {
   pausedDurationMinutes Int                @default(0) @map("paused_duration_minutes")
   totalWorkhour         Decimal            @map("total_workhour") @db.Decimal(10, 2)
   sourceType            WorkhourSourceType @map("source_type")
+  // Sesi kerja rental (pagi/siang/overtime) persis seperti dipilih saat input —
+  // dasar tagihan lembur. Hanya untuk external_rental (CHECK). Satu sesi per
+  // pool item per tanggal (unique index parsial, log yang dibatalkan tidak dihitung).
+  workSession           WorkSession?       @map("work_session")
   description           String?            @db.Text
   createdBy             Int?               @map("created_by")
   createdAt             DateTime           @default(now()) @map("created_at")
   updatedAt             DateTime           @updatedAt @map("updated_at")
 
+  // Log tidak pernah diubah atau dihapus: salah input dibatalkan lalu dicatat
+  // ulang. Pembatalan mengurangi jam alat dan counter servis yang memang
+  // masih memuat jam ini (lihat counter_started_at di setting maintenance).
+  isVoided   Boolean   @default(false) @map("is_voided")
+  voidReason String?   @map("void_reason") @db.Text
+  voidedBy   Int?      @map("voided_by")
+  voidedAt   DateTime? @map("voided_at")
+
   equipmentItem EquipmentItem @relation(fields: [equipmentItemId], references: [id])
-  createdByUser User?         @relation(fields: [createdBy], references: [id])
+  createdByUser User?         @relation("WorkhourCreatedBy", fields: [createdBy], references: [id])
+  voidedByUser  User?         @relation("WorkhourVoidedBy", fields: [voidedBy], references: [id])
 
   subProjectEquipmentAllocation SubProjectEquipmentAllocation? @relation(fields: [subProjectEquipmentAllocationId], references: [id], onDelete: Restrict)
   equipmentPoolItem             EquipmentPoolItem?             @relation(fields: [equipmentPoolItemId], references: [id], onDelete: Restrict)
@@ -330,6 +353,10 @@ model EquipmentMaintenanceSetting {
   typeThresholdId        Int?                     @map("type_threshold_id")
   // Jam terpakai sejak servis terakhir. Ditambah otomatis oleh workhour log.
   currentValueSinceReset Decimal                  @default(0) @map("current_value_since_reset") @db.Decimal(12, 2)
+  // Kapan hitungan di atas mulai dari 0 (servis, setting baru, diaktifkan lagi).
+  // Pembatalan workhour log hanya mengurangi counter kalau log itu dibuat
+  // SESUDAH titik ini — jam sebelum servis sudah tidak ada di counter.
+  counterStartedAt       DateTime                 @default(now()) @map("counter_started_at")
   status                 MaintenanceSettingStatus @default(normal)
   lastMaintenanceDate    DateTime?                @map("last_maintenance_date") @db.Date
   lastResetWorkhour      Decimal?                 @map("last_reset_workhour") @db.Decimal(12, 2)
@@ -1102,6 +1129,9 @@ model EquipmentPoolItem {
   requestedQuantity      Int                     @default(1) @map("requested_quantity")
   approvedQuantity       Int                     @default(0) @map("approved_quantity")
   status                 EquipmentPoolItemStatus @default(pending)
+  // Operator yang ikut bersama unit rental. Satu nama per unit per kontrak,
+  // diisi Divisi Alat. Hanya untuk pool rental — dijaga service.
+  operatorName           String?                 @map("operator_name") @db.VarChar(150)
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
 

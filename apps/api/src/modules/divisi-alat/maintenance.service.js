@@ -211,6 +211,7 @@ const shapeSetting = (setting) => {
     status: setting.status,
     lastMaintenanceDate: toDateOnly(setting.lastMaintenanceDate),
     lastResetWorkhour: toNumber(setting.lastResetWorkhour),
+    counterStartedAt: setting.counterStartedAt,
     isActive: setting.isActive,
     createdAt: setting.createdAt,
     updatedAt: setting.updatedAt,
@@ -271,13 +272,21 @@ const updateSetting = async (id, { isActive }) => {
     throw httpError(`Aspek "${setting.maintenanceAspect.aspectCode}" tidak berlaku untuk jenis alat ini. Tambahkan ambangnya ke jenis alat dulu.`, 409);
   }
 
+  // Diaktifkan LAGI = hitungan mulai 0, sama dengan syncItemSettings: jam kerja
+  // tidak dihitung selama nonaktif, jadi angka lamanya basi. Ini juga yang
+  // membuat counter_started_at cukup untuk tahu log mana yang ada di counter.
+  const restart = isActive && !setting.isActive;
+  const item = restart ? await findItemOrFail(setting.equipmentItemId) : null;
+  const counter = restart ? 0 : setting.currentValueSinceReset;
+
   const updated = await prisma.equipmentMaintenanceSetting.update({
     where: { id },
     data: {
       isActive,
+      ...(restart && { currentValueSinceReset: 0, counterStartedAt: new Date(), lastResetWorkhour: item.totalWorkhour }),
       status: computeStatus({
         thresholdValue: thresholdOf(setting),
-        currentValueSinceReset: setting.currentValueSinceReset,
+        currentValueSinceReset: counter,
         warningLeadValue: setting.maintenanceAspect.warningLeadValue,
         isActive,
       }),
@@ -336,6 +345,54 @@ const applyWorkhourToSettings = async (tx, equipmentItemId, hours) => {
   return touched;
 };
 
+/**
+ * Kebalikan applyWorkhourToSettings, dipanggil saat workhour log dibatalkan.
+ * Jam log hanya ada di counter setting yang AKTIF dan mulai menghitung SEBELUM
+ * log itu dibuat (counter_started_at) — setting yang sudah diservis, dibuat,
+ * atau diaktifkan lagi sesudahnya tidak pernah/tidak lagi memuat jam ini.
+ *
+ * Syaratnya ditaruh di WHERE update, bukan dicek lebih dulu: kalau reset servis
+ * commit di tengah transaksi ini, update membaca ulang barisnya dan melewatinya
+ * — pola yang sama dengan increment atomik di atas.
+ */
+const revertWorkhourFromSettings = async (tx, equipmentItemId, hours, loggedAt) => {
+  const settings = await tx.equipmentMaintenanceSetting.findMany({
+    where: { equipmentItemId, isActive: true, counterStartedAt: { lt: loggedAt } },
+    include: { maintenanceAspect: true, typeThreshold: true },
+  });
+
+  const touched = [];
+  for (const setting of settings) {
+    const { count } = await tx.equipmentMaintenanceSetting.updateMany({
+      where: { id: setting.id, isActive: true, counterStartedAt: { lt: loggedAt } },
+      data: { currentValueSinceReset: { decrement: Number(hours) } },
+    });
+    if (count === 0) continue;
+
+    const current = await tx.equipmentMaintenanceSetting.findUnique({ where: { id: setting.id } });
+    const nextValue = Number(current.currentValueSinceReset);
+    const status = computeStatus({
+      thresholdValue: thresholdOf(setting),
+      currentValueSinceReset: nextValue,
+      warningLeadValue: setting.maintenanceAspect.warningLeadValue,
+      isActive: true,
+    });
+    if (status !== current.status) {
+      await tx.equipmentMaintenanceSetting.update({ where: { id: setting.id }, data: { status } });
+    }
+
+    touched.push({
+      settingId: setting.id,
+      aspectCode: setting.maintenanceAspect.aspectCode,
+      remainingValue: Number(thresholdOf(setting)) - nextValue,
+      status,
+      statusChanged: status !== setting.status,
+    });
+  }
+
+  return touched;
+};
+
 // ============================================================
 // AMBANG PER JENIS ALAT (16 Okt 2026)
 // docs/keputusan-desain-divisi-alat.md — "Ambang maintenance per jenis alat"
@@ -376,6 +433,7 @@ const syncItemSettings = async (tx, item) => {
         typeThresholdId: t.id,
         isActive: true,
         currentValueSinceReset: 0,
+        counterStartedAt: new Date(),
         lastResetWorkhour: item.totalWorkhour,
         status: computeStatus({ thresholdValue: t.thresholdValue, currentValueSinceReset: 0, warningLeadValue: lead, isActive: true }),
       };
@@ -606,6 +664,7 @@ const createRecord = async (payload, userId) => {
         where: { id: setting.id },
         data: {
           currentValueSinceReset: 0,
+          counterStartedAt: new Date(),
           lastMaintenanceDate: workDate,
           lastResetWorkhour: item.totalWorkhour,
           status: computeStatus({
@@ -647,7 +706,7 @@ const cancelRecord = async (id, { notes }) => {
 };
 
 module.exports = {
-  computeStatus, applyWorkhourToSettings,
+  computeStatus, applyWorkhourToSettings, revertWorkhourFromSettings,
   listAspects, getAspectById, createAspect, updateAspect, removeAspect,
   listSettings, listSettingsByItem, getSettingById, updateSetting,
   listTypeThresholds, upsertTypeThreshold, removeTypeThreshold, syncItemSettings, lockEquipmentType,

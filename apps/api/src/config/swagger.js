@@ -738,6 +738,25 @@ const swaggerSpec = {
         responses: { 200: { description: 'Updated' }, 409: { description: 'Sudah terikat unit / status bukan available' } }
       }
     },
+    '/projects/equipment-pools/{id}/items/{itemId}/operator': {
+      put: {
+        tags: ['Equipment Pool & Material Pool'], summary: 'Set operator unit rental',
+        description: 'Permission: equipment-pool:update (Divisi Alat). Satu nama operator per unit per kontrak rental — dasar timesheet & tagihan. `operatorName` WAJIB dikirim: teks (di-trim, maks 150) atau `null`/string kosong untuk menghapus. Hanya pool milik external rental project (400 untuk pool konstruksi). Terkunci (409) kalau kontrak rental `completed`/`cancelled` atau pool item `rejected`/`cancelled`. Sejak 17 Okt 2026 — menggantikan operator yang dititipkan FE di notes Request Alat. Nilainya tampil sebagai `operatorName` di setiap pool item.',
+        parameters: [
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } }
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['operatorName'], properties: { operatorName: { type: 'string', nullable: true, maxLength: 150, example: 'Ahmad Suganda' } }
+        }}}},
+        responses: {
+          200: { description: 'Pool item dengan `operatorName` terbaru' },
+          400: { description: 'operatorName tidak dikirim / lebih dari 150 karakter / pool milik construction project' },
+          404: { description: 'Pool atau pool item tidak ditemukan' },
+          409: { description: 'Kontrak rental ditutup / pool item rejected atau cancelled' }
+        }
+      }
+    },
     '/projects/equipment-pools/{id}/items/{itemId}/close': {
       put: {
         tags: ['Equipment Pool & Material Pool'], summary: 'Tutup pool item manual (completed/cancelled)',
@@ -978,7 +997,7 @@ const swaggerSpec = {
     },
     '/equipment/workhour-logs': {
       post: {
-        tags: ['Workhour Logs'], summary: 'Catat jam kerja alat', description: 'Role: lapangan. Permission: workhour:create. Menambah total_workhour alat DAN menggerakkan hitung mundur maintenance setting aktif, dalam satu transaksi. Response memuat `maintenanceImpact`. DITOLAK kalau alat berstatus `maintenance` atau `retired`. KONTEKS WAJIB per sourceType (backlog C1, berubah 4 Okt 2026 — `projectId`/`subProjectId` SUDAH TIDAK DIPAKAI dan ditolak 400): `internal_project` wajib `subProjectEquipmentAllocationId` dan dilarang mengirim `equipmentPoolItemId`; `external_rental` wajib `equipmentPoolItemId` dari pool milik external rental project dan dilarang mengirim allocation id; `manual_adjustment` tanpa konteks, dan HANYA di sini `equipmentItemId` wajib diisi. Untuk dua sourceType pertama `equipmentItemId` adalah KOLOM TERKELOLA SISTEM yang diturunkan dari alokasi/pool item — mengirimnya dengan nilai tidak cocok ditolak 400, kosongkan saja. Konteks yang belum terikat unit spesifik ditolak 409.',
+        tags: ['Workhour Logs'], summary: 'Catat jam kerja alat', description: 'Role: lapangan. Permission: workhour:create. Menambah total_workhour alat DAN menggerakkan hitung mundur maintenance setting aktif, dalam satu transaksi. Response memuat `maintenanceImpact`. DITOLAK kalau alat berstatus `maintenance` atau `retired`. KONTEKS WAJIB per sourceType (backlog C1, berubah 4 Okt 2026 — `projectId`/`subProjectId` SUDAH TIDAK DIPAKAI dan ditolak 400): `internal_project` wajib `subProjectEquipmentAllocationId` dan dilarang mengirim `equipmentPoolItemId`; `external_rental` wajib `equipmentPoolItemId` dari pool milik external rental project dan dilarang mengirim allocation id; `manual_adjustment` tanpa konteks, dan HANYA di sini `equipmentItemId` wajib diisi. Untuk dua sourceType pertama `equipmentItemId` adalah KOLOM TERKELOLA SISTEM yang diturunkan dari alokasi/pool item — mengirimnya dengan nilai tidak cocok ditolak 400, kosongkan saja. Konteks yang belum terikat unit spesifik ditolak 409. **Sejak 17 Okt 2026:** (1) jam boleh dicatat selama PEKERJAANNYA masih berjalan — `internal_project`: alokasi `assigned`/`completed`/`returned` DAN tahapan `active` (catatan terlambat setelah alat ditarik tetap bisa); `external_rental`: pool item `available`/`completed` DAN kontrak rental `active`. Tahapan/kontrak yang ditutup = terkunci (409). (2) `startedAt` & `stoppedAt` berpasangan; kalau diisi, `totalWorkhour` WAJIB = rentang − jeda (toleransi 0,01 jam) — juga dijaga CHECK database. (3) Batas 24 jam/alat/hari dihitung setelah baris alat dikunci, jadi input bersamaan tidak bisa sama-sama lolos. (4) Log tidak bisa diubah — salah input dibatalkan lewat `PUT /equipment/workhour-logs/{id}/void` lalu dicatat ulang. Untuk timesheet rental pakai `POST /equipment/workhour-logs/rental-sheet` (semua sesi satu transaksi).',
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['workDate', 'totalWorkhour', 'sourceType'],
           properties: {
@@ -989,7 +1008,8 @@ const swaggerSpec = {
             workDate: { type: 'string', format: 'date', example: '2026-10-03' },
             startedAt: { type: 'string', format: 'date-time' }, stoppedAt: { type: 'string', format: 'date-time' },
             pausedDurationMinutes: { type: 'integer', default: 0, description: 'Jeda yang tidak dihitung jam kerja. Tidak boleh melebihi rentang startedAt-stoppedAt.' },
-            totalWorkhour: { type: 'number', example: 8, description: 'Lebih dari 0, maksimal 24. Akumulasi per alat per hari juga dibatasi 24 jam.' },
+            totalWorkhour: { type: 'number', example: 8, description: 'Lebih dari 0, maksimal 24. Akumulasi per alat per hari juga dibatasi 24 jam. Kalau startedAt/stoppedAt diisi, wajib = rentang − jeda.' },
+            workSession: { type: 'string', enum: ['pagi', 'siang', 'overtime'], nullable: true, description: 'HANYA untuk external_rental (selain itu 400). Opsional di endpoint ini; satu sesi per pool item per tanggal (409 kalau sudah ada).' },
             description: { type: 'string' }
           }
         }}}},
@@ -997,7 +1017,55 @@ const swaggerSpec = {
           201: { description: 'Created. Response berisi data log + `maintenanceImpact`: array setting yang counternya bergerak, masing-masing dengan settingId, aspectCode, remainingValue, status, dan statusChanged.' },
           400: { description: 'Validasi gagal / tanggal di masa depan / konteks tidak sesuai sourceType / equipmentItemId tidak cocok konteksnya / projectId-subProjectId dikirim (sudah tidak dipakai)' },
           404: { description: 'Unit alat, alokasi, atau pool item tidak ditemukan' },
-          409: { description: 'Alat nonaktif / maintenance / retired / total jam melebihi 24 / alokasi sudah tidak berjalan / konteks belum terikat unit spesifik' }
+          409: { description: 'Alat nonaktif / maintenance / retired / total jam melebihi 24 / alokasi cancelled / tahapan atau kontrak rental sudah ditutup / pool item tidak pernah jalan / konteks belum terikat unit spesifik / sesi sudah tercatat' }
+        }
+      }
+    },
+    '/equipment/workhour-logs/rental-sheet': {
+      post: {
+        tags: ['Workhour Logs'], summary: 'Catat timesheet rental satu unit satu tanggal (1–3 sesi)',
+        description: 'Permission: workhour:create. Semua sesi masuk dalam SATU transaksi — satu gagal, semua batal (menggantikan beberapa POST terpisah). `totalWorkhour` per sesi DIHITUNG SISTEM dari `stoppedAt − startedAt − pausedDurationMinutes`; mengirimnya ditolak 400. Sesi dikirim apa adanya seperti dipilih di form (tidak ditebak dari jam). Aturan konteks sama dengan POST /equipment/workhour-logs untuk external_rental.',
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['equipmentPoolItemId', 'workDate', 'sessions'],
+          properties: {
+            equipmentPoolItemId: { type: 'integer', description: 'Pool item milik external rental project, sudah terikat unit' },
+            workDate: { type: 'string', format: 'date', example: '2026-10-06' },
+            sessions: {
+              type: 'array', minItems: 1, maxItems: 3,
+              items: {
+                type: 'object', required: ['workSession', 'startedAt', 'stoppedAt'],
+                properties: {
+                  workSession: { type: 'string', enum: ['pagi', 'siang', 'overtime'] },
+                  startedAt: { type: 'string', format: 'date-time', example: '2026-10-06T01:00:00.000Z' },
+                  stoppedAt: { type: 'string', format: 'date-time', example: '2026-10-06T05:00:00.000Z' },
+                  pausedDurationMinutes: { type: 'integer', default: 0 },
+                  description: { type: 'string' }
+                }
+              }
+            }
+          }
+        }}}},
+        responses: {
+          201: { description: '`data.logs` (log per sesi) + `data.maintenanceImpact`' },
+          400: { description: 'Sesi ganda dalam satu kiriman / jam bertumpuk / jeda melebihi rentang / jam bersih 0 / totalWorkhour dikirim / pool item milik construction project' },
+          404: { description: 'Pool item tidak ditemukan' },
+          409: { description: 'Sesi sudah tercatat untuk tanggal itu (batalkan dulu) / kontrak tidak active / pool item tidak pernah jalan / alat nonaktif-maintenance-retired / melebihi 24 jam' }
+        }
+      }
+    },
+    '/equipment/workhour-logs/{id}/void': {
+      put: {
+        tags: ['Workhour Logs'], summary: 'Batalkan log jam kerja yang salah input',
+        description: 'Permission: workhour:update (Lapangan, Divisi Alat). Log tidak pernah diubah atau dihapus: koreksi = batalkan lalu catat ulang. Dalam satu transaksi: log ditandai `isVoided` (+ alasan, siapa, kapan), `total_workhour` alat dikurangi, dan counter servis dikurangi HANYA pada setting aktif yang mulai menghitung sebelum log itu dibuat (`counterStartedAt`) — jam yang sudah "terhapus" oleh servis tidak dikurangi dua kali. Ditolak 409 kalau tahapan/kontrak rental pemilik log sudah ditutup. `manual_adjustment` selalu bisa dibatalkan.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['reason'], properties: { reason: { type: 'string', example: 'Salah ketik jam selesai' } }
+        }}}},
+        responses: {
+          200: { description: 'Log yang sudah dibatalkan + `maintenanceImpact` (setting yang counternya ditarik)' },
+          400: { description: 'Alasan kosong' },
+          404: { description: 'Log tidak ditemukan' },
+          409: { description: 'Sudah dibatalkan / tahapan atau kontrak sudah ditutup' }
         }
       }
     },
@@ -1009,9 +1077,10 @@ const swaggerSpec = {
           { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
           { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
           { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } },
-          { in: 'query', name: 'sourceType', schema: { type: 'string', enum: ['internal_project', 'external_rental', 'manual_adjustment'] } }
+          { in: 'query', name: 'sourceType', schema: { type: 'string', enum: ['internal_project', 'external_rental', 'manual_adjustment'] } },
+          { in: 'query', name: 'includeVoided', schema: { type: 'boolean', default: false }, description: 'Default log yang dibatalkan TIDAK ditampilkan. `summary` tidak pernah menjumlahkannya.' }
         ],
-        responses: { 200: { description: 'Paginated workhour logs + summary' }, 404: { description: 'Unit alat tidak ditemukan' } }
+        responses: { 200: { description: 'Paginated workhour logs + summary. Tiap log memuat `workSession`, `isVoided`, `voidReason`, `voidedAt`, `voidedBy`.' }, 404: { description: 'Unit alat tidak ditemukan' } }
       }
     },
     '/equipment/maintenance/aspects': {
@@ -1081,7 +1150,7 @@ const swaggerSpec = {
         responses: { 200: { description: 'Detail + remainingValue + status' }, 404: { description: 'Tidak ditemukan' } }
       },
       put: {
-        tags: ['Maintenance'], summary: 'Update setting maintenance', description: 'Permission: maintenance:update. Hanya `isActive` (mis. unit ini tidak punya komponen tersebut). `thresholdValue` DITOLAK — ambang mengikuti jenis alat. `currentValueSinceReset` dan `status` dikelola sistem. Mengaktifkan setting yang aspeknya tidak berlaku lagi untuk jenisnya → 409. Setting tidak bisa dihapus: dibuat & dinonaktifkan otomatis mengikuti ambang jenis.',
+        tags: ['Maintenance'], summary: 'Update setting maintenance', description: 'Permission: maintenance:update. Hanya `isActive` (mis. unit ini tidak punya komponen tersebut). `thresholdValue` DITOLAK — ambang mengikuti jenis alat. `currentValueSinceReset` dan `status` dikelola sistem. Mengaktifkan setting yang aspeknya tidak berlaku lagi untuk jenisnya → 409. Setting tidak bisa dihapus: dibuat & dinonaktifkan otomatis mengikuti ambang jenis. **Sejak 17 Okt 2026: mengaktifkan LAGI setting yang nonaktif memulai hitungan dari 0** (`counterStartedAt` = sekarang) — jam kerja tidak dihitung selama nonaktif, jadi angka lamanya basi; sama dengan setting yang diaktifkan ulang oleh sinkronisasi ambang jenis.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { content: { 'application/json': { schema: {
           type: 'object', properties: { isActive: { type: 'boolean' } }

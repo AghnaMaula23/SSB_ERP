@@ -77,6 +77,7 @@ const PERMISSIONS = [
   { module: 'equipment',  action: 'delete', label: 'Hapus jenis alat / nonaktifkan unit alat' },
   { module: 'workhour',   action: 'read',   label: 'Lihat log jam kerja alat' },
   { module: 'workhour',   action: 'create', label: 'Catat jam kerja alat' },
+  { module: 'workhour',   action: 'update', label: 'Batalkan log jam kerja yang salah input (jam alat & counter servis ikut ditarik)' },
   { module: 'maintenance', action: 'read',   label: 'Lihat aspek, setting, dan riwayat maintenance' },
   { module: 'maintenance', action: 'create', label: 'Tambah aspek, setting, dan riwayat maintenance' },
   { module: 'maintenance', action: 'update', label: 'Ubah setting maintenance dan batalkan riwayat' },
@@ -174,7 +175,7 @@ const ROLE_PERMISSIONS = {
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
-    'workhour:read', 'workhour:create',
+    'workhour:read', 'workhour:create', 'workhour:update',
     'maintenance:read', 'maintenance:create', 'maintenance:update', 'maintenance:delete',
     'damage:read', 'damage:create', 'damage:update',
     // Sengaja tanpa validate/approve — pengaju tidak boleh menyetujui sendiri
@@ -198,7 +199,8 @@ const ROLE_PERMISSIONS = {
   // Lapangan pencatat realisasi harian — TANPA progress:validate. Yang mencatat
   // tidak memvalidasi; pemisahan yang sama dengan pengaju purchase request yang
   // tidak boleh menyetujui pengajuannya sendiri.
-  lapangan: ['equipment:read', 'workhour:read', 'workhour:create', 'maintenance:read', 'damage:read',
+  // Pencatat jam kerja boleh membatalkan log salah ketik (wajib alasan, tercatat siapa)
+  lapangan: ['equipment:read', 'workhour:read', 'workhour:create', 'workhour:update', 'maintenance:read', 'damage:read',
     'project:read', 'sub-project:read', 'progress:read', 'progress:create',
     // Lapangan yang menerima unit di lokasi — sengaja TANPA allocation:create,
     // yang mengalokasikan adalah Divisi Alat.

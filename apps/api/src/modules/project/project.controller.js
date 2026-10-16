@@ -188,6 +188,13 @@ const addPoolItem = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const setPoolItemOperator = async (req, res, next) => {
+  try {
+    const data = await pool.setItemOperator(req.params.id, req.params.itemId, req.body.operatorName);
+    return success(res, data, 'Operator unit berhasil disimpan');
+  } catch (err) { next(err); }
+};
+
 const bindPoolItemUnit = async (req, res, next) => {
   try {
     const data = await pool.bindItemUnit(req.params.id, req.params.itemId, req.body.equipmentItemId);
@@ -291,7 +298,7 @@ module.exports = {
   listSubProjects, detailSubProject, detailSubProjectDirect, subProjectProgress,
   createSubProject, updateSubProject, changeSubProjectStatus,
   listProgressLogs, detailProgressLog, createProgressLog, updateProgressLog, validateProgressLog,
-  listPools, detailPool, createPool, changePoolStatus, addPoolItem, bindPoolItemUnit, closePoolItem,
+  listPools, detailPool, createPool, changePoolStatus, addPoolItem, bindPoolItemUnit, setPoolItemOperator, closePoolItem,
   listMaterialPools, detailMaterialPool, createMaterialPool, changeMaterialPoolStatus, addMaterialPoolItem, removeMaterialPoolItem,
   listAllocations, detailAllocation, createAllocation, receiveAllocation, changeAllocationStatus,
 };

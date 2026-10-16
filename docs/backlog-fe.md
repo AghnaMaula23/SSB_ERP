@@ -560,3 +560,52 @@ Detail: Swagger tag *Approval Center* dan `docs/keputusan-desain-approval-center
 - Tab PR yang sudah ada boleh tetap memakai `/api/equipment/purchase-requests?status=submitted`,
   tapi antrean ini satu-satunya yang memberi daftar progress & request lintas project.
 
+
+## E23. Workhour: koreksi, sesi rental, operator (17 Okt 2026)
+
+Detail: Swagger tag *Workhour Logs* & *Equipment Pool & Material Pool*, `docs/keputusan-desain-divisi-alat.md`
+bagian "Workhour — koreksi, sesi rental, operator".
+
+**1. Perubahan perilaku yang bisa memutus layar yang ada:**
+
+- **Total jam harus cocok dengan jamnya.** Kalau `startedAt`/`stoppedAt` dikirim,
+  `totalWorkhour` wajib = rentang − jeda (toleransi 0,01 jam), selain itu **400**.
+  `WorkhourFormPage` (konstruksi) punya centang "isi total manual" — matikan saat jam
+  diisi, atau kirim tanpa jam kalau memang hanya total yang diketahui.
+- **Jam kerja ditolak 409 kalau tahapan / kontrak rental bukan `active`** — tombol
+  "Input Sheet" sebaiknya disembunyikan untuk tahapan/kontrak yang selesai.
+  Sebaliknya, alokasi yang sudah `completed`/`returned` kini BOLEH diisi selama
+  tahapannya aktif (catatan terlambat).
+- `GET /equipment/items/:id/workhour-logs` default **tidak** memuat log yang dibatalkan
+  (aman untuk tampilan sekarang). `includeVoided=true` untuk menampilkannya dengan
+  `isVoided`, `voidReason`, `voidedBy`, `voidedAt`.
+
+**2. Rental timesheet:**
+
+- `SheetFormPage`: ganti beberapa `createRentalWorkhour` dengan SATU
+  `POST /api/equipment/workhour-logs/rental-sheet`
+  `{ equipmentPoolItemId, workDate, sessions: [{ workSession, startedAt, stoppedAt, pausedDurationMinutes?, description? }] }`.
+  JANGAN kirim `totalWorkhour` — dihitung sistem. Semua sesi masuk atau tidak sama sekali.
+  Response: `data.logs[]` + `data.maintenanceImpact`.
+- `UnitTimesheet` / `groupTimesheet`: kelompokkan per `log.workSession`, **hapus
+  `sessionOf()`** yang menebak dari jam (sesi lembur 16:30 terbaca "siang", dan bergantung
+  zona waktu browser). Log lama tanpa `workSession` → kolom "tanpa sesi".
+- Sesi yang sama dua kali di tanggal yang sama → **409**: batalkan log lamanya dulu.
+- Setelah layar ini pindah, backend akan mewajibkan `workSession` untuk rental (backlog
+  Divisi Alat I4).
+
+**3. Operator unit rental:**
+
+- Baca dari `operatorName` di setiap pool item (`GET /api/projects/equipment-pools/:id`).
+- Ubah lewat `PUT /api/projects/equipment-pools/:id/items/:itemId/operator`
+  `{ operatorName }` (`null`/kosong = hapus) — permission `equipment-pool:update`
+  (Divisi Alat). Admin tidak memegangnya: field "Operator" di form Unit Baru Admin
+  sebaiknya dibuang, atau dijadikan catatan untuk Divisi Alat.
+- Berhenti menulis/membaca baris `Operator:` di notes (`buildUnitNotes`/`parseUnitNotes`).
+
+**4. Batalkan log (fitur baru):**
+
+- `PUT /api/equipment/workhour-logs/:id/void` `{ reason }` — permission `workhour:update`
+  (Lapangan, Divisi Alat). Tombol "Batalkan" per baris timesheet + isian alasan. Koreksi =
+  batalkan lalu catat ulang (tidak ada edit). Response `maintenanceImpact` = setting yang
+  counternya ditarik. 409 kalau tahapan/kontrak sudah ditutup.

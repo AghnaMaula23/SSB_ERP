@@ -107,6 +107,20 @@ const createWorkhourLog = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const createRentalSheet = async (req, res, next) => {
+  try {
+    const result = await service.createRentalSheet(req.body, req.user.id);
+    return created(res, result, `${result.logs.length} sesi jam kerja rental berhasil dicatat`);
+  } catch (err) { next(err); }
+};
+
+const voidWorkhourLog = async (req, res, next) => {
+  try {
+    const log = await service.voidWorkhourLog(req.params.id, req.body, req.user.id);
+    return success(res, log, 'Workhour log dibatalkan');
+  } catch (err) { next(err); }
+};
+
 const listWorkhourLogsByItem = async (req, res, next) => {
   try {
     const { summary, ...result } = await service.listWorkhourLogsByItem(Number(req.params.itemId), {
@@ -114,6 +128,7 @@ const listWorkhourLogsByItem = async (req, res, next) => {
       startDate: req.query.startDate,
       endDate: req.query.endDate,
       sourceType: req.query.sourceType,
+      includeVoided: boolQuery(req.query.includeVoided),
     });
     return res.status(200).json({
       success: true,
@@ -132,5 +147,5 @@ const listWorkhourLogsByItem = async (req, res, next) => {
 module.exports = {
   listTypes, detailType, createType, updateType, removeType,
   listItems, detailItem, createItem, updateItem, changeItemStatus, listItemStatusLogs, removeItem,
-  createWorkhourLog, listWorkhourLogsByItem,
+  createWorkhourLog, createRentalSheet, voidWorkhourLog, listWorkhourLogsByItem,
 };

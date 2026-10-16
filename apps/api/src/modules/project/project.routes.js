@@ -307,6 +307,13 @@ router.put('/equipment-pools/:id/items/:itemId/bind-unit', authorize('equipment-
     body('equipmentItemId').isInt({ min: 1 }).withMessage('equipmentItemId wajib diisi').toInt()]),
   controller.bindPoolItemUnit);
 
+// Operator unit rental — satu nama per unit per kontrak, string kosong menghapus
+router.put('/equipment-pools/:id/items/:itemId/operator', authorize('equipment-pool:update'),
+  validate([poolIdParam, poolItemIdParam,
+    body('operatorName').custom((v) => v === null || (typeof v === 'string' && v.trim().length <= 150))
+      .withMessage('operatorName wajib dikirim: teks maksimal 150 karakter, atau null untuk menghapus')]),
+  controller.setPoolItemOperator);
+
 router.put('/equipment-pools/:id/items/:itemId/close', authorize('equipment-pool:update'),
   validate([poolIdParam, poolItemIdParam,
     body('status').isIn(['completed', 'cancelled']).withMessage('status harus "completed" atau "cancelled"')]),

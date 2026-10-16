@@ -368,3 +368,59 @@ keluar dari schema & kode; ditunda karena DB dev dipakai bersama. Catatan: backe
 versi lama yang mencoba `POST /items/:itemId/maintenance-settings` akan ditolak CHECK
 (setting aktif tanpa ambang jenis).
 
+
+## Workhour — koreksi, sesi rental, operator (17 Oktober 2026)
+
+Migrasi `20261017120000_workhour_void_session_operator`. Ditemukan saat merencanakan
+ekspor timesheet rental (berkas project): layar rental menampilkan operator & overtime
+yang **tidak disediakan backend** — FE menitipkan operator sebagai teks di notes
+Request Alat dan menebak sesi dari jam mulai.
+
+**Celah yang ditutup:**
+
+| # | Celah | Perbaikan |
+|---|---|---|
+| 1 | Log tidak bisa dikoreksi; `manual_adjustment` wajib > 0 jadi tidak bisa mengurangi | `PUT /equipment/workhour-logs/:id/void` (`workhour:update`, Lapangan & Divisi Alat), wajib alasan. Log tidak diubah/dihapus — batalkan lalu catat ulang |
+| 2 | `totalWorkhour` tidak dicek terhadap jam mulai/selesai | Jam berpasangan; total = rentang − jeda (toleransi 0,01). Service + CHECK |
+| 3 | Rental: status pool item & kontrak tidak dicek | Catat/batal hanya saat kontrak rental `active` dan pool item `available`/`completed` |
+| 4 | Batas 24 jam/hari dibaca di luar transaksi | Baris `equipment_items` dikunci `FOR UPDATE` dulu, baru dijumlah. Terbukti: 3×9 jam bersamaan → 2 lolos |
+| 5 | Sheet rental = 1–3 POST terpisah, bisa gagal di tengah | `POST /equipment/workhour-logs/rental-sheet`: semua sesi satu transaksi, total dihitung sistem |
+
+**Aturan konteks baru (berlaku untuk catat & batal):** jam boleh dicatat selama
+PEKERJAANNYA berjalan, bukan selama alatnya masih di lokasi — alokasi
+`assigned`/`completed`/`returned` dengan tahapan `active`, atau pool item rental
+`available`/`completed` dengan kontrak `active`. Catatan yang terlambat atau salah
+ketik sering baru ketahuan setelah alat ditarik. Tahapan/kontrak yang ditutup =
+terkunci; ini bagian pertama dari aturan "tahapan selesai = terkunci" (berkas project).
+
+**Pembatalan & counter servis.** Pembatalan selalu mengurangi `equipment_items.total_workhour`.
+Counter servis hanya dikurangi kalau jam log itu **masih ada di counter**: setting aktif
+yang `counter_started_at` (kolom baru — kapan hitungan terakhir mulai dari 0) lebih awal
+dari waktu log dibuat. Jam sebelum servis sudah "terhapus" oleh reset, jadi tidak
+dikurangi dua kali. Syaratnya ditaruh di WHERE update supaya reset yang commit bersamaan
+tetap aman (pola increment atomik 13 Okt).
+
+Supaya satu kolom itu cukup, **setting yang diaktifkan LAGI lewat `PUT
+/maintenance-settings/:id` kini mulai dari 0** — perubahan perilaku. Sebelumnya
+hitungannya dilanjutkan, padahal jam selama nonaktif tidak dihitung (alasan yang sama
+yang sudah dipakai `syncItemSettings`). Baris lama diisi waktu migrasi: membatalkan log
+yang dibuat sebelum migrasi tidak mengurangi counter — sisi aman (servis lebih awal).
+
+**Sesi rental** (`work_session` pagi/siang/overtime) disimpan persis seperti dipilih di
+form, tidak ditebak dari jam — sesi lembur yang mulai 16:30 tetap "overtime". Hanya
+`external_rental` (CHECK); satu sesi per pool item per tanggal (unique index parsial,
+log yang dibatalkan tidak dihitung). Opsional di `POST /workhour-logs` sampai FE pindah
+ke rental-sheet (backlog-fe E23); setelah itu jadi wajib untuk rental.
+
+**Operator** = `equipment_pool_items.operator_name`, satu nama per unit per kontrak
+rental, diisi Divisi Alat lewat `PUT /projects/equipment-pools/:id/items/:itemId/operator`
+(`equipment-pool:update`). Ditaruh di pool item, bukan di Request Alat: operator ikut
+UNIT, dan unit baru ditentukan setelah request disetujui. Riwayat pergantian operator
+tidak dibuat (belum ada kebutuhan). Paket, periode, merek & model rental masih
+dititipkan FE di notes — utang yang sama, dicatat di backlog Divisi Alat bagian I.
+
+**Nomor timesheet** tidak dibuat — diputuskan bersama Income rental (tarif lembur).
+
+**Terbukti di replika** (Postgres 17 Docker, struktur DB bersama + migrasi + seed):
+40 uji HTTP lolos — termasuk void sebelum/sesudah servis, input bersamaan, sheet atomik,
+sesi ganda, kontrak ditutup, dan CHECK database menolak total yang tidak cocok.

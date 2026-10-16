@@ -53,6 +53,7 @@ const shapePoolItem = (row) => ({
   requestedQuantity: row.requestedQuantity,
   approvedQuantity: row.approvedQuantity,
   status: row.status,
+  operatorName: row.operatorName,
   createdAt: row.createdAt,
 });
 
@@ -300,6 +301,36 @@ const bindItemUnit = async (poolId, id, equipmentItemId) => {
   return shapePoolItem(updated);
 };
 
+/**
+ * Operator yang ikut bersama unit rental (dasar timesheet & tagihan). Satu nama
+ * per unit per kontrak; string kosong menghapusnya. Hanya pool rental, dan
+ * terkunci begitu kontraknya ditutup — sama dengan jam kerjanya.
+ */
+const setItemOperator = async (poolId, id, operatorName) => {
+  const pool = await prisma.equipmentPool.findUnique({
+    where: { id: poolId },
+    select: { ownerType: true, externalRentalProject: { select: { rentalProjectCode: true, status: true } } },
+  });
+  if (!pool) throw httpError('Equipment pool tidak ditemukan', 404);
+  if (pool.ownerType !== 'external_rental_project') {
+    throw httpError('Operator hanya dicatat untuk unit rental', 400);
+  }
+  if (['completed', 'cancelled'].includes(pool.externalRentalProject.status)) {
+    throw httpError(`Kontrak rental ${pool.externalRentalProject.rentalProjectCode} berstatus "${pool.externalRentalProject.status}", datanya terkunci`, 409);
+  }
+  const poolItem = await findPoolItemOrFail(poolId, id);
+  if (['rejected', 'cancelled'].includes(poolItem.status)) {
+    throw httpError(`Pool item berstatus "${poolItem.status}", tidak bisa diberi operator`, 409);
+  }
+
+  const updated = await prisma.equipmentPoolItem.update({
+    where: { id },
+    data: { operatorName: operatorName?.trim() || null },
+    include: { equipmentType: true, equipmentItem: { select: { id: true, assetCode: true, currentStatus: true } } },
+  });
+  return shapePoolItem(updated);
+};
+
 /** Divisi Alat menutup pool item manual — hanya saat bebas (available). */
 const closeItem = async (poolId, id, status) => {
   if (!['completed', 'cancelled'].includes(status)) {
@@ -324,6 +355,6 @@ const closeItem = async (poolId, id, status) => {
 
 module.exports = {
   list, getById, create, createInTx, changeStatus,
-  findPoolOrFail, findPoolItemOrFail, addItem, bindItemUnit, closeItem, assertItemAssignable,
+  findPoolOrFail, findPoolItemOrFail, addItem, bindItemUnit, setItemOperator, closeItem, assertItemAssignable,
   shapePoolItem,
 };
