@@ -1,11 +1,9 @@
 # Backlog Frontend — ConstructERP
 
-Terakhir diaudit: 9 Oktober 2026 terhadap `origin/feature/be-div-alat` (`5de0ebc`).
+Terakhir diperbarui: 16 Oktober 2026 (audit FE↔BE).
 
 Berisi apa yang **backend sudah
 sediakan** tapi FE belum pakai, dan di mana bentuk data FE berbeda dari API.
-
-Terakhir diperbarui: 30 September 2026.
 
 **Dokumen pendamping:**
 - `purchase-request-schema.md` S7 — bentuk payload purchase request
@@ -49,26 +47,14 @@ boleh ditampilkan apa adanya.
 
 ## Urutan pengerjaan yang disarankan
 
-**Diperiksa ulang 9 Oktober 2026** terhadap kode di `origin/feature/be-div-alat`
-(commit `5de0ebc`). Tiga butir prioritas lama sudah dikerjakan Rafi.
+Urutan prioritas ada di **E17**.
 
-| Prioritas | Butir | Kenapa |
-|---|---|---|
-| 1 | **E3** `hasPermission` | super_admin kini read-only: bypass FE membuat semua tombol tulis berakhir 403 |
-| 2 | **E4d** `maintenanceThresholdService` | Endpoint per jenis tersedia sejak 16 Okt 2026 — sambungkan layarnya (lihat E4d) |
-| 3 | **E4e** `maintenanceService` hibrida | Separuh API separuh localStorage — paling rawan salah baca |
-| 1 | **E8** pool item "Jumlah" | **Memblokir migrasi contract** pool item |
-| 1 | **E9** fallback data palsu | Data dummy ikut tersimpan ke database |
-| 2 | **E10** data bisnis di localStorage (damage log) | Tidak terlihat user lain, hilang saat cache dibersihkan |
-| 4 | E5, E6 | Kebersihan kode, tidak mendesak |
-| — | E4b `incomeClaimService` | Tetap mock, **wajar** — backend Income baru langkah 6 |
-
-**Sudah selesai, jangan dikerjakan lagi:** E4 (Purchase Order), E4c (Kas Alat),
+**Sudah selesai, jangan dikerjakan lagi:** E1, E2, E4 (Purchase Order), E4c (Kas Alat),
 dan bagian Project pada E4b.
 
 ---
 
-## E1. Kaitan order pembelian pada reset maintenance — SEBAGIAN BERES
+## E1. Kaitan order pembelian pada reset maintenance — BERES
 
 `ResetMaintenancePage.jsx` dulu mengirim `purchaseOrderId` + `purchaseOrderCode`
 ke `POST /equipment/maintenance-records`. Backend menamainya `purchaseRequestId`,
@@ -81,10 +67,9 @@ bukan id purchase request sungguhan — diuji, mengirimnya justru dibalas **409*
 karena foreign key. Mengganti nama saja akan mengubah kehilangan data diam-diam
 menjadi kegagalan total.
 
-**Sisa pekerjaan:** aktifkan `purchaseRequestId: Number(selectedPurchaseOrderId)`
-(ada sebagai TODO di file itu) begitu E4 selesai dan daftar PO berasal dari API.
-Sampai itu terjadi, kaitan "servis ini dibiayai order yang mana" memang belum
-tercatat — tapi sekarang jelas kenapa, bukan hilang tanpa jejak.
+**Selesai:** `ResetMaintenancePage.jsx` sekarang mengirim `purchaseRequestId` dari
+PO hasil `GET /api/equipment/purchase-requests`, jadi kaitan "servis ini dibiayai
+order yang mana" tercatat.
 
 ## E2. Reset jadwal servis lewat penyelesaian kerusakan — DITUTUP
 
@@ -143,10 +128,8 @@ berlaku dan dihapus dari dokumen ini.
 **Ini belum bisa dikerjakan** — backend Income & Klaim Pendapatan Alat baru
 Build Order langkah 6. Biarkan sampai modulnya ada.
 
-**KOREKSI 13 Okt 2026:** catatan sebelumnya menyebut `projectService.js` (modul
-alat) "tidak lagi mock". Itu keliru. Ia memanggil `/api/projects?status=accepted`
-— path itu tidak ada, dan `accepted` bukan nilai status project — lalu jatuh ke
-`DUMMY_PROJECTS` diam-diam. Lihat **E9**.
+`projectService.js` (modul alat) yang dipakai layar klaim **masih mock terselubung** —
+lihat **E9** butir 2.
 
 ## E4c. Kas Alat — BERES (commit 33d0070)
 
@@ -155,38 +138,31 @@ alat) "tidak lagi mock". Itu keliru. Ia memanggil `/api/projects?status=accepted
 
 ## E4d. `maintenanceThresholdService` masih localStorage — endpoint TERSEDIA 16 Okt 2026
 
-> **Koreksi 16 Okt 2026:** catatan asli di bawah keliru menyebut backend sudah
-> tersedia — dulu backend hanya punya ambang **per unit**, sedangkan layar ini per
-> **jenis × aspek**. Sekarang backend memakai model yang sama dengan layar ini, dan
-> layarnya **dipertahankan**. Yang perlu dikerjakan:
->
-> | Fungsi di `maintenanceThresholdService.js` | Ganti dengan |
-> |---|---|
-> | `getTypeThresholds()` | `GET /api/equipment/maintenance-thresholds` (bentuk baris sama: `equipmentTypeId`, `maintenanceAspectId`, `thresholdValue`, `updatedAt`) |
-> | `getTypeThreshold(typeId, aspectId)` | cari dari hasil list di atas |
-> | `saveTypeThreshold({ equipmentTypeId, maintenanceAspectId, thresholdValue })` | `PUT /api/equipment/types/{typeId}/maintenance-thresholds/{aspectId}` `{ thresholdValue }` — tambah atau ubah |
-> | `deleteTypeThreshold(typeId, aspectId)` | `DELETE` path yang sama |
->
-> - Ketiganya jadi `async` → tambahkan `await` di `MaintenanceThresholdPage.jsx`.
-> - Form "buat aspek" di layar yang sama: **buang isian default threshold** — dikirim
->   `defaultThresholdValue` sekarang ditolak 400. Fallback localStorage di
->   `createMaintenanceAspect` dibuang juga (E4e).
-> - Setting per unit **tidak lagi dibuat/dihapus manual**: backend membuatkannya
->   otomatis saat unit didaftarkan. `POST /items/:itemId/maintenance-settings` dan
->   `DELETE /maintenance-settings/:id` sudah tidak ada; `thresholdValue` di
->   `PUT /maintenance-settings/:id` ditolak (yang tersisa hanya `isActive`).
-> - `thresholdValue` di respons setting tetap ada (turunan dari jenis) — grid status
->   maintenance tidak perlu diubah.
+`maintenanceThresholdService.js` sepenuhnya localStorage, jadi ambang servis yang
+diubah lewat layar ini tidak pernah sampai ke database dan hitung mundur
+maintenance di backend tidak ikut bergerak. Sejak 16 Okt 2026 backend memakai
+model yang sama dengan layar ini (ambang per **jenis alat × aspek**), dan layarnya
+**dipertahankan**. Yang perlu dikerjakan:
 
-Ditemukan 9 Oktober 2026. Berbeda dari E4b: ini **bisa dikerjakan sekarang**.
+| Fungsi di `maintenanceThresholdService.js` | Ganti dengan |
+|---|---|
+| `getTypeThresholds()` | `GET /api/equipment/maintenance-thresholds` (bentuk baris sama: `equipmentTypeId`, `maintenanceAspectId`, `thresholdValue`, `updatedAt`) |
+| `getTypeThreshold(typeId, aspectId)` | cari dari hasil list di atas |
+| `saveTypeThreshold({ equipmentTypeId, maintenanceAspectId, thresholdValue })` | `PUT /api/equipment/types/{typeId}/maintenance-thresholds/{aspectId}` `{ thresholdValue }` — tambah atau ubah |
+| `deleteTypeThreshold(typeId, aspectId)` | `DELETE` path yang sama |
 
-`maintenanceThresholdService.js` sepenuhnya localStorage (2 pemanggilan, nol
-API), padahal backend maintenance setting sudah selesai sejak Batch 2 dan
-endpoint-nya ada di `/api/equipment/items/{itemId}/maintenance-settings`.
-
-**Akibatnya:** ambang servis yang diubah lewat layar ini tidak pernah sampai ke
-database, jadi hitung mundur maintenance di backend tidak ikut bergerak. Operator
-mengira sudah mengubah jadwal servis padahal tidak.
+- Ketiganya jadi `async` → tambahkan `await` di `MaintenanceThresholdPage.jsx`.
+- Form "buat aspek" di layar yang sama: **buang isian default threshold** — dikirim
+  `defaultThresholdValue` sekarang ditolak 400. Fallback localStorage di
+  `createMaintenanceAspect` dibuang juga (E4e).
+- Prefill `aspect?.defaultThresholdValue` di `MaintenanceThresholdPage.jsx:59`
+  selalu kosong (kolomnya sudah tidak ada di respons) — buang juga.
+- Setting per unit **tidak lagi dibuat/dihapus manual**: backend membuatkannya
+  otomatis saat unit didaftarkan. `POST /items/:itemId/maintenance-settings` dan
+  `DELETE /maintenance-settings/:id` sudah tidak ada; `thresholdValue` di
+  `PUT /maintenance-settings/:id` ditolak (yang tersisa hanya `isActive`).
+- `thresholdValue` di respons setting tetap ada (turunan dari jenis) — grid status
+  maintenance tidak perlu diubah.
 
 ## E4e. `maintenanceService` setengah API setengah localStorage — PALING RAWAN
 
@@ -197,8 +173,15 @@ Ini lebih berbahaya daripada mock penuh: layar yang sebagian datanya nyata dan
 sebagian lagi dari localStorage **terlihat benar** sampai dua sumber itu tidak
 sepakat. Mock penuh setidaknya jujur bahwa datanya belum nyata.
 
-Perlu ditelusuri bagian mana yang masih localStorage, lalu disambungkan ke
-endpoint yang sudah ada — bukan dibiarkan hibrida.
+Lokasinya (kunci `maintenance_custom_aspects`):
+
+- `createMaintenanceAspect` — kalau request gagal tanpa status HTTP (koneksi),
+  aspek disimpan ke localStorage dan dianggap berhasil.
+- `getMaintenanceAspects` (baris 95) — **menggabungkan** hasil API dengan aspek
+  localStorage. Inilah yang membuat datanya tampak benar padahal dua sumbernya bisa
+  bertentangan: aspek yang tidak pernah ada di database ikut muncul di daftar.
+
+Buang keduanya; kalau API gagal, tampilkan errornya — bukan dibiarkan hibrida.
 
 ## E5. Field `level` dikirim tapi tidak ada di backend — ringan
 
@@ -256,7 +239,12 @@ Data palsu yang ditampilkan seolah asli ikut tersimpan ke database.
    **Keputusan 13 Okt: nama mekanik TIDAK dicatat** — tidak ada data master
    mekanik internal maupun eksternal. **Hapus input itu**, jangan kirim
    `performedBy`. Backend sudah opsional, tidak perlu perubahan API.
-   Kolomnya dijadwalkan di-DROP bersama contract pool item.
+   Kolomnya dijadwalkan di-DROP bersama contract pool item. Semua lokasinya:
+   - `DamageLogActionModal.jsx` — input saat resolve kerusakan
+   - `ResetMaintenancePage.jsx` — input, riwayat nama (`performerHistory`), dan payload
+   - `DamageLogDetailPage.jsx` — kolom tampilan di riwayat tindakan
+   - `alatService.resolveDamageIssue` — **kode mati** (tidak dipanggil di mana pun,
+     lihat E17): hapus fungsinya, jangan diperbaiki.
 2. **`alat/services/projectService.js`** — path yang benar
    `/api/projects/construction?status=active`. Hapus `DUMMY_PROJECTS`.
 
@@ -288,7 +276,6 @@ sebagai contoh.
 `rentalDemoService` dan `demoSupplyService` menambahkan baris `demo-N` ke daftar
 project asli. Penandanya jelas (`isDemo`, dibersihkan saat logout), jadi bukan
 fallback diam-diam — tapi **butuh sakelar untuk mematikannya sebelum produksi**.
-Mock delivery, kas lapangan, dan tenaga kerja wajar: backend-nya belum ada.
 
 ## E12. Perubahan perilaku backend yang perlu diikuti FE (13 Okt 2026)
 
@@ -326,8 +313,8 @@ Detail keputusan: `docs/keputusan-desain-request-material.md`.
     `/api/equipment/items/:id/workhour-logs?sourceType=external_rental`.
   - `SPL-000001` sudah punya material pool `MPL-000001`.
   - `PRJ-000001` punya material pool `MPL-000002`.
-  - Delivery, inventori, kas lapangan, dan pekerja **tetap mock** — backendnya
-    RM-4, RM-5, dan langkah 7.
+  - Delivery dan inventori: API-nya sudah tersedia — lihat E15/E16.
+    Kas lapangan dan pekerja **tetap mock** — lihat E21.
 
 ## E14. API Request Material RM-2 + guard tahapan (14 Okt 2026)
 
@@ -453,4 +440,80 @@ Form terlalu detail dan masih merujuk konteks project konstruksi. Untuk request 
   workhour × rate. Kolom aslinya dirancang bersama modul pemakainya: Finance Field
   & Labor Payroll (Build Order 7).
 - Form supply: buang isian yang merujuk tahapan/project konstruksi dengan cara yang sama.
+
+## E19. API Request Material RM-3 tersedia (15 Okt 2026) — belum punya entri sebelumnya
+
+Detail di Swagger tag *Request Material* dan `docs/keputusan-desain-request-material.md` (F1–F5).
+
+- **Admin — rincian biaya** `PUT /api/request-material/:id/costs` `{ costs: [...] }`:
+  MENGGANTI seluruh daftar, hanya selama `submitted`. `costType`:
+  `material_cost` | `driver_fee` | `delivery_fee` | `loading_unloading_fee` |
+  `fuel_cost` | `other`. `material_cost` wajib menunjuk `materialRequestItemId`
+  (tepat satu per item); jenis lain TIDAK boleh menunjuk item. `amount` > 0.
+- **Admin — teruskan** `PUT /:id/submit-to-finance` `{ notes? }`: ditolak 400 kalau
+  ada item tanpa `material_cost` (pesan menyebut itemnya). Setelah ini kuantitas &
+  biaya terkunci.
+- **Finance — setujui** `PUT /:id/approve` `{ notes?, materialPoolId? }`
+  (permission `material-request:approve`). Nominal yang disetujui = yang diajukan —
+  **tidak ada isian nominal aktual** (beda dengan PR Divisi Alat). `materialPoolId`
+  hanya wajib kalau project punya lebih dari satu material pool aktif (400 menyebut
+  pilihannya).
+- **Finance — tolak** `PUT /:id/reject` `{ notes }` pada status `waiting_finance_approval`.
+- **Pemisahan tugas:** Admin yang meneruskan paket tidak bisa menyetujuinya walau
+  akunnya juga ber-role finance (403). Sembunyikan tombol approve kalau
+  `adminReviewedBy.id` = user login.
+- Respons detail memuat `costs[]` dan `totalCostAmount` (dihitung, tidak disimpan);
+  list memuat `totalCostAmount` per baris untuk antrean Finance.
+
+## E20. API tersedia, belum ada layarnya (audit 16 Okt 2026)
+
+Bukan bug — fitur yang menunggu layar. Dikelompokkan menurut pemakai; kartu
+**Divisi Lapangan** dan **Divisi Finance** di `ModuleSelection.jsx` masih
+placeholder, dan sebagian besar butir di bawah milik dua role itu.
+
+**Alur bisnis (prioritas):**
+
+| Layar | Endpoint | Pemakai |
+|---|---|---|
+| Finance approve/reject PR + nominal aktual | `PUT /api/equipment/purchase-requests/:id/approve` \| `/reject` | Finance — **paling mendesak**, lihat E17 |
+| Request Alat — review Admin | `PUT /api/request-alat/:id/admin-review` | Admin |
+| Request Alat — keputusan Divisi Alat | `PUT /api/request-alat/:id/equipment-review` | Divisi Alat |
+| Request Alat — pengajuan `internal_project` (sekarang hanya `external_rental`) | `POST /api/request-alat` | Lapangan |
+| Request Material RM-2/RM-3 | E14, E19 | Lapangan, Admin, Finance |
+| Delivery, Penerimaan, Stok | E15, E16 | Lapangan |
+| Master material & supplier | `/api/materials/types` \| `/units` \| `/suppliers` | Admin |
+| Material pool | `/api/projects/material-pools` | Admin |
+
+**Administrasi & pelengkap:**
+
+| Layar | Endpoint |
+|---|---|
+| Manajemen akun (satu-satunya hak tulis super_admin) | `/api/users` (atur role), `/api/roles` (CRUD + atur permission), `/api/permissions`, `POST /api/auth/register` |
+| Master jenis alat — tambah/ubah/hapus (FE baru membaca) | `POST/PUT/DELETE /api/equipment/types` |
+| Kategori kas — tambah/ubah/hapus | `/api/equipment/cash/categories` |
+| Ubah transaksi kas (FE baru bisa membatalkan) | `PUT /api/equipment/cash/transactions/:id` |
+| Aspek maintenance — ubah/hapus | `PUT/DELETE /api/equipment/maintenance/aspects/:id` (tanpa `defaultThresholdValue`, lihat E4d) |
+| Maintenance record — detail & batal | `GET /api/equipment/maintenance-records/:id`, `PUT .../:id/cancel` |
+| Aktif/nonaktif setting per unit | `PUT /api/equipment/maintenance-settings/:id` `{ isActive }` |
+| Riwayat status alat | `GET /api/equipment/items/:id/status-logs` |
+| Progress per tahapan | `GET /api/projects/construction/:pid/sub-projects/:sid/progress` |
+
+## E21. Mock FE yang menunggu backend (audit 16 Okt 2026)
+
+Tetap mock — **wajar**, backend-nya belum dibangun. Dicatat supaya tidak dikira utang FE.
+
+| Layar FE | Penyimpanan | Backend |
+|---|---|---|
+| Approval Center (`ApprovalWorkspacePage.jsx`) — PR sudah via API, kas lapangan mock | campuran | Build Order 5 (berikutnya) |
+| Income records (`incomeService.js`) | localStorage | Build Order 6 |
+| Klaim pendapatan alat (`incomeClaimService.js`) | localStorage | Build Order 6 (E4b) |
+| Verifikasi kas lapangan (`fieldCashMockService.js`) | localStorage | Build Order 7 |
+| Pekerja per tahapan (`fieldMockService.js`) | localStorage | Build Order 7 (Labor Payroll) |
+| Folder & berkas proyek (`admin/files`, `fileStore.js`) | localStorage + IndexedDB | **Terblokir BE** — keputusannya sudah ada (`docs/keputusan-desain-lampiran.md` L7: folder project satu tingkat + folder sistem baca-saja untuk surat jalan & bukti penerimaan), tapi API berkas project belum dibangun (lampiran tahap 3) |
+| Log aktivitas / notifikasi (`activityLogService.js`) | localStorage | Tidak direncanakan — boleh tetap lokal |
+
+**Aturan untuk modul berikutnya:** sebelum membuat layar untuk modul yang
+backend-nya belum ada, sepakati dulu kontraknya (endpoint, field, enum) di Swagger
+atau di sini. Sebagian besar ketidakcocokan di audit ini lahir dari mock yang
+menebak kontrak (E9, E4e, E10, E11, ambang maintenance).
 
