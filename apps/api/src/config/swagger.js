@@ -578,20 +578,20 @@ const swaggerSpec = {
     '/projects/sub-projects/{subProjectId}/progress-logs/{id}/validate': {
       put: {
         tags: ['Daily Progress'], summary: 'Validasi / tolak progress harian (GERBANG TAGIHAN)',
-        description: 'Permission: progress:validate — DIPEGANG ADMIN, sengaja TIDAK diberikan ke role lapangan: yang mencatat tidak memvalidasi catatannya sendiri. Inilah gerbang yang memisahkan catatan lapangan dari angka yang boleh menagih klien: hanya baris `validated` yang masuk `billableAmount`. Transisi sah: submitted→validated|rejected, validated→submitted (cabut validasi), rejected→submitted. Field `notes` DITOLAK 400 — alasan penolakan menunggu Approval Center (lihat backlog C6).',
+        description: 'Permission: progress:validate — DIPEGANG ADMIN, sengaja TIDAK diberikan ke role lapangan: yang mencatat tidak memvalidasi catatannya sendiri. Inilah gerbang yang memisahkan catatan lapangan dari angka yang boleh menagih klien: hanya baris `validated` yang masuk `billableAmount`. Transisi sah: submitted→validated|rejected, validated→submitted (cabut validasi), rejected→submitted. `notes` disimpan di `validationNotes` (catatan keputusan TERAKHIR): **WAJIB saat `rejected`**, opsional selainnya, dan ditimpa setiap transisi — kembali ke `submitted` tanpa catatan mengosongkannya. Aksi bersamaan pada log yang sama: satu 200, satu 409. Log `submitted` muncul di antrean `GET /approval-queue` (sourceType `progress_log`).',
         parameters: [
           { in: 'path', name: 'subProjectId', required: true, schema: { type: 'integer' } },
           { in: 'path', name: 'id', required: true, schema: { type: 'integer' } }
         ],
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['status'],
-          properties: { status: { type: 'string', enum: ['submitted','validated','rejected'] } }
+          properties: { status: { type: 'string', enum: ['submitted','validated','rejected'] }, notes: { type: 'string', description: 'Wajib saat rejected' } }
         }}}},
         responses: {
           200: { description: 'Status diubah. Response memuat `subProjectProgress` — dampak langsung ke angka tagihan.' },
-          400: { description: '`notes` dikirim (belum didukung) / status tidak valid' },
+          400: { description: 'Status tidak valid / menolak tanpa `notes`' },
           403: { description: 'Role lapangan — pencatat tidak boleh memvalidasi' },
-          409: { description: 'Transisi tidak sah' }
+          409: { description: 'Transisi tidak sah / kalah dari aksi bersamaan' }
         }
       }
     },
@@ -1346,11 +1346,12 @@ const swaggerSpec = {
       }
     },
     '/equipment/purchase-requests/{id}/validate': {
-      put: { tags: ['Purchase Requests'], summary: 'Admin validasi', description: 'Permission: purchase-request:validate (Admin). submitted -> waiting_finance_approval. Tanpa body: catatan approval belum punya tempat penyimpanan (rencananya approval_task_logs di Approval Center).', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Validated' } } }
+      put: { tags: ['Purchase Requests'], summary: 'Admin validasi', description: 'Permission: purchase-request:validate (Admin). submitted -> waiting_finance_approval. `notes` opsional, disimpan di `adminNotes`.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Validated' } } }
     },
     '/equipment/purchase-requests/{id}/approve': {
       put: { tags: ['Purchase Requests'], summary: 'Finance approve + cairkan', description: 'Permission: purchase-request:approve (Finance). Atomik: approval bersamaan hanya satu yang lolos (sisanya 409), dan database menolak baris kas kedua untuk order yang sama. Nominal aktual per baris WAJIB diisi, bukan menyalin estimasi. Boleh menyebabkan saldo Kas Alat negatif. Admin yang memvalidasi order ini tidak boleh menyetujuinya walau juga memegang role finance (403, pemisahan tugas).', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: {
+          notes: { type: 'string', description: 'Opsional, disimpan di `financeNotes`' },
           approvedRepairItems: { type: 'array', items: { type: 'object', properties: { repairItemId: { type: 'integer' }, approvedServiceFee: { type: 'number' }, spareparts: { type: 'array', items: { type: 'object', properties: { sparepartId: { type: 'integer' }, approvedTotalPrice: { type: 'number' } } } } } } },
           approvedMaintenanceItems: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'integer' }, approvedPrice: { type: 'number' } } } },
           approvedStockItems: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'integer' }, approvedTotalPrice: { type: 'number' } } } }
@@ -1358,7 +1359,7 @@ const swaggerSpec = {
         responses: { 200: { description: 'Approved. total_approved_amount dijumlahkan dari baris, lalu cash-out Kas Alat dibuat dalam transaksi yang SAMA — kategori kasnya diturunkan dari orderCategory. Response menyertakan cashTransactionCreated + cashTransaction.' } } }
     },
     '/equipment/purchase-requests/{id}/reject': {
-      put: { tags: ['Purchase Requests'], summary: 'Tolak order', description: 'Permission: purchase-request:validate (saat submitted) atau purchase-request:approve (saat waiting_finance_approval) — diperiksa per permission, bukan nama role. Penolakan bersamaan dengan aksi lain: yang kalah 409. CATATAN: alasan penolakan BELUM bisa disimpan — header PR tidak punya kolom teks dan Approval Center belum dibangun. Mengirim `notes` akan ditolak 400 supaya tidak hilang diam-diam.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Rejected' } } }
+      put: { tags: ['Purchase Requests'], summary: 'Tolak order', description: 'Permission: purchase-request:validate (saat submitted) atau purchase-request:approve (saat waiting_finance_approval) — diperiksa per permission, bukan nama role. Penolakan bersamaan dengan aksi lain: yang kalah 409. **`notes` WAJIB** (alasan penolakan) — disimpan di `adminNotes` kalau ditolak Admin, `financeNotes` kalau ditolak Finance.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Rejected' }, 400: { description: 'Tanpa `notes`' } } }
     },
     '/equipment/purchase-requests/{id}/cancel': {
       put: { tags: ['Purchase Requests'], summary: 'Batalkan order', description: 'Role: divisi_alat, hanya pengaju sendiri, dan hanya SEBELUM approved. Order yang sudah approved ditolak 409 karena dananya sudah dicairkan — siapa yang berwenang mencatat dana kembali masuk belum diputuskan, jadi ditutup untuk MVP. Sementara ini pengembaliannya dicatat manual di Kas Alat sebagai cash-in `adjustment` kategori "Koreksi Masuk".', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Cancelled' } } }
@@ -1892,7 +1893,7 @@ const swaggerSpec = {
     // ========================================
     // 6. APPROVAL CENTER
     // ========================================
-    // Rancangan disepakati 17 Okt 2026, BELUM DIBANGUN. Keputusan: docs/keputusan-desain-approval-center.md.
+    // Dibangun 17 Okt 2026. Keputusan: docs/keputusan-desain-approval-center.md.
     // Approval Center = ANTREAN BACA-SAJA dari VIEW `approval_queue` (UNION ALL tabel sumber).
     // Tidak ada tabel approval_tasks, tidak ada endpoint aksi di sini: approve/reject/validate
     // tetap lewat endpoint modul sumbernya (lihat `actionEndpoints` di tiap baris).
@@ -1900,7 +1901,7 @@ const swaggerSpec = {
       get: {
         tags: ['Approval Center'], summary: 'Antrean dokumen yang menunggu aksi user login',
         description: [
-          '**RANCANGAN — belum dibangun.** Satu endpoint untuk Admin & Finance — tahapnya dipilih lewat `stage`, isinya ditentukan permission (bukan nama role); layar "Approval Center Admin" & "Approval Center Finance" di FE sama-sama memakai endpoint ini. Dibaca dari VIEW `approval_queue`, jadi selalu sama dengan status di tabel sumber (tidak ada salinan yang perlu disinkronkan).',
+          'Satu endpoint untuk Admin & Finance — tahapnya dipilih lewat `stage`, isinya ditentukan permission (bukan nama role); layar "Approval Center Admin" & "Approval Center Finance" di FE sama-sama memakai endpoint ini. Dibaca dari VIEW `approval_queue`, jadi selalu sama dengan status di tabel sumber (tidak ada salinan yang perlu disinkronkan).',
           '',
           'Tanpa permission khusus. Baris tampil hanya kalau user memegang **permission aksi** tahap itu:',
           '',
@@ -1944,7 +1945,7 @@ const swaggerSpec = {
     '/approval-queue/summary': {
       get: {
         tags: ['Approval Center'], summary: 'Jumlah antrean per jenis — untuk badge tab & menu',
-        description: '**RANCANGAN — belum dibangun.** Aturan visibilitas sama persis dengan `GET /approval-queue`. Kombinasi yang boleh Anda proses tetap muncul walau jumlahnya 0, supaya FE bisa menentukan tab mana yang ditampilkan dari response ini (bukan dari nama role).',
+        description: 'Aturan visibilitas sama persis dengan `GET /approval-queue`. Kombinasi yang boleh Anda proses tetap muncul walau jumlahnya 0, supaya FE bisa menentukan tab mana yang ditampilkan dari response ini (bukan dari nama role).',
         responses: { 200: { description: 'Jumlah per tahap & jenis', content: { 'application/json': { schema: { type: 'object', properties: {
           success: { type: 'boolean' },
           data: { type: 'object', properties: {

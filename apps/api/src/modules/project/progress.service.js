@@ -1,5 +1,6 @@
 const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
+const { claimTransition } = require('../../utils/status-transition.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { toNumber, toDateOnly, pickWritable, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 const subProjectService = require('./sub-project.service.js');
@@ -35,6 +36,7 @@ const shapeLog = (row) => ({
   status: row.status,
   validatedAt: row.validatedAt,
   validatedBy: shapeActor(row.validatedByUser),
+  validationNotes: row.validationNotes,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
   createdBy: shapeActor(row.createdByUser),
@@ -219,11 +221,11 @@ const VALIDATION_TRANSITIONS = {
  * Validasi Admin. Inilah gerbang yang memisahkan catatan lapangan dari angka
  * yang boleh menagih klien.
  *
- * Alasan penolakan BELUM BISA DISIMPAN — menunggu Approval Center, sejalan
- * dengan keputusan B1 pada purchase request. `notes` ditolak dengan 400 di
- * validator daripada diterima lalu dibuang diam-diam.
+ * `validation_notes` memuat catatan keputusan TERAKHIR (Approval Center A5):
+ * wajib saat menolak (dijaga validator), ditimpa setiap transisi — termasuk
+ * dikosongkan saat kembali ke `submitted` tanpa catatan.
  */
-const setValidationStatus = async (subProjectId, id, status, userId) => {
+const setValidationStatus = async (subProjectId, id, status, userId, notes) => {
   const row = await findLogOrFail(subProjectId, id);
 
   if (row.status === status) throw httpError(`Progress log sudah berstatus "${status}"`, 409);
@@ -236,16 +238,17 @@ const setValidationStatus = async (subProjectId, id, status, userId) => {
     );
   }
 
-  const updated = await prisma.dailyProgressLog.update({
-    where: { id },
-    data: {
+  const updated = await prisma.$transaction(async (tx) => {
+    // Atomik: dua Admin yang bertindak bersamaan pada log yang sama — satu 409.
+    await claimTransition(tx.dailyProgressLog, { id, status: row.status }, {
       status,
       // Dicatat juga saat validasi DICABUT — siapa yang membuka kunci sama
       // pentingnya dengan siapa yang menguncinya.
       validatedBy: userId,
       validatedAt: new Date(),
-    },
-    include: LOG_INCLUDE,
+      validationNotes: notes || null,
+    });
+    return tx.dailyProgressLog.findUnique({ where: { id }, include: LOG_INCLUDE });
   });
 
   const subProject = await prisma.subProject.findUnique({ where: { id: subProjectId } });

@@ -560,8 +560,12 @@ model EquipmentPurchaseRequest {
   requestedBy       Int       @map("requested_by")
   adminValidatedBy  Int?      @map("admin_validated_by")
   adminValidatedAt  DateTime? @map("admin_validated_at")
+  // Catatan keputusan per tahap (Approval Center A5). Penolakan wajib beralasan,
+  // ditulis ke kolom tahap yang menolak.
+  adminNotes        String?   @map("admin_notes") @db.Text
   financeApprovedBy Int?      @map("finance_approved_by")
   financeApprovedAt DateTime? @map("finance_approved_at")
+  financeNotes      String?   @map("finance_notes") @db.Text
   cancelledBy       Int?      @map("cancelled_by")
   cancelledAt       DateTime? @map("cancelled_at")
 
@@ -999,23 +1003,25 @@ model SubProject {
 /// mengubah angka yang sudah pernah dikirim keluar. Pola kunci ini mengikuti
 /// `daily_labor_logs.locked_at` pada ERD Finance Field.
 ///
-/// Alasan penolakan belum bisa disimpan — menunggu Approval Center, sejalan
-/// dengan keputusan B1 pada purchase request. Lihat backlog bagian C.
+/// Alasan penolakan disimpan di `validation_notes` (Approval Center A5, menutup C6).
 model DailyProgressLog {
-  id             Int                 @id @default(autoincrement())
-  subProjectId   Int                 @map("sub_project_id")
-  progressDate   DateTime            @map("progress_date") @db.Date
-  realizedVolume Decimal             @map("realized_volume") @db.Decimal(18, 2)
-  notes          String?             @db.Text
-  status         DailyProgressStatus @default(submitted)
+  id              Int                 @id @default(autoincrement())
+  subProjectId    Int                 @map("sub_project_id")
+  progressDate    DateTime            @map("progress_date") @db.Date
+  realizedVolume  Decimal             @map("realized_volume") @db.Decimal(18, 2)
+  notes           String?             @db.Text
+  status          DailyProgressStatus @default(submitted)
   // Jejak siapa yang memeriksa. Di luar ERD, alasannya sama dengan
   // admin_validated_by pada purchase request: perubahan status tanpa aktor
   // tidak bisa ditelusuri. Ikut tercatat saat validasi DICABUT.
-  validatedBy    Int?                @map("validated_by")
-  validatedAt    DateTime?           @map("validated_at")
-  createdBy      Int?                @map("created_by")
-  createdAt      DateTime            @default(now()) @map("created_at")
-  updatedAt      DateTime            @updatedAt @map("updated_at")
+  validatedBy     Int?                @map("validated_by")
+  validatedAt     DateTime?           @map("validated_at")
+  // Catatan keputusan TERAKHIR (Approval Center A5): wajib saat ditolak,
+  // ditimpa setiap transisi — termasuk dikosongkan saat kembali ke submitted.
+  validationNotes String?             @map("validation_notes") @db.Text
+  createdBy       Int?                @map("created_by")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
 
   subProject      SubProject         @relation(fields: [subProjectId], references: [id])
   createdByUser   User?              @relation("ProgressCreatedBy", fields: [createdBy], references: [id])

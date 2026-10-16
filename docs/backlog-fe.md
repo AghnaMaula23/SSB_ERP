@@ -504,7 +504,7 @@ Tetap mock — **wajar**, backend-nya belum dibangun. Dicatat supaya tidak dikir
 
 | Layar FE | Penyimpanan | Backend |
 |---|---|---|
-| Approval Center (`ApprovalWorkspacePage.jsx`) — PR sudah via API, kas lapangan mock | campuran | Build Order 5 (berikutnya) |
+| Approval Center — tab kas lapangan (`fieldCashMockService.js`) | localStorage | Build Order 7. **Antrean Approval Center sendiri sudah ada (E22)** |
 | Income records (`incomeService.js`) | localStorage | Build Order 6 |
 | Klaim pendapatan alat (`incomeClaimService.js`) | localStorage | Build Order 6 (E4b) |
 | Verifikasi kas lapangan (`fieldCashMockService.js`) | localStorage | Build Order 7 |
@@ -516,4 +516,47 @@ Tetap mock — **wajar**, backend-nya belum dibangun. Dicatat supaya tidak dikir
 backend-nya belum ada, sepakati dulu kontraknya (endpoint, field, enum) di Swagger
 atau di sini. Sebagian besar ketidakcocokan di audit ini lahir dari mock yang
 menebak kontrak (E9, E4e, E10, E11, ambang maintenance).
+
+---
+
+# Approval Center (17 Oktober 2026)
+
+## E22. Antrean Approval Center tersedia + alasan tolak WAJIB — MEMUTUS FE
+
+Detail: Swagger tag *Approval Center* dan `docs/keputusan-desain-approval-center.md`.
+
+**1. Perlu dikerjakan SEGERA (memutus layar yang sudah ada):**
+
+- **Tolak PR sekarang wajib `notes`.** `rejectPurchaseRequest(id)` di
+  `admin/approvals/services/approvalService.js` mengirim tanpa body → dibalas **400**
+  "Alasan penolakan wajib diisi". Tambah isian alasan di `PurchaseRequestDetail`/`Queue`
+  dan kirim `{ notes }`. Berlaku juga untuk penolakan oleh Finance.
+- **Tolak progress harian sekarang wajib `notes`.** `setProgressValidation` di
+  `admin/project/services/projectService.js` (dipakai `SubProjectVolumePage.jsx`) →
+  kirim `{ status: 'rejected', notes }`. `validated` & cabut validasi: `notes` opsional.
+- Komentar "catatan belum bisa dikirim — menunggu Approval Center" di kedua service itu
+  sudah usang: `validate`/`approve` PR kini menerima `notes` opsional.
+- Tampilkan alasannya ke pengaju: PR → `adminNotes`/`financeNotes`; progress →
+  `validationNotes` (catatan keputusan terakhir, kosong lagi saat dibuka kembali).
+
+**2. Layar antrean (fitur baru):**
+
+- `GET /api/approval-queue?stage=admin|finance&sourceType=&search=&sort=oldest|newest&page=&limit=`
+  — satu endpoint untuk Approval Center **Admin** dan **Finance**; bedakan dengan `stage`.
+- `GET /api/approval-queue/summary` — jumlah per antrean untuk badge. **Tab yang tampil
+  ditentukan dari `items` di response ini, bukan dari nama role** (sejalan E3); antrean
+  berjumlah 0 tetap ada di `items`.
+- Tiap baris: `sourceType`, `sourceId`, `stage`, `referenceCode` (null untuk progress),
+  `context`, `summary`, `amount` (null kalau tidak relevan), `requestedBy`, `submittedAt`,
+  `detailPath`, `actionEndpoints`. Detail & aksi **memakai endpoint sumber apa adanya** —
+  tidak ada `/approval-queue/:id/approve`.
+- Isi antrean Admin: `purchase_request`, `material_request` (kuantitas + biaya, lihat E19),
+  `equipment_request` (internal), `progress_log`. Finance: `purchase_request` (+ nominal
+  aktual, lihat E17), `material_request`.
+- Dokumen yang user ajukan sendiri, atau teruskan sendiri ke Finance, tidak muncul di
+  antreannya — tidak perlu disaring lagi di FE.
+- Setelah aksi berhasil, muat ulang antrean + summary (baris langsung hilang). Aksi yang
+  kalah dari user lain dibalas 409 — tampilkan pesannya dan muat ulang.
+- Tab PR yang sudah ada boleh tetap memakai `/api/equipment/purchase-requests?status=submitted`,
+  tapi antrean ini satu-satunya yang memberi daftar progress & request lintas project.
 

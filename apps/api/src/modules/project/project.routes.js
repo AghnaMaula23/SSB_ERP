@@ -250,14 +250,14 @@ router.put(`${LOGS}/:id`, authorize('progress:create'),
  * yang boleh menagih klien. Permission `progress:validate` TIDAK diberikan ke
  * role lapangan: pencatat tidak boleh memvalidasi catatannya sendiri.
  *
- * `notes` DITOLAK: alasan penolakan menunggu Approval Center (keputusan B1 pada
- * purchase request). Ditolak terbuka daripada diterima lalu dibuang diam-diam.
+ * `notes` disimpan di `validation_notes` (Approval Center A5) — wajib saat
+ * menolak supaya Lapangan tahu apa yang harus diperbaiki.
  */
 router.put(`${LOGS}/:id/validate`, authorize('progress:validate'),
   validate([subProjectIdParam, idParam, statusBodyRule(PROGRESS_STATUSES),
-    body('notes').not().exists().withMessage(
-      'Alasan validasi/penolakan belum bisa disimpan — menunggu modul Approval Center. ' +
-      'Sampaikan alasannya di luar sistem dulu.')]),
+    body('notes').optional({ nullable: true }).isString().trim(),
+    body('notes').if(body('status').equals('rejected'))
+      .isString().trim().notEmpty().withMessage('Alasan penolakan wajib diisi')]),
   controller.validateProgressLog);
 
 // ============================================================

@@ -140,7 +140,7 @@ const updateProgressLog = async (req, res, next) => {
 const validateProgressLog = async (req, res, next) => {
   try {
     const data = await progress.setValidationStatus(
-      req.params.subProjectId, req.params.id, req.body.status, req.user.id);
+      req.params.subProjectId, req.params.id, req.body.status, req.user.id, req.body.notes);
     return success(res, data, `Progress harian berhasil diubah menjadi "${req.body.status}"`);
   } catch (err) { next(err); }
 };

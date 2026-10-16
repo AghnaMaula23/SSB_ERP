@@ -122,7 +122,7 @@ berlaku 5 menit. Rincian: `docs/keputusan-desain-lampiran.md`.
 
 ## Cakupan endpoint saat ini
 
-144 path, 36 tag. Yang **sudah dibangun**:
+142 path, 36 tag. Yang **sudah dibangun**:
 
 | Prefix | Path | Status |
 |---|---|---|
@@ -134,9 +134,7 @@ berlaku 5 menit. Rincian: `docs/keputusan-desain-lampiran.md`.
 | `/request-material` | 8 | jalan — RM-2 & RM-3 |
 | `/material-deliveries`, `/material-receipts`, `/material-stock` | 10 | jalan — RM-4 & RM-5 |
 | `/files` | 1 | jalan — signed URL unduh |
-
-**`/approval-queue` — kontrak DISEPAKATI 17 Okt 2026, belum dibangun** (antrean baca-saja,
-aksi tetap di endpoint modul sumber; `docs/keputusan-desain-approval-center.md`).
+| `/approval-queue` | 2 | jalan (17 Okt) — antrean baca-saja Admin & Finance; aksi tetap di endpoint modul sumber (`docs/keputusan-desain-approval-center.md`) |
 
 Yang masih **rancangan di swagger, belum ada kodenya**: `/income`,
 `/finance-field`, `/finance-accounting`, `/payroll`. Rancangan ini ditulis sebelum
