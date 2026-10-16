@@ -19,6 +19,27 @@ const swaggerSpec = {
       }
     },
     schemas: {
+      ApprovalQueueItem: {
+        type: 'object',
+        description: 'Satu baris antrean Approval Center. Ringkasan untuk list — detail & aksi selalu lewat endpoint modul sumber.',
+        properties: {
+          sourceType: { type: 'string', enum: ['purchase_request', 'material_request', 'equipment_request', 'progress_log'] },
+          sourceId: { type: 'integer', example: 12 },
+          stage: { type: 'string', enum: ['admin', 'finance'] },
+          referenceCode: { type: 'string', nullable: true, example: 'MRQ-000012', description: 'Kode dokumen. `null` untuk progress_log (tidak bernomor)' },
+          context: { type: 'string', example: 'PRJ-000003 Jalan Demak-Kudus · Galian', description: 'Project & tahapan, kontrak supply, atau kategori order PR' },
+          summary: { type: 'string', example: '3 material', description: 'Ringkasan isi: jumlah item, kategori order, atau volume + tanggal progress' },
+          amount: { type: 'number', nullable: true, example: 15000000, description: 'Rupiah. PR: estimasi total; request material tahap finance: total rincian biaya; lainnya `null`' },
+          requestedBy: { type: 'object', properties: { id: { type: 'integer' }, fullName: { type: 'string' } } },
+          submittedAt: { type: 'string', format: 'date-time', description: 'Waktu masuk antrean TAHAP INI (lihat tabel di GET /approval-queue)' },
+          detailPath: { type: 'string', example: '/api/request-material/12', description: 'Endpoint detail sumber' },
+          actionEndpoints: {
+            type: 'array', description: 'Endpoint aksi tahap ini (method PUT). FE tetap memakai kontrak masing-masing endpoint',
+            items: { type: 'string' },
+            example: ['/api/request-material/12/admin-validation', '/api/request-material/12/costs', '/api/request-material/12/submit-to-finance', '/api/request-material/12/reject'],
+          },
+        },
+      },
       Error: {
         type: 'object',
         properties: {
@@ -92,7 +113,7 @@ const swaggerSpec = {
     { name: 'Material Receipt', description: 'Penerimaan material per delivery (RM-5)' },
     { name: 'Material Stock', description: 'Stok material per tahapan konstruksi (RM-5)' },
     { name: 'Files', description: 'Unduh lampiran lewat signed URL' },
-    { name: 'Approval Center', description: 'Approval terpusat lintas modul' },
+    { name: 'Approval Center', description: 'Antrean baca-saja lintas modul (VIEW approval_queue). Aksi tetap di modul sumber' },
     { name: 'Income Records', description: 'Pencatatan pendapatan dan billing' },
     { name: 'Income Payments', description: 'Pembayaran client' },
     { name: 'Equipment Income Claims', description: 'Klaim pendapatan alat oleh Divisi Alat' },
@@ -1871,14 +1892,73 @@ const swaggerSpec = {
     // ========================================
     // 6. APPROVAL CENTER
     // ========================================
-    '/approvals': {
-      get: { tags: ['Approval Center'], summary: 'List pending approvals untuk user login',
-        parameters: [{ $ref: '#/components/parameters/PageParam' }, { in: 'query', name: 'sourceType', schema: { type: 'string' } }, { in: 'query', name: 'status', schema: { type: 'string', enum: ['pending','approved','rejected'] } }],
-        responses: { 200: { description: 'Paginated approval items' } } }
+    // Rancangan disepakati 17 Okt 2026, BELUM DIBANGUN. Keputusan: docs/keputusan-desain-approval-center.md.
+    // Approval Center = ANTREAN BACA-SAJA dari VIEW `approval_queue` (UNION ALL tabel sumber).
+    // Tidak ada tabel approval_tasks, tidak ada endpoint aksi di sini: approve/reject/validate
+    // tetap lewat endpoint modul sumbernya (lihat `actionEndpoints` di tiap baris).
+    '/approval-queue': {
+      get: {
+        tags: ['Approval Center'], summary: 'Antrean dokumen yang menunggu aksi user login',
+        description: [
+          '**RANCANGAN — belum dibangun.** Satu endpoint untuk Admin & Finance — tahapnya dipilih lewat `stage`, isinya ditentukan permission (bukan nama role); layar "Approval Center Admin" & "Approval Center Finance" di FE sama-sama memakai endpoint ini. Dibaca dari VIEW `approval_queue`, jadi selalu sama dengan status di tabel sumber (tidak ada salinan yang perlu disinkronkan).',
+          '',
+          'Tanpa permission khusus. Baris tampil hanya kalau user memegang **permission aksi** tahap itu:',
+          '',
+          '| sourceType | stage | Masuk antrean saat | Permission | submittedAt |',
+          '|---|---|---|---|---|',
+          '| `purchase_request` | admin | status `submitted` | `purchase-request:validate` | `created_at` |',
+          '| `purchase_request` | finance | status `waiting_finance_approval` | `purchase-request:approve` | `admin_validated_at` |',
+          '| `material_request` | admin | status `submitted` | `material-request:validate` | `created_at` |',
+          '| `material_request` | finance | status `waiting_finance_approval` | `material-request:approve` | `admin_reviewed_at` |',
+          '| `equipment_request` | admin | status `submitted` (hanya `internal_project`) | `equipment-request:review` | `created_at` |',
+          '| `progress_log` | admin | status `submitted` | `progress:validate` | `updated_at` |',
+          '',
+          'Keputusan Divisi Alat atas Request Alat (`equipment_review`) **tidak** masuk — ERD Approval Center membatasi diri pada Admin & Finance.',
+          '',
+          '**Dokumen yang tidak boleh Anda proses disembunyikan**: yang Anda ajukan/catat sendiri, dan untuk tahap finance yang Anda teruskan sendiri di tahap admin. Endpoint sumber tetap penjaga sebenarnya (403).',
+          '',
+          'super_admin tidak memegang permission aksi, jadi antreannya selalu kosong — memantau dilakukan lewat list tiap modul.',
+          '',
+          'Urutan default `oldest` (FIFO): yang paling lama menunggu di atas. Tahap finance Income/Klaim Alat/Finance Field menyusul sebagai `sourceType` baru tanpa mengubah bentuk response.',
+        ].join('\n'),
+        parameters: [
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'stage', schema: { type: 'string', enum: ['admin', 'finance'] }, description: 'Kosong = semua tahap yang boleh Anda proses' },
+          { in: 'query', name: 'sourceType', schema: { type: 'string', enum: ['purchase_request', 'material_request', 'equipment_request', 'progress_log'] } },
+          { in: 'query', name: 'search', schema: { type: 'string' }, description: 'Cocokkan `referenceCode` atau `context` (tidak peka huruf besar-kecil)' },
+          { in: 'query', name: 'sort', schema: { type: 'string', enum: ['oldest', 'newest'], default: 'oldest' } },
+        ],
+        responses: {
+          200: {
+            description: 'Paginated (bentuk `paginated()` standar)',
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              success: { type: 'boolean' },
+              data: { type: 'array', items: { $ref: '#/components/schemas/ApprovalQueueItem' } },
+              meta: { type: 'object', properties: { total: { type: 'integer' }, page: { type: 'integer' }, limit: { type: 'integer' }, totalPages: { type: 'integer' } } },
+            } } } },
+          },
+          400: { description: 'Nilai `stage`/`sourceType`/`sort` tidak dikenal' },
+        },
+      },
     },
-    '/approvals/{id}': { get: { tags: ['Approval Center'], summary: 'Detail approval + source data', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } } },
-    '/approvals/{id}/approve': { put: { tags: ['Approval Center'], summary: 'Approve', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Approved' } } } },
-    '/approvals/{id}/reject': { put: { tags: ['Approval Center'], summary: 'Reject', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Rejected' } } } },
+    '/approval-queue/summary': {
+      get: {
+        tags: ['Approval Center'], summary: 'Jumlah antrean per jenis — untuk badge tab & menu',
+        description: '**RANCANGAN — belum dibangun.** Aturan visibilitas sama persis dengan `GET /approval-queue`. Kombinasi yang boleh Anda proses tetap muncul walau jumlahnya 0, supaya FE bisa menentukan tab mana yang ditampilkan dari response ini (bukan dari nama role).',
+        responses: { 200: { description: 'Jumlah per tahap & jenis', content: { 'application/json': { schema: { type: 'object', properties: {
+          success: { type: 'boolean' },
+          data: { type: 'object', properties: {
+            total: { type: 'integer', example: 7 },
+            items: { type: 'array', items: { type: 'object', properties: {
+              stage: { type: 'string', enum: ['admin', 'finance'] },
+              sourceType: { type: 'string', example: 'material_request' },
+              count: { type: 'integer', example: 3 },
+              oldestSubmittedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Untuk menandai antrean yang mengendap' },
+            } } },
+          } },
+        } } } } } },
+      },
+    },
 
     // ========================================
     // 7. INCOME

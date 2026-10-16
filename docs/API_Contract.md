@@ -17,7 +17,7 @@ pada taraf menyesatkan, bukan sekadar kurang lengkap. Daftar endpoint memang
 tidak pantas dirawat manual di dokumen terpisah: dia berubah tiap batch,
 sementara swagger ikut berubah bersama kodenya.
 
-Terakhir diverifikasi terhadap kode: 9 Oktober 2026.
+Terakhir diverifikasi terhadap kode: 16 Oktober 2026.
 
 ---
 
@@ -111,17 +111,34 @@ Permission berformat `module:action`, dicek `authorize('module:action')`.
 **Tidak ada role yang mem-bypass** — hak akses sepenuhnya dari daftar permission
 (`GET /api/auth/me`). Tidak ada yang bisa mengubah role akunnya sendiri (403).
 
+## Lampiran file (multipart)
+
+Endpoint yang menerima file memakai `multipart/form-data` — **form dan file dalam
+satu request**, bukan unggah dulu lalu rujuk. Field teks dikirim sebagai part biasa.
+Jenis file diperiksa dari isinya (bukan ekstensi); file yang ditolak dibalas **400**
+dengan bentuk gagal validasi (`errors[].field` = nama field file). Profil `evidence`:
+PDF/JPG/PNG/WebP maks 10 MB. Unduh lewat `GET /api/files/:id/url` → signed URL
+berlaku 5 menit. Rincian: `docs/keputusan-desain-lampiran.md`.
+
 ## Cakupan endpoint saat ini
 
-118 path, 31 tag. Yang **sudah dibangun**:
+144 path, 36 tag. Yang **sudah dibangun**:
 
 | Prefix | Path | Status |
 |---|---|---|
 | `/auth`, `/users`, `/roles`, `/permissions` | 13 | jalan |
-| `/projects` | 25 | jalan — project, sub-project, progress, pool, alokasi |
-| `/equipment` | 35 | jalan — master alat, workhour, maintenance, damage, purchase request, kas |
+| `/projects` | 30 | jalan — project, sub-project, progress, equipment & material pool, alokasi |
+| `/equipment` | 37 | jalan — master alat, workhour, maintenance (ambang per jenis), damage, purchase request, kas |
+| `/request-alat` | 5 | jalan |
+| `/materials` | 5 | jalan — jenis material, satuan, supplier |
+| `/request-material` | 8 | jalan — RM-2 & RM-3 |
+| `/material-deliveries`, `/material-receipts`, `/material-stock` | 10 | jalan — RM-4 & RM-5 |
+| `/files` | 1 | jalan — signed URL unduh |
 
-Yang masih **rancangan di swagger, belum ada kodenya**: `/request-alat`,
-`/request-material`, `/approvals`, `/income`, `/finance-field`,
-`/finance-accounting`, `/payroll`. Urutan pembangunannya ada di CLAUDE.md
-bagian Build Order.
+**`/approval-queue` — kontrak DISEPAKATI 17 Okt 2026, belum dibangun** (antrean baca-saja,
+aksi tetap di endpoint modul sumber; `docs/keputusan-desain-approval-center.md`).
+
+Yang masih **rancangan di swagger, belum ada kodenya**: `/income`,
+`/finance-field`, `/finance-accounting`, `/payroll`. Rancangan ini ditulis sebelum
+ERD direvisi — anggap draf, kontraknya disepakati ulang saat modulnya dibangun.
+Urutan pembangunannya ada di CLAUDE.md bagian Build Order.
