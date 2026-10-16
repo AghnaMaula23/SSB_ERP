@@ -55,7 +55,7 @@ boleh ditampilkan apa adanya.
 | Prioritas | Butir | Kenapa |
 |---|---|---|
 | 1 | **E3** `hasPermission` | super_admin kini read-only: bypass FE membuat semua tombol tulis berakhir 403 |
-| 2 | **E4d** `maintenanceThresholdService` | Backend-nya SUDAH ADA, tapi FE masih localStorage penuh |
+| 2 | **E4d** `maintenanceThresholdService` | Endpoint per jenis tersedia sejak 16 Okt 2026 — sambungkan layarnya (lihat E4d) |
 | 3 | **E4e** `maintenanceService` hibrida | Separuh API separuh localStorage — paling rawan salah baca |
 | 1 | **E8** pool item "Jumlah" | **Memblokir migrasi contract** pool item |
 | 1 | **E9** fallback data palsu | Data dummy ikut tersimpan ke database |
@@ -153,7 +153,30 @@ alat) "tidak lagi mock". Itu keliru. Ia memanggil `/api/projects?status=accepted
 `kasService.js` sudah tidak ada; digantikan `cashService.js` yang memanggil
 `/api/equipment/cash`. Diverifikasi 9 Okt: nol localStorage.
 
-## E4d. `maintenanceThresholdService` masih localStorage — backendnya SUDAH ADA
+## E4d. `maintenanceThresholdService` masih localStorage — endpoint TERSEDIA 16 Okt 2026
+
+> **Koreksi 16 Okt 2026:** catatan asli di bawah keliru menyebut backend sudah
+> tersedia — dulu backend hanya punya ambang **per unit**, sedangkan layar ini per
+> **jenis × aspek**. Sekarang backend memakai model yang sama dengan layar ini, dan
+> layarnya **dipertahankan**. Yang perlu dikerjakan:
+>
+> | Fungsi di `maintenanceThresholdService.js` | Ganti dengan |
+> |---|---|
+> | `getTypeThresholds()` | `GET /api/equipment/maintenance-thresholds` (bentuk baris sama: `equipmentTypeId`, `maintenanceAspectId`, `thresholdValue`, `updatedAt`) |
+> | `getTypeThreshold(typeId, aspectId)` | cari dari hasil list di atas |
+> | `saveTypeThreshold({ equipmentTypeId, maintenanceAspectId, thresholdValue })` | `PUT /api/equipment/types/{typeId}/maintenance-thresholds/{aspectId}` `{ thresholdValue }` — tambah atau ubah |
+> | `deleteTypeThreshold(typeId, aspectId)` | `DELETE` path yang sama |
+>
+> - Ketiganya jadi `async` → tambahkan `await` di `MaintenanceThresholdPage.jsx`.
+> - Form "buat aspek" di layar yang sama: **buang isian default threshold** — dikirim
+>   `defaultThresholdValue` sekarang ditolak 400. Fallback localStorage di
+>   `createMaintenanceAspect` dibuang juga (E4e).
+> - Setting per unit **tidak lagi dibuat/dihapus manual**: backend membuatkannya
+>   otomatis saat unit didaftarkan. `POST /items/:itemId/maintenance-settings` dan
+>   `DELETE /maintenance-settings/:id` sudah tidak ada; `thresholdValue` di
+>   `PUT /maintenance-settings/:id` ditolak (yang tersisa hanya `isActive`).
+> - `thresholdValue` di respons setting tetap ada (turunan dari jenis) — grid status
+>   maintenance tidak perlu diubah.
 
 Ditemukan 9 Oktober 2026. Berbeda dari E4b: ini **bisa dikerjakan sekarang**.
 
@@ -384,4 +407,50 @@ perlu dirombak, bukan sekadar diganti endpoint:
   mencatat mutasi lawan.
 - Riwayat stok masuk = `GET /api/material-receipts?subProjectId=`; riwayat mutasi =
   `GET /api/material-stock/movements?subProjectId=`. Gabungkan di layar kalau perlu.
+
+---
+
+# Hasil audit FE↔BE 16 Oktober 2026 (report.md)
+
+## E17. Daftar perbaikan WAJIB — mencegah bug, tanpa fitur baru
+
+Kriteria: merusak data, menampilkan data palsu, atau membuat alur macet. Urutan =
+prioritas.
+
+| # | Butir | Bug yang dicegah |
+|---|---|---|
+| 1 | **E9a** `alat/services/projectService.js` `getClaimableProjects`: memanggil `/api/projects?status=accepted` (tidak ada) lalu jatuh ke `DUMMY_PROJECTS`. Yang benar: `/api/projects/construction?status=active`, dan **hapus fallback dummy** | Klaim dibuat untuk project palsu |
+| 2 | **E9b** buang isian "dikerjakan oleh" (`performedBy`) maintenance beserta `getMaintenancePerformedByOptions` (`/api/users` selalu 403 untuk divisi_alat lalu jatuh ke nama palsu) | Nama palsu tersimpan; kolom `performed_by` dijadwalkan DROP |
+| 3 | **E4e** hapus fallback localStorage di `maintenanceService.js` | Aspek "tersimpan" padahal tidak ada di database |
+| 4 | **E10** status tindakan damage & kaitan PO di localStorage; aturan FE "wajib PO approved untuk resolve" tidak ada di backend | Tidak terlihat user lain; aturan berbeda |
+| 5 | **E8** hapus input "Jumlah" pool item | Memblokir migrasi backend |
+| 6 | **E3** bypass super_admin di `hasPermission` & `ModuleSelection` | Tombol tulis selalu berakhir 403 |
+| 7 | **E4d** sambungkan layar ambang per jenis ke API (lihat E4d) | Angka ambang tidak pernah sampai ke database |
+| 8 | **E11** data demo rental/supply bercampur data asli | User tidak bisa membedakan kontrak asli dari contoh |
+
+**Tidak perlu sekarang** (tidak menimbulkan bug, bersihkan sambil lalu): kode mati
+`resolveDamageIssue` di `alatService.js` (mengirim `maintenanceSettingId` yang
+ditolak 400 kalau terisi), `sort/order` di `maintenanceService.js` (tidak dibaca
+backend), E5 (`level`), E6, log aktivitas.
+
+**Fitur pertama setelah daftar di atas:** layar **Finance approve PR**
+(`PUT /api/equipment/purchase-requests/:id/approve` + nominal aktual, dan reject
+oleh Finance). Tanpa ini alur Divisi Alat tidak pernah selesai — PR berhenti di
+`waiting_finance_approval`, jadi cash-out Kas Alat dan reset maintenance berbasis PO
+tidak pernah terjadi.
+
+## E18. Form "Unit Baru" rental & form supply disederhanakan
+
+Form terlalu detail dan masih merujuk konteks project konstruksi. Untuk request alat
+`external_rental`, backend hanya butuh: `equipmentTypeId`, `requestedQuantity`,
+`neededDate`, `locationDetail`, `estimatedWorkhours` (opsional), catatan.
+
+- **Preferensi merek/model dibuang** — wewenang Divisi Alat memilih unit, bukan
+  Admin/Lapangan saat mengajukan.
+- **Operator & paket (include solar / supir saja)** tetap dititipkan di catatan
+  untuk sekarang. Keduanya menentukan **biaya internal** (bayaran supir, BBM
+  ditanggung atau tidak), bukan tagihan klien — tarif alat ke klien hanya
+  workhour × rate. Kolom aslinya dirancang bersama modul pemakainya: Finance Field
+  & Labor Payroll (Build Order 7).
+- Form supply: buang isian yang merujuk tahapan/project konstruksi dengan cara yang sama.
 

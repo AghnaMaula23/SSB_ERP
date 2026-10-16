@@ -143,19 +143,20 @@ enum WorkhourSourceType {
 }
 
 model EquipmentType {
-  id           Int                    @id @default(autoincrement())
-  typeCode     String                 @unique @map("type_code") @db.VarChar(50)
-  typeName     String                 @map("type_name") @db.VarChar(150)
-  description  String?                @db.Text
-  isActive     Boolean                @default(true) @map("is_active")
+  id                    Int                                 @id @default(autoincrement())
+  typeCode              String                              @unique @map("type_code") @db.VarChar(50)
+  typeName              String                              @map("type_name") @db.VarChar(150)
+  description           String?                             @db.Text
+  isActive              Boolean                             @default(true) @map("is_active")
   // Counter asset code per jenis alat. Di-increment atomik saat unit baru
   // didaftarkan dan tidak pernah mundur, supaya nomor tidak pernah dipakai ulang.
-  lastSequence Int                    @default(0) @map("last_sequence")
-  createdAt    DateTime               @default(now()) @map("created_at")
-  updatedAt    DateTime               @updatedAt @map("updated_at")
-  items        EquipmentItem[]
-  poolItems    EquipmentPoolItem[]
-  requestItems EquipmentRequestItem[]
+  lastSequence          Int                                 @default(0) @map("last_sequence")
+  createdAt             DateTime                            @default(now()) @map("created_at")
+  updatedAt             DateTime                            @updatedAt @map("updated_at")
+  items                 EquipmentItem[]
+  poolItems             EquipmentPoolItem[]
+  requestItems          EquipmentRequestItem[]
+  maintenanceThresholds EquipmentTypeMaintenanceThreshold[]
 
   @@map("equipment_types")
 }
@@ -300,19 +301,19 @@ enum MaintenanceRecordStatus {
 
 /// Master aspek maintenance: oli mesin, filter udara, ban, servis berkala, dst.
 model MaintenanceAspect {
-  id                    Int      @id @default(autoincrement())
-  aspectCode            String   @unique @map("aspect_code") @db.VarChar(50)
-  aspectName            String   @map("aspect_name") @db.VarChar(150)
+  id               Int      @id @default(autoincrement())
+  aspectCode       String   @unique @map("aspect_code") @db.VarChar(50)
+  aspectName       String   @map("aspect_name") @db.VarChar(150)
   // Semua threshold maintenance berbasis JAM KERJA alat, digerakkan workhour log.
-  defaultThresholdValue Decimal? @map("default_threshold_value") @db.Decimal(12, 2)
   // Sisa jam saat peringatan mulai muncul. Default 50 -> warning saat sisa 50 jam.
-  warningLeadValue      Decimal  @default(50) @map("warning_lead_value") @db.Decimal(12, 2)
-  description           String?  @db.Text
-  isActive              Boolean  @default(true) @map("is_active")
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
+  warningLeadValue Decimal  @default(50) @map("warning_lead_value") @db.Decimal(12, 2)
+  description      String?  @db.Text
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
-  settings EquipmentMaintenanceSetting[]
+  settings       EquipmentMaintenanceSetting[]
+  typeThresholds EquipmentTypeMaintenanceThreshold[]
 
   @@map("maintenance_aspects")
 }
@@ -322,7 +323,11 @@ model EquipmentMaintenanceSetting {
   id                     Int                      @id @default(autoincrement())
   equipmentItemId        Int                      @map("equipment_item_id")
   maintenanceAspectId    Int                      @map("maintenance_aspect_id")
-  thresholdValue         Decimal                  @map("threshold_value") @db.Decimal(12, 2)
+  // Ambang TIDAK disimpan per unit (16 Okt 2026): dibaca dari ambang jenis alat
+  // lewat type_threshold_id. NULL = aspek ini tidak (lagi) berlaku untuk jenisnya,
+  // dan setting wajib nonaktif (CHECK). Kolom lama threshold_value masih ada di
+  // database (nullable, tidak dipakai) — DROP ditunda karena DB dev dipakai bersama.
+  typeThresholdId        Int?                     @map("type_threshold_id")
   // Jam terpakai sejak servis terakhir. Ditambah otomatis oleh workhour log.
   currentValueSinceReset Decimal                  @default(0) @map("current_value_since_reset") @db.Decimal(12, 2)
   status                 MaintenanceSettingStatus @default(normal)
@@ -334,12 +339,39 @@ model EquipmentMaintenanceSetting {
 
   equipmentItem            EquipmentItem                      @relation(fields: [equipmentItemId], references: [id])
   maintenanceAspect        MaintenanceAspect                  @relation(fields: [maintenanceAspectId], references: [id])
+  // Composite: ambang yang ditunjuk wajib untuk aspek yang sama
+  typeThreshold            EquipmentTypeMaintenanceThreshold? @relation(fields: [typeThresholdId, maintenanceAspectId], references: [id, maintenanceAspectId])
   maintenanceRecords       MaintenanceRecord[]
   purchaseMaintenanceItems EquipmentPurchaseMaintenanceItem[]
 
   @@unique([equipmentItemId, maintenanceAspectId])
   @@index([status])
+  @@index([typeThresholdId])
   @@map("equipment_maintenance_settings")
+}
+
+/// Ambang servis per JENIS alat × aspek (16 Okt 2026, menggantikan ambang per
+/// unit dan default per aspek). Barisnya sekaligus menyatakan "aspek ini berlaku
+/// untuk jenis ini": setiap unit jenis itu otomatis punya setting untuk aspek
+/// tersebut (dibuat saat unit didaftarkan, berganti jenis, atau saat ambang
+/// ditambahkan). Mengubah ambang langsung berlaku untuk semua unitnya.
+model EquipmentTypeMaintenanceThreshold {
+  id                  Int      @id @default(autoincrement())
+  equipmentTypeId     Int      @map("equipment_type_id")
+  maintenanceAspectId Int      @map("maintenance_aspect_id")
+  thresholdValue      Decimal  @map("threshold_value") @db.Decimal(12, 2)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  equipmentType     EquipmentType                 @relation(fields: [equipmentTypeId], references: [id])
+  maintenanceAspect MaintenanceAspect             @relation(fields: [maintenanceAspectId], references: [id])
+  settings          EquipmentMaintenanceSetting[]
+
+  @@unique([equipmentTypeId, maintenanceAspectId])
+  // Sasaran composite FK dari setting (ambang & aspek setting harus sejalan)
+  @@unique([id, maintenanceAspectId])
+  @@index([maintenanceAspectId])
+  @@map("equipment_type_maintenance_thresholds")
 }
 
 /// Histori tindakan maintenance. Dibuat setelah pekerjaan selesai.

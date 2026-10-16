@@ -381,6 +381,11 @@ const createItem = async (payload, user) => {
       },
     });
 
+    // Jadwal servis lahir bersama unitnya, dari ambang jenis alat. Baris jenis
+    // sudah terkunci oleh nextAssetCode, jadi ambang yang ditambahkan bersamaan
+    // tidak terlewat.
+    await maintenance.syncItemSettings(tx, created);
+
     return created;
   });
 
@@ -406,16 +411,25 @@ const updateItem = async (id, payload, user) => {
   const rateChanged =
     defaultHourlyRate !== undefined && toNumber(defaultHourlyRate) !== toNumber(item.defaultHourlyRate);
 
-  const updated = await prisma.equipmentItem.update({
-    where: { id },
-    data: {
-      ...writable,
-      ...(isActive !== undefined && { isActive }),
-      ...(equipmentTypeId !== undefined && { equipmentTypeId }),
-      ...(defaultHourlyRate !== undefined && { defaultHourlyRate }),
-      ...(rateChanged && { rateUpdatedAt: new Date() }),
-    },
-    include: { equipmentType: true },
+  const typeChanged = equipmentTypeId !== undefined && equipmentTypeId !== item.equipmentTypeId;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    if (typeChanged) await maintenance.lockEquipmentType(tx, equipmentTypeId);
+    const result = await tx.equipmentItem.update({
+      where: { id },
+      data: {
+        ...writable,
+        ...(isActive !== undefined && { isActive }),
+        ...(equipmentTypeId !== undefined && { equipmentTypeId }),
+        ...(defaultHourlyRate !== undefined && { defaultHourlyRate }),
+        ...(rateChanged && { rateUpdatedAt: new Date() }),
+      },
+      include: { equipmentType: true },
+    });
+    // Ganti jenis = ganti ambang servis: aspek yang sama tetap membawa hitungannya,
+    // aspek jenis lama dinonaktifkan, aspek jenis baru dibuatkan
+    if (typeChanged) await maintenance.syncItemSettings(tx, result);
+    return result;
   });
 
   return shapeItem(updated);

@@ -102,33 +102,35 @@ async function seedDivisiAlatDemo(adminUserId) {
 
   console.log('Seeding maintenance aspects...');
   const aspectDefs = [
-    { aspectCode: 'OLI-MSN', aspectName: 'Oli Mesin', defaultThresholdValue: 50, warningLeadValue: 10 },
-    { aspectCode: 'FLT-UDR', aspectName: 'Filter Udara', defaultThresholdValue: 40, warningLeadValue: 8 },
-    { aspectCode: 'FLT-SLR', aspectName: 'Filter Solar', defaultThresholdValue: 60, warningLeadValue: 12 },
-    { aspectCode: 'OLI-HDR', aspectName: 'Oli Hidrolik', defaultThresholdValue: 75, warningLeadValue: 15 },
+    { aspectCode: 'OLI-MSN', aspectName: 'Oli Mesin', warningLeadValue: 10 },
+    { aspectCode: 'FLT-UDR', aspectName: 'Filter Udara', warningLeadValue: 8 },
+    { aspectCode: 'FLT-SLR', aspectName: 'Filter Solar', warningLeadValue: 12 },
+    { aspectCode: 'OLI-HDR', aspectName: 'Oli Hidrolik', warningLeadValue: 15 },
   ];
   const aspects = {};
   for (const def of aspectDefs) {
     aspects[def.aspectCode] = await maintenanceSvc.createAspect(def);
   }
 
-  console.log('Seeding maintenance settings per unit...');
-  // Dump truck tidak punya lengan hidrolik seperti alat berat lainnya.
+  console.log('Seeding ambang servis per jenis alat...');
+  // Ambang per JENIS × aspek (jam kerja). Dump truck tidak punya lengan
+  // hidrolik seperti alat berat lainnya. Setting tiap unit dibuat OTOMATIS oleh
+  // upsertTypeThreshold — jalur yang sama dengan layar ambang Divisi Alat.
+  const thresholdHours = { 'OLI-MSN': 50, 'FLT-UDR': 40, 'FLT-SLR': 60, 'OLI-HDR': 75 };
   const aspectsByType = {
     EXC: ['OLI-MSN', 'FLT-UDR', 'FLT-SLR', 'OLI-HDR'],
     BLD: ['OLI-MSN', 'FLT-UDR', 'FLT-SLR', 'OLI-HDR'],
     WL: ['OLI-MSN', 'FLT-UDR', 'FLT-SLR', 'OLI-HDR'],
     DT: ['OLI-MSN', 'FLT-UDR', 'FLT-SLR'],
   };
+  for (const [typeCode, codes] of Object.entries(aspectsByType)) {
+    for (const aspectCode of codes) {
+      await maintenanceSvc.upsertTypeThreshold(types[typeCode].id, aspects[aspectCode].id, { thresholdValue: thresholdHours[aspectCode] });
+    }
+  }
   const settingsByItem = {};
   for (const def of itemDefs) {
-    settingsByItem[def.key] = [];
-    for (const aspectCode of aspectsByType[def.typeCode]) {
-      const setting = await maintenanceSvc.createSetting(items[def.key].id, {
-        maintenanceAspectId: aspects[aspectCode].id,
-      });
-      settingsByItem[def.key].push(setting);
-    }
+    settingsByItem[def.key] = await prisma.equipmentMaintenanceSetting.findMany({ where: { equipmentItemId: items[def.key].id } });
   }
 
   console.log('Mensimulasikan histori jam kerja (menggerakkan counter maintenance)...');

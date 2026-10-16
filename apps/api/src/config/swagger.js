@@ -1004,13 +1004,12 @@ const swaggerSpec = {
         responses: { 200: { description: 'Paginated list aspek + settingCount', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } } }
       },
       post: {
-        tags: ['Maintenance'], summary: 'Tambah aspek maintenance', description: 'Role: divisi_alat. Permission: maintenance:create. SEMUA threshold berbasis JAM KERJA alat — kolom `unit` tidak ada.',
+        tags: ['Maintenance'], summary: 'Tambah aspek maintenance', description: 'Role: divisi_alat. Permission: maintenance:create. SEMUA threshold berbasis JAM KERJA alat — kolom `unit` tidak ada. Ambang TIDAK diatur di aspek: `defaultThresholdValue` ditolak 400 (sejak 16 Okt 2026 ambang per jenis alat — lihat /equipment/types/{typeId}/maintenance-thresholds/{aspectId}).',
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['aspectCode', 'aspectName'],
           properties: {
             aspectCode: { type: 'string', example: 'OLI-MSN', description: 'Unik dan immutable' },
             aspectName: { type: 'string', example: 'Ganti Oli Mesin' },
-            defaultThresholdValue: { type: 'number', example: 250, description: 'Jam pakai antar servis. Dipakai sebagai nilai awal saat setting dibuat.' },
             warningLeadValue: { type: 'number', example: 50, default: 50, description: 'Sisa jam saat status berubah jadi warning. Default 50.' },
             description: { type: 'string' }
           }
@@ -1030,14 +1029,14 @@ const swaggerSpec = {
         requestBody: { content: { 'application/json': { schema: {
           type: 'object',
           properties: {
-            aspectName: { type: 'string' }, defaultThresholdValue: { type: 'number' },
+            aspectName: { type: 'string' },
             warningLeadValue: { type: 'number' }, description: { type: 'string' }, isActive: { type: 'boolean' }
           }
         }}}},
         responses: { 200: { description: 'Updated' }, 400: { description: 'aspectCode dikirim / validasi gagal' }, 404: { description: 'Tidak ditemukan' } }
       },
       delete: {
-        tags: ['Maintenance'], summary: 'Hapus aspek maintenance', description: 'Permission: maintenance:delete. Ditolak kalau masih dipakai setting alat.',
+        tags: ['Maintenance'], summary: 'Hapus aspek maintenance', description: 'Permission: maintenance:delete. Ditolak kalau masih berlaku untuk jenis alat atau dipakai setting alat — nonaktifkan saja.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         responses: { 200: { description: 'Deleted' }, 409: { description: 'Masih dipakai setting' } }
       }
@@ -1061,17 +1060,12 @@ const swaggerSpec = {
         responses: { 200: { description: 'Detail + remainingValue + status' }, 404: { description: 'Tidak ditemukan' } }
       },
       put: {
-        tags: ['Maintenance'], summary: 'Update setting maintenance', description: 'Permission: maintenance:update. Hanya `thresholdValue` dan `isActive`. `currentValueSinceReset` dan `status` dikelola sistem dan ditolak kalau dikirim.',
+        tags: ['Maintenance'], summary: 'Update setting maintenance', description: 'Permission: maintenance:update. Hanya `isActive` (mis. unit ini tidak punya komponen tersebut). `thresholdValue` DITOLAK — ambang mengikuti jenis alat. `currentValueSinceReset` dan `status` dikelola sistem. Mengaktifkan setting yang aspeknya tidak berlaku lagi untuk jenisnya → 409. Setting tidak bisa dihapus: dibuat & dinonaktifkan otomatis mengikuti ambang jenis.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { content: { 'application/json': { schema: {
-          type: 'object', properties: { thresholdValue: { type: 'number', example: 300 }, isActive: { type: 'boolean' } }
+          type: 'object', properties: { isActive: { type: 'boolean' } }
         }}}},
-        responses: { 200: { description: 'Updated, status dihitung ulang' }, 400: { description: 'Field terkelola sistem dikirim' }, 404: { description: 'Tidak ditemukan' } }
-      },
-      delete: {
-        tags: ['Maintenance'], summary: 'Hapus setting maintenance', description: 'Permission: maintenance:delete. Ditolak kalau sudah punya riwayat maintenance.',
-        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
-        responses: { 200: { description: 'Deleted' }, 409: { description: 'Sudah punya riwayat maintenance' } }
+        responses: { 200: { description: 'Updated, status dihitung ulang' }, 400: { description: 'Field terkelola sistem / thresholdValue dikirim' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'Aspek tidak berlaku untuk jenis alat ini' } }
       }
     },
     '/equipment/items/{itemId}/maintenance-settings': {
@@ -1084,21 +1078,31 @@ const swaggerSpec = {
           { in: 'query', name: 'isActive', schema: { type: 'boolean' } }
         ],
         responses: { 200: { description: 'Paginated settings milik alat ini' }, 404: { description: 'Unit alat tidak ditemukan' } }
+      }
+    },
+    // Ambang servis per jenis alat × aspek (16 Okt 2026) — dipakai layar ambang Divisi Alat.
+    // Setting per unit tidak lagi dibuat manual (POST /items/{itemId}/maintenance-settings dihapus).
+    '/equipment/maintenance-thresholds': {
+      get: {
+        tags: ['Maintenance'], summary: 'List ambang servis per jenis alat × aspek',
+        description: 'Permission: maintenance:read. Satu baris = aspek itu berlaku untuk jenis itu, dengan ambang jam kerjanya. Semua unit jenis itu memakai ambang ini (`thresholdValue` di setting unit adalah turunannya).',
+        parameters: [{ in: 'query', name: 'equipmentTypeId', schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Array { id, equipmentTypeId, maintenanceAspectId, thresholdValue, equipmentType, maintenanceAspect, updatedAt }' } }
+      }
+    },
+    '/equipment/types/{typeId}/maintenance-thresholds/{aspectId}': {
+      put: {
+        tags: ['Maintenance'], summary: 'Tambah / ubah ambang servis satu jenis alat',
+        description: 'Permission: maintenance:update. Upsert. Diterapkan ke SEMUA unit jenis itu di transaksi yang sama: unit lama langsung memakai angka baru (status dihitung ulang, hitungan jam tetap); unit yang belum punya setting aspek ini dibuatkan dengan hitungan mulai 0. Unit yang didaftarkan kemudian otomatis ikut. Aspek nonaktif → 409.',
+        parameters: [{ in: 'path', name: 'typeId', required: true, schema: { type: 'integer' } }, { in: 'path', name: 'aspectId', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['thresholdValue'], properties: { thresholdValue: { type: 'number', example: 250, description: 'Jam kerja antar servis, > 0' } } } } } },
+        responses: { 200: { description: 'Disimpan & diterapkan' }, 404: { description: 'Jenis / aspek tidak ditemukan' }, 409: { description: 'Aspek nonaktif' } }
       },
-      post: {
-        tags: ['Maintenance'], summary: 'Tambah maintenance setting ke alat', description: 'Role: divisi_alat. Permission: maintenance:create. Unik per (alat, aspek). `thresholdValue` boleh dikosongkan kalau aspeknya punya defaultThresholdValue.',
-        parameters: [{ in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } }],
-        requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['maintenanceAspectId'],
-          properties: {
-            maintenanceAspectId: { type: 'integer' },
-            thresholdValue: { type: 'number', example: 250, description: 'Jam pakai antar servis. Default dari aspek kalau dikosongkan.' }
-          }
-        }}}},
-        responses: {
-          201: { description: 'Created, counter mulai dari 0' }, 400: { description: 'Threshold tidak ada dan aspek tidak punya default' },
-          404: { description: 'Alat / aspek tidak ditemukan' }, 409: { description: 'Setting untuk aspek ini sudah ada / alat atau aspek nonaktif' }
-        }
+      delete: {
+        tags: ['Maintenance'], summary: 'Hapus ambang servis dari jenis alat',
+        description: 'Permission: maintenance:update. Aspek tidak berlaku lagi untuk jenis ini: setting unitnya dinonaktifkan (riwayat servis tetap). Menambahkan ambangnya lagi mengaktifkan kembali setting itu dengan hitungan mulai 0.',
+        parameters: [{ in: 'path', name: 'typeId', required: true, schema: { type: 'integer' } }, { in: 'path', name: 'aspectId', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Dihapus' }, 404: { description: 'Ambang tidak ada' } }
       }
     },
     '/equipment/maintenance-records': {

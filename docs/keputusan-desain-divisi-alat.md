@@ -317,3 +317,54 @@ untuk unit yang sama antre. Jalur reset tidak lewat kunci itu.
 - **Nama mekanik tidak dicatat** (keputusan 13 Okt): tidak ada data master
   mekanik. Backend sudah opsional; FE menghapus inputnya (`backlog-fe.md` E9).
   `maintenance_records.performed_by` dijadwalkan di-DROP bersama contract pool item.
+
+---
+
+## Ambang maintenance per jenis alat (16 Oktober 2026)
+
+Migrasi `20261016150000_maintenance_threshold_per_type`.
+
+**Masalah yang ditemukan:**
+- Setting maintenance per unit hanya bisa dibuat manual (`POST
+  /items/:itemId/maintenance-settings`, satu per aspek per unit), dan FE tidak
+  pernah memanggilnya. Unit yang didaftarkan lewat layar Register Item **tidak
+  punya jadwal servis sama sekali**.
+- Ambang per unit tidak pernah dipakai berbeda: ke-37 setting di DB dev memakai
+  angka yang sama persis dengan default aspeknya.
+- Layar ambang FE (per jenis × aspek) sudah memakai model yang benar, tapi
+  menyimpan ke localStorage karena endpoint per jenis belum ada (backlog E4d
+  keliru menyebut backend sudah tersedia).
+
+**Keputusan:**
+- Ambang servis diatur **per jenis alat × aspek** di tabel baru
+  `equipment_type_maintenance_thresholds`. Barisnya sekaligus menyatakan "aspek ini
+  berlaku untuk jenis ini". Tidak ada lagi ambang per unit maupun default per aspek.
+- Setting unit **dibuat otomatis** (`syncItemSettings`) saat unit didaftarkan,
+  berganti jenis, atau saat ambang ditambahkan ke jenisnya. Unit membaca ambang
+  lewat `type_threshold_id` (composite FK dengan aspek, supaya tidak bisa menunjuk
+  ambang aspek lain). Mengubah ambang jenis langsung berlaku untuk semua unitnya
+  dan status dihitung ulang; hitungan jam per unit tetap.
+- Ambang dihapus dari jenis → setting unitnya dinonaktifkan & dilepas (riwayat
+  tetap). Ditambah lagi → aktif kembali dengan hitungan mulai 0 (jam kerja tidak
+  dihitung selama nonaktif, jadi angka lamanya basi). CHECK: setting aktif wajib
+  punya ambang.
+- Per unit hanya boleh **dinonaktifkan** (unit tanpa komponen itu); pilihan ini
+  dipertahankan saat ambang jenis disimpan ulang. Tambah/hapus setting manual dan
+  `thresholdValue` per unit dibuang.
+- Diubah Divisi Alat lewat **layar ambang FE yang sudah ada**
+  (`MaintenanceThresholdPage`), disambung ke `GET /equipment/maintenance-thresholds`
+  dan `PUT|DELETE /equipment/types/:typeId/maintenance-thresholds/:aspectId`
+  (`maintenance:update`). Bentuk responsnya sengaja sama dengan data localStorage.
+- Konkurensi: semua jalur mengunci baris `equipment_types` (createItem lewat
+  increment `last_sequence`, jalur ambang lewat `FOR UPDATE`) — terbukti unit baru
+  yang didaftarkan bersamaan dengan aspek baru tetap mendapat setting-nya.
+
+**Migrasi data:** 15 pasangan jenis × aspek diisi dari setting yang ada; 37 setting
+ditautkan; 8 setting dilengkapi untuk dua unit (nonaktif) yang belum punya.
+
+**TERTUNDA (destruktif):** DROP `equipment_maintenance_settings.threshold_value`
+(sudah nullable) dan `maintenance_aspects.default_threshold_value` — keduanya sudah
+keluar dari schema & kode; ditunda karena DB dev dipakai bersama. Catatan: backend
+versi lama yang mencoba `POST /items/:itemId/maintenance-settings` akan ditolak CHECK
+(setting aktif tanpa ambang jenis).
+

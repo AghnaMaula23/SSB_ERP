@@ -1,6 +1,6 @@
 const service = require('./maintenance.service.js');
 const { success, created, paginated } = require('../../utils/response.js');
-const { pageParams, boolQuery } = require('../../utils/query.js');
+const { pageParams, boolQuery, numQuery } = require('../../utils/query.js');
 
 // --- Maintenance Aspects ---
 
@@ -73,13 +73,6 @@ const detailSetting = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const createSetting = async (req, res, next) => {
-  try {
-    const setting = await service.createSetting(Number(req.params.itemId), req.body);
-    return created(res, setting, 'Maintenance setting berhasil dibuat');
-  } catch (err) { next(err); }
-};
-
 const updateSetting = async (req, res, next) => {
   try {
     const setting = await service.updateSetting(Number(req.params.id), req.body);
@@ -87,10 +80,25 @@ const updateSetting = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const removeSetting = async (req, res, next) => {
+// --- Ambang per jenis alat ---
+
+const listTypeThresholds = async (req, res, next) => {
   try {
-    const result = await service.removeSetting(Number(req.params.id));
-    return success(res, result, 'Maintenance setting berhasil dihapus');
+    return success(res, await service.listTypeThresholds({ equipmentTypeId: numQuery(req.query.equipmentTypeId) }));
+  } catch (err) { next(err); }
+};
+
+const upsertTypeThreshold = async (req, res, next) => {
+  try {
+    const data = await service.upsertTypeThreshold(req.params.typeId, req.params.aspectId, req.body);
+    return success(res, data, 'Ambang servis jenis alat disimpan dan diterapkan ke semua unitnya');
+  } catch (err) { next(err); }
+};
+
+const removeTypeThreshold = async (req, res, next) => {
+  try {
+    const data = await service.removeTypeThreshold(req.params.typeId, req.params.aspectId);
+    return success(res, data, 'Ambang servis dihapus; setting unit terkait dinonaktifkan');
   } catch (err) { next(err); }
 };
 
@@ -143,6 +151,7 @@ const cancelRecord = async (req, res, next) => {
 
 module.exports = {
   listAspects, detailAspect, createAspect, updateAspect, removeAspect,
-  listSettings, listSettingsByItem, detailSetting, createSetting, updateSetting, removeSetting,
+  listSettings, listSettingsByItem, detailSetting, updateSetting,
+  listTypeThresholds, upsertTypeThreshold, removeTypeThreshold,
   listRecords, listRecordsByItem, detailRecord, createRecord, cancelRecord,
 };

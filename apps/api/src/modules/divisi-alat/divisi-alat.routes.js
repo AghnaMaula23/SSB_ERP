@@ -192,6 +192,10 @@ const itemIdParam = param('itemId').isInt({ min: 1 }).withMessage('ID alat tidak
 
 // --- Master aspek maintenance ---
 
+// Ambang servis kini per JENIS alat × aspek (16 Okt 2026) — default per aspek dibuang
+const noDefaultThreshold = body('defaultThresholdValue').not().exists()
+  .withMessage('Ambang servis diatur per jenis alat lewat /equipment/types/:typeId/maintenance-thresholds/:aspectId');
+
 router.get('/maintenance/aspects',
   authorize('maintenance:read'), validate(pageRules), maintenance.listAspects);
 
@@ -206,8 +210,7 @@ router.post('/maintenance/aspects',
       .matches(/^[A-Za-z0-9_-]+$/).withMessage('Kode aspek hanya boleh huruf, angka, underscore, dan strip'),
     body('aspectName').trim().notEmpty().withMessage('Nama aspek wajib diisi')
       .isLength({ max: 150 }).withMessage('Nama aspek maksimal 150 karakter'),
-    body('defaultThresholdValue').optional({ nullable: true })
-      .isFloat({ gt: 0 }).withMessage('Threshold default harus lebih dari 0 jam').toFloat(),
+    noDefaultThreshold,
     body('warningLeadValue').optional()
       .isFloat({ gt: 0 }).withMessage('Ambang peringatan harus lebih dari 0 jam').toFloat(),
     body('description').optional({ nullable: true }).trim(),
@@ -221,8 +224,7 @@ router.put('/maintenance/aspects/:id',
     body('aspectCode').not().exists().withMessage('Kode aspek tidak bisa diubah setelah dibuat'),
     body('aspectName').optional().trim().notEmpty().withMessage('Nama aspek tidak boleh kosong')
       .isLength({ max: 150 }).withMessage('Nama aspek maksimal 150 karakter'),
-    body('defaultThresholdValue').optional({ nullable: true })
-      .isFloat({ gt: 0 }).withMessage('Threshold default harus lebih dari 0 jam').toFloat(),
+    noDefaultThreshold,
     body('warningLeadValue').optional()
       .isFloat({ gt: 0 }).withMessage('Ambang peringatan harus lebih dari 0 jam').toFloat(),
     body('description').optional({ nullable: true }).trim(),
@@ -257,7 +259,8 @@ router.put('/maintenance-settings/:id',
   authorize('maintenance:update'),
   validate([
     idParam,
-    body('thresholdValue').optional().isFloat({ gt: 0 }).withMessage('Threshold harus lebih dari 0 jam').toFloat(),
+    body('thresholdValue').not().exists()
+      .withMessage('Ambang mengikuti jenis alat — ubah lewat /equipment/types/:typeId/maintenance-thresholds/:aspectId'),
     body('isActive').optional().isBoolean().withMessage('isActive harus boolean').toBoolean(),
     body('currentValueSinceReset').not().exists()
       .withMessage('Counter jam dikelola sistem dari workhour log dan reset maintenance'),
@@ -265,24 +268,37 @@ router.put('/maintenance-settings/:id',
   ]),
   maintenance.updateSetting);
 
-router.delete('/maintenance-settings/:id',
-  authorize('maintenance:delete'), validate([idParam]), maintenance.removeSetting);
-
 router.get('/items/:itemId/maintenance-settings',
   authorize('maintenance:read'),
   validate([itemIdParam, ...settingFilterRules]),
   maintenance.listSettingsByItem);
 
-router.post('/items/:itemId/maintenance-settings',
-  authorize('maintenance:create'),
-  validate([
-    itemIdParam,
-    body('maintenanceAspectId').isInt({ min: 1 })
-      .withMessage('maintenanceAspectId wajib diisi dan harus angka').toInt(),
-    body('thresholdValue').optional()
-      .isFloat({ gt: 0 }).withMessage('Threshold harus lebih dari 0 jam').toFloat(),
-  ]),
-  maintenance.createSetting);
+// Setting per unit TIDAK dibuat/dihapus manual lagi: lahir otomatis dari ambang
+// jenis alat (saat unit didaftarkan, berganti jenis, atau ambang ditambahkan).
+
+// --- Ambang servis per jenis alat × aspek ---
+// Dipakai layar ambang Divisi Alat (MaintenanceThresholdPage).
+
+const thresholdParams = [
+  param('typeId').isInt({ min: 1 }).withMessage('ID jenis alat tidak valid').toInt(),
+  param('aspectId').isInt({ min: 1 }).withMessage('ID aspek tidak valid').toInt(),
+];
+
+// TANPA .toInt() di query() — tidak berfungsi pada req.query di Express 5
+router.get('/maintenance-thresholds',
+  authorize('maintenance:read'),
+  validate([query('equipmentTypeId').optional().isInt({ min: 1 }).withMessage('equipmentTypeId harus angka')]),
+  maintenance.listTypeThresholds);
+
+// Tambah atau ubah (upsert) — diterapkan ke semua unit jenis itu di transaksi yang sama
+router.put('/types/:typeId/maintenance-thresholds/:aspectId',
+  authorize('maintenance:update'),
+  validate([...thresholdParams,
+    body('thresholdValue').isFloat({ gt: 0, max: 9999999999 }).withMessage('thresholdValue wajib, lebih dari 0 jam').toFloat()]),
+  maintenance.upsertTypeThreshold);
+
+router.delete('/types/:typeId/maintenance-thresholds/:aspectId',
+  authorize('maintenance:update'), validate(thresholdParams), maintenance.removeTypeThreshold);
 
 // --- Riwayat tindakan maintenance ---
 
