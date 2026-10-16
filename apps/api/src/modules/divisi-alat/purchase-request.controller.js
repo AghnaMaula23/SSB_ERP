@@ -44,14 +44,14 @@ const cancel = async (req, res, next) => {
 
 const validateByAdmin = async (req, res, next) => {
   try {
-    const result = await service.validateByAdmin(Number(req.params.id), req.user.id);
+    const result = await service.validateByAdmin(Number(req.params.id), req.user.id, req.body.notes);
     return success(res, result, 'Purchase request divalidasi dan diteruskan ke Finance');
   } catch (err) { next(err); }
 };
 
 const reject = async (req, res, next) => {
   try {
-    const result = await service.reject(Number(req.params.id), req.user.id, req.user.permissions);
+    const result = await service.reject(Number(req.params.id), req.user.id, req.user.permissions, req.body.notes);
     return success(res, result, 'Purchase request ditolak');
   } catch (err) { next(err); }
 };

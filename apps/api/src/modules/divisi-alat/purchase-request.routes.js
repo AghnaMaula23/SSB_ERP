@@ -109,12 +109,15 @@ const updateRules = [
   itemsMatchCategory,
 ];
 
-// Alasan validasi/penolakan/persetujuan BELUM punya tempat menyimpan: desainnya
-// menaruh itu di approval_task_logs (Approval Center, belum dibangun) dan header
-// PR sengaja tidak punya kolom teks. Ditolak terang-terangan daripada diterima
-// lalu dibuang diam-diam.
+// Catatan keputusan disimpan di header PR, kolom milik tahap yang bertindak
+// (admin_notes / finance_notes — Approval Center A5). Penolakan wajib beralasan:
+// pengaju perlu tahu apa yang harus diperbaiki.
+const optionalNotes = body('notes').optional({ nullable: true }).isString().trim();
+const requiredNotes = body('notes').isString().trim().notEmpty().withMessage('Alasan penolakan wajib diisi');
+
+// Pembatalan oleh pengaju tidak punya kolom catatan.
 const notesNotSupported = body('notes').not().exists()
-  .withMessage('Catatan approval belum bisa disimpan — tempatnya di Approval Center yang belum dibangun');
+  .withMessage('Pembatalan tidak menyimpan catatan');
 
 router.get('/',
   authorize('purchase-request:read'),
@@ -143,14 +146,14 @@ router.put('/:id/cancel',
 // (read-only kecuali manajemen akun, kebijakan 15 Okt 2026).
 router.put('/:id/validate',
   authorize('purchase-request:validate'),
-  validate([idParam, notesNotSupported]),
+  validate([idParam, optionalNotes]),
   controller.validateByAdmin);
 
 router.put('/:id/approve',
   authorize('purchase-request:approve'),
   validate([
     idParam,
-    notesNotSupported,
+    optionalNotes,
     body('approvedRepairItems').optional().isArray(),
     body('approvedRepairItems.*.repairItemId').if(body('approvedRepairItems').exists())
       .isInt({ min: 1 }).withMessage('repairItemId harus angka').toInt(),
@@ -177,7 +180,7 @@ router.put('/:id/approve',
 // pencairan); aturan per status diperiksa di service.
 router.put('/:id/reject',
   authorize('purchase-request:validate', 'purchase-request:approve'),
-  validate([idParam, notesNotSupported]),
+  validate([idParam, requiredNotes]),
   controller.reject);
 
 module.exports = router;

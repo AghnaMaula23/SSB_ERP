@@ -44,7 +44,7 @@ const detailInclude = {
     include: {
       maintenanceSetting: {
         select: {
-          id: true, status: true, thresholdValue: true, currentValueSinceReset: true,
+          id: true, status: true, currentValueSinceReset: true,
           equipmentItem: { select: { id: true, assetCode: true } },
           maintenanceAspect: { select: { id: true, aspectCode: true, aspectName: true } },
         },
@@ -68,8 +68,10 @@ const shapeRequest = (pr) => ({
   requestedBy: shapeUser(pr.requestedByUser),
   adminValidatedBy: shapeUser(pr.adminValidatedByUser),
   adminValidatedAt: pr.adminValidatedAt,
+  adminNotes: pr.adminNotes,
   financeApprovedBy: shapeUser(pr.financeApprovedByUser),
   financeApprovedAt: pr.financeApprovedAt,
+  financeNotes: pr.financeNotes,
   cancelledBy: shapeUser(pr.cancelledByUser),
   cancelledAt: pr.cancelledAt,
   createdAt: pr.createdAt,
@@ -547,7 +549,7 @@ const assertNotAdminValidator = (pr, userId) => {
 
 /** submitted -> waiting_finance_approval. Tidak ada status `admin_validated`:
  *  validasi Admin langsung melempar ke antrean Finance. */
-const validateByAdmin = async (id, userId) => {
+const validateByAdmin = async (id, userId, notes) => {
   const pr = await findRequestOrFail(id);
   if (pr.status !== 'submitted') {
     throw httpError(`Order berstatus "${pr.status}" tidak menunggu validasi Admin`, 409);
@@ -559,6 +561,7 @@ const validateByAdmin = async (id, userId) => {
       status: 'waiting_finance_approval',
       adminValidatedBy: userId,
       adminValidatedAt: new Date(),
+      adminNotes: notes || null,
     });
     return tx.equipmentPurchaseRequest.findUnique({ where: { id }, include: detailInclude });
   });
@@ -572,16 +575,16 @@ const REJECT_RULES = {
   submitted: {
     permission: 'purchase-request:validate',
     deniedMessage: 'Order yang belum divalidasi hanya bisa ditolak pemegang wewenang validasi Admin',
-    data: (userId) => ({ status: 'rejected_by_admin', adminValidatedBy: userId, adminValidatedAt: new Date() }),
+    data: (userId, notes) => ({ status: 'rejected_by_admin', adminValidatedBy: userId, adminValidatedAt: new Date(), adminNotes: notes }),
   },
   waiting_finance_approval: {
     permission: 'purchase-request:approve',
     deniedMessage: 'Order yang menunggu pencairan hanya bisa ditolak pemegang wewenang approval Finance',
-    data: (userId) => ({ status: 'rejected_by_finance', financeApprovedBy: userId, financeApprovedAt: new Date() }),
+    data: (userId, notes) => ({ status: 'rejected_by_finance', financeApprovedBy: userId, financeApprovedAt: new Date(), financeNotes: notes }),
   },
 };
 
-const reject = async (id, userId, userPermissions) => {
+const reject = async (id, userId, userPermissions, notes) => {
   const pr = await findRequestOrFail(id);
   assertNotOwnRequest(pr, userId, 'menolak');
 
@@ -590,7 +593,7 @@ const reject = async (id, userId, userPermissions) => {
   if (!userPermissions.includes(rule.permission)) throw httpError(rule.deniedMessage, 403);
 
   const updated = await prisma.$transaction(async (tx) => {
-    await claimTransition(tx.equipmentPurchaseRequest, { id, status: pr.status }, rule.data(userId));
+    await claimTransition(tx.equipmentPurchaseRequest, { id, status: pr.status }, rule.data(userId, notes));
     return tx.equipmentPurchaseRequest.findUnique({ where: { id }, include: detailInclude });
   });
   return shapeRequest(updated);
@@ -687,6 +690,7 @@ const approve = async (id, payload, userId) => {
       totalApprovedAmount,
       financeApprovedBy: userId,
       financeApprovedAt: new Date(),
+      financeNotes: payload.notes || null,
     });
 
     for (const write of writes) await write(tx);
