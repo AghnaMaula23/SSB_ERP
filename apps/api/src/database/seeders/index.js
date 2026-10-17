@@ -71,6 +71,11 @@ const PERMISSIONS = [
   { module: 'material-receipt', action: 'create', label: 'Catat penerimaan material + bukti, batalkan' },
   { module: 'material-stock', action: 'read',   label: 'Lihat stok material per tahapan' },
   { module: 'material-stock', action: 'create', label: 'Catat pemakaian & koreksi stok material, batalkan' },
+  // Berkas project (L8). Folder sistem & arsip penutupan ikut dibaca dengan :read
+  { module: 'project-file', action: 'read',   label: 'Lihat berkas project, folder sistem, dan arsip penutupan' },
+  { module: 'project-file', action: 'create', label: 'Buat folder dan unggah berkas project' },
+  { module: 'project-file', action: 'update', label: 'Ubah nama folder, ubah nama/deskripsi berkas, pindah folder' },
+  { module: 'project-file', action: 'delete', label: 'Buang berkas ke sampah, pulihkan, hapus folder kosong' },
   { module: 'equipment',  action: 'read',   label: 'Lihat master alat' },
   { module: 'equipment',  action: 'create', label: 'Tambah jenis/unit alat' },
   { module: 'equipment',  action: 'update', label: 'Ubah data dan status alat' },
@@ -158,6 +163,8 @@ const ROLE_PERMISSIONS = {
     'material-request:read', 'material-request:validate',
     // Admin memantau stok material tahapan (RM-5) — tanpa mencatat mutasi
     'material-stock:read',
+    // Pemilik halaman Files (L8) — dokumen project dikelola Admin kantor
+    'project-file:read', 'project-file:create', 'project-file:update', 'project-file:delete',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah

@@ -62,6 +62,7 @@ model User {
   materialDeliveriesCancelled     MaterialDelivery[]      @relation("MatDeliveryCancelledBy")
   filesUploaded                   File[]                  @relation("FileUploadedBy")
   filesTrashed                    File[]                  @relation("FileTrashedBy")
+  projectFoldersCreated           ProjectFileFolder[]     @relation("ProjectFolderCreatedBy")
   materialReceiptsCreated         MaterialReceipt[]       @relation("MatReceiptCreatedBy")
   materialReceiptsCancelled       MaterialReceipt[]       @relation("MatReceiptCancelledBy")
   stockMovementsCreated           MaterialStockMovement[] @relation("StockMovementCreatedBy")
@@ -922,6 +923,8 @@ model ConstructionProject {
   equipmentPools EquipmentPool[]
   materialPools  MaterialPool[]
 
+  fileFolders ProjectFileFolder[]
+
   @@index([status])
   @@map("construction_projects")
 }
@@ -950,6 +953,8 @@ model ExternalRentalProject {
   equipmentPools    EquipmentPool[]
   equipmentRequests EquipmentRequest[]
 
+  fileFolders ProjectFileFolder[]
+
   @@index([status])
   @@map("external_rental_projects")
 }
@@ -974,6 +979,8 @@ model ExternalSupplyProject {
   createdByUser    User?             @relation("SupplyProjectCreatedBy", fields: [createdBy], references: [id])
   materialRequests MaterialRequest[]
   materialPools    MaterialPool[]
+
+  fileFolders ProjectFileFolder[]
 
   @@index([status])
   @@map("external_supply_projects")
@@ -1016,8 +1023,12 @@ model SubProject {
   materialRequests     MaterialRequest[]
   stockMovements       MaterialStockMovement[]
 
+  fileFolders ProjectFileFolder[]
+
   // Satu construction project hanya boleh punya satu tahapan per tipe
   @@unique([constructionProjectId, subProjectType])
+  // Sasaran composite FK folder berkas: tahapan pasti milik project yang sama
+  @@unique([id, constructionProjectId])
   @@index([status])
   @@map("sub_projects")
 }
@@ -1576,9 +1587,64 @@ model File {
   trashedByUser  User?                      @relation("FileTrashedBy", fields: [trashedBy], references: [id])
   deliveryNoteOf MaterialDelivery?
   receiptProofOf MaterialReceiptAttachment?
+  projectFile    ProjectFile?
 
   @@index([status, trashedAt])
   @@map("files")
+}
+
+// ============================================================
+// BERKAS PROJECT (L8, docs/keputusan-desain-lampiran.md)
+// ============================================================
+
+/// Folder buatan user, SATU tingkat, milik tepat satu project (CHECK
+/// num_nonnulls = 1 — FK mana yang terisi sudah menyatakan jenisnya, jadi tanpa
+/// owner_type). `sub_project_id` = folder milik tahapan; composite FK ke
+/// sub_projects(id, construction_project_id) menjamin tahapannya milik project
+/// yang sama. Nama unik per tempat tanpa membedakan huruf — index ekspresi di SQL.
+/// Folder sistem (surat jalan, bukti penerimaan, arsip) TIDAK disimpan di sini.
+model ProjectFileFolder {
+  id                      Int      @id @default(autoincrement())
+  constructionProjectId   Int?     @map("construction_project_id")
+  externalRentalProjectId Int?     @map("external_rental_project_id")
+  externalSupplyProjectId Int?     @map("external_supply_project_id")
+  subProjectId            Int?     @map("sub_project_id")
+  name                    String   @db.VarChar(120)
+  createdBy               Int      @map("created_by")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  constructionProject   ConstructionProject?   @relation(fields: [constructionProjectId], references: [id], onDelete: Restrict)
+  externalRentalProject ExternalRentalProject? @relation(fields: [externalRentalProjectId], references: [id], onDelete: Restrict)
+  externalSupplyProject ExternalSupplyProject? @relation(fields: [externalSupplyProjectId], references: [id], onDelete: Restrict)
+  subProject            SubProject?            @relation(fields: [subProjectId, constructionProjectId], references: [id, constructionProjectId], onDelete: Restrict)
+  createdByUser         User                   @relation("ProjectFolderCreatedBy", fields: [createdBy], references: [id])
+  files                 ProjectFile[]
+
+  @@index([constructionProjectId])
+  @@index([externalRentalProjectId])
+  @@index([externalSupplyProjectId])
+  @@index([subProjectId])
+  @@map("project_file_folders")
+}
+
+/// Berkas di folder user. Pengunggah, ukuran, jenis, dan status sampah hidup di
+/// `files` (satu fakta). `name` = nama tampilan yang bisa diubah; nama unduhan
+/// tetap `files.original_name`.
+model ProjectFile {
+  id          Int      @id @default(autoincrement())
+  folderId    Int      @map("folder_id")
+  fileId      Int      @unique @map("file_id")
+  name        String   @db.VarChar(150)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  folder ProjectFileFolder @relation(fields: [folderId], references: [id])
+  file   File              @relation(fields: [fileId], references: [id])
+
+  @@index([folderId])
+  @@map("project_files")
 }
 
 // ============================================================

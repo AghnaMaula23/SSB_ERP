@@ -12,6 +12,8 @@ const { isInline } = require('./file-types.js');
 
 const SIGNED_URL_SECONDS = 5 * 60; // L5: link bisa diteruskan, jadi dibuat pendek
 const ORPHAN_AGE_MS = 24 * 60 * 60 * 1000;
+// L6: berkas project dihapus permanen 30 hari setelah MASUK sampah (per berkas)
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Siapa pemilik sebuah file dan permission apa yang dibutuhkan untuk
@@ -30,6 +32,11 @@ const OWNERS = [
     prefix: 'receipt-proofs',
     permission: 'material-request:read',
     find: (fileId) => prisma.materialReceiptAttachment.findUnique({ where: { fileId }, select: { id: true } }),
+  },
+  {
+    prefix: 'project-files',
+    permission: 'project-file:read',
+    find: (fileId) => prisma.projectFile.findUnique({ where: { fileId }, select: { id: true } }),
   },
 ];
 
@@ -144,4 +151,32 @@ const sweepOrphans = async () => {
   return { removed };
 };
 
-module.exports = { withUploadedFile, withUploadedFiles, markSuperseded, getDownloadUrl, sweepOrphans, shapeFile };
+/**
+ * Hapus permanen berkas yang sudah > 30 hari di sampah (L6). Hanya berkas project
+ * yang bisa masuk sampah. Baris DB dihapus DULU, baru objek storage: kalau storage
+ * gagal, objeknya jadi yatim dan tersapu sweepOrphans — tidak ada jalur yang
+ * meninggalkan baris tanpa file. Fungsi biasa: dijalankan `npm run files:cleanup`.
+ */
+const purgeTrash = async () => {
+  const cutoff = new Date(Date.now() - TRASH_RETENTION_MS);
+  const expired = await prisma.file.findMany({
+    where: { status: 'trashed', trashedAt: { lt: cutoff } },
+    select: { id: true, storageKey: true },
+  });
+  let removed = 0;
+  for (const file of expired) {
+    // Syarat diulang di WHERE: berkas yang baru saja dipulihkan tidak ikut terhapus
+    const deleted = await prisma.$transaction(async (tx) => {
+      await tx.projectFile.deleteMany({ where: { fileId: file.id, file: { status: 'trashed', trashedAt: { lt: cutoff } } } });
+      return tx.file.deleteMany({ where: { id: file.id, status: 'trashed', trashedAt: { lt: cutoff } } });
+    });
+    if (deleted.count === 0) continue;
+    await removeQuietly([file.storageKey]);
+    removed++;
+  }
+  return { removed };
+};
+
+module.exports = {
+  withUploadedFile, withUploadedFiles, markSuperseded, getDownloadUrl, sweepOrphans, purgeTrash, shapeFile,
+};

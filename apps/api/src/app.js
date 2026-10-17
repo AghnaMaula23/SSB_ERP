@@ -37,6 +37,7 @@ app.use('/api/material-deliveries', require('./modules/request-material/material
 app.use('/api/material-receipts',  require('./modules/request-material/material-receipt.routes.js'));
 app.use('/api/material-stock',     require('./modules/request-material/material-stock.routes.js'));
 app.use('/api/files',              require('./modules/file/file.routes.js'));
+app.use('/api/project-files',      require('./modules/project-file/project-file.routes.js'));
 app.use('/api/approval-queue',       require('./modules/approval-center/approval-queue.routes.js'));
 // Didaftarkan SEBELUM /api/equipment supaya jelas mana yang menangani
 // /purchase-requests — bukan bergantung pada fall-through router.
