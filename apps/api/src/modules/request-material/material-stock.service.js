@@ -2,6 +2,7 @@ const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { claimTransition } = require('../../utils/status-transition.js');
+const { assertContextOpen } = require('../project/context-lock.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 
 // ============================================================
@@ -155,6 +156,7 @@ const createMovement = async (payload, userId) => {
 
   const row = await prisma.$transaction(async (tx) => {
     await lockSubProject(tx, subProjectId);
+    await assertContextOpen(tx, { subProjectId });
     const created = await tx.materialStockMovement.create({
       data: { subProjectId, materialTypeId, movementType, quantity, movementDate, notes, createdBy: userId },
     });
@@ -178,6 +180,7 @@ const cancelMovement = async (id, { reason }, userId) => {
 
   const updated = await prisma.$transaction(async (tx) => {
     await lockSubProject(tx, row.subProjectId);
+    await assertContextOpen(tx, { subProjectId: row.subProjectId });
     await claimTransition(tx.materialStockMovement, { id, cancelledAt: null },
       { cancelledAt: new Date(), cancelledBy: userId, cancelReason: reason.trim() });
     if (row.movementType === 'adjustment_in') await assertNotNegative(tx, row.subProjectId, row.materialTypeId);

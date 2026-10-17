@@ -3,6 +3,7 @@ const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const { claimTransition } = require('../../utils/status-transition.js');
+const { assertContextOpen } = require('../project/context-lock.js');
 const { toNumber, toDateOnly, shapeActor, pickWritable, ACTOR_SELECT } = require('../../utils/shape.js');
 const fileService = require('../file/file.service.js');
 
@@ -160,6 +161,7 @@ const create = async (payload, upload, userId) => {
 
   try {
     const row = await fileService.withUploadedFile(upload, { prefix: FILE_PREFIX, userId }, async (tx, file) => {
+      await assertContextOpen(tx, contextOf(item.materialRequest));
       const deliveryCode = await nextDocumentNumber(tx, DELIVERY_DOC_TYPE, { pad: DELIVERY_DOC_PAD });
       const created = await tx.materialDelivery.create({
         data: {
@@ -186,6 +188,9 @@ const assertOwnActiveDelivery = (row, userId, action) => {
   if (row.cancelledAt) throw httpError(`Delivery ${row.deliveryCode} sudah dibatalkan`, 409);
   if (row.createdBy !== userId) throw httpError(`Hanya pencatat delivery ini yang boleh ${action}`, 403);
 };
+
+/** Konteks pemilik request — tahapan/kontrak yang ditutup terkunci (L8). */
+const contextOf = (request) => ({ subProjectId: request.subProjectId, externalSupplyProjectId: request.externalSupplyProjectId });
 
 /** Kunci baris delivery: pencatatan receipt vs pembatalan/ganti file antre di sini. */
 const lockDelivery = (tx, id) => tx.$queryRaw`SELECT id FROM material_deliveries WHERE id = ${id} FOR UPDATE`;
@@ -214,6 +219,7 @@ const replaceDeliveryNote = async (id, upload, userId) => {
 
   const updated = await fileService.withUploadedFile(upload, { prefix: FILE_PREFIX, userId }, async (tx, file) => {
     await assertNotReceived(tx, id, 'diganti surat jalannya');
+    await assertContextOpen(tx, contextOf(row.materialRequest));
     await claimTransition(tx.materialDelivery,
       { id, cancelledAt: null, deliveryNoteFileId: row.deliveryNoteFileId },
       { deliveryNoteFileId: file.id });
@@ -231,6 +237,7 @@ const cancel = async (id, { reason }, userId) => {
 
   const updated = await prisma.$transaction(async (tx) => {
     await assertNotReceived(tx, id, 'dibatalkan');
+    await assertContextOpen(tx, contextOf(row.materialRequest));
     await claimTransition(tx.materialDelivery, { id, cancelledAt: null },
       { cancelledAt: new Date(), cancelledBy: userId, cancelReason: reason.trim() });
     return findOrFail(id, tx);

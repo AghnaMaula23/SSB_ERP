@@ -2,6 +2,7 @@ const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const { claimTransition } = require('../../utils/status-transition.js');
+const { assertContextOpen } = require('../project/context-lock.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 const fileService = require('../file/file.service.js');
 const stock = require('./material-stock.service.js');
@@ -71,6 +72,9 @@ const shape = (row) => {
   };
 };
 
+/** Konteks pemilik request — tahapan/kontrak yang ditutup terkunci (L8). */
+const contextOf = (request) => ({ subProjectId: request.subProjectId, externalSupplyProjectId: request.externalSupplyProjectId });
+
 const findOrFail = async (id, client = prisma) => {
   const row = await client.materialReceipt.findUnique({ where: { id }, include: INCLUDE });
   if (!row) throw httpError('Receipt tidak ditemukan', 404);
@@ -100,7 +104,7 @@ const getById = async (id) => shape(await findOrFail(id));
 const create = async (payload, uploads, userId) => {
   const delivery = await prisma.materialDelivery.findUnique({
     where: { id: payload.materialDeliveryId },
-    include: { materialRequest: { select: { requestType: true } } },
+    include: { materialRequest: { select: { requestType: true, subProjectId: true, externalSupplyProjectId: true } } },
   });
   if (!delivery) throw httpError(`Delivery dengan ID ${payload.materialDeliveryId} tidak ditemukan`, 404);
   if (delivery.cancelledAt) throw httpError(`Delivery ${delivery.deliveryCode} sudah dibatalkan`, 409);
@@ -129,6 +133,7 @@ const create = async (payload, uploads, userId) => {
   try {
     const row = await fileService.withUploadedFiles(uploads, { prefix: FILE_PREFIX, userId }, async (tx, files) => {
       await lockDelivery(tx, delivery.id);
+      await assertContextOpen(tx, contextOf(delivery.materialRequest));
       const current = await tx.materialDelivery.findUnique({ where: { id: delivery.id }, select: { cancelledAt: true } });
       if (current.cancelledAt) throw httpError(`Delivery ${delivery.deliveryCode} baru saja dibatalkan`, 409);
       const active = await tx.materialReceipt.findFirst({ where: { materialDeliveryId: delivery.id, cancelledAt: null }, select: { receiptCode: true } });
@@ -177,6 +182,7 @@ const cancel = async (id, { reason }, userId) => {
 
   const updated = await prisma.$transaction(async (tx) => {
     if (subProjectId) await stock.lockSubProject(tx, subProjectId);
+    await assertContextOpen(tx, contextOf(row.materialDelivery.materialRequest));
     await claimTransition(tx.materialReceipt, { id, cancelledAt: null },
       { cancelledAt: new Date(), cancelledBy: userId, cancelReason: reason.trim() });
     if (subProjectId) await stock.assertNotNegative(tx, subProjectId, materialTypeId);

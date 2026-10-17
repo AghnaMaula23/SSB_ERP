@@ -1,6 +1,7 @@
 const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { claimTransition } = require('../../utils/status-transition.js');
+const { CLOSED_STATUSES, lockForClosing, assertNothingOpen } = require('./context-lock.js');
 const { toNumber, toDateOnly, coerceDates, pickWritable, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 
 // Urutan tahapan baku. Dipakai sebagai sequenceOrder default dan sebagai acuan
@@ -351,6 +352,34 @@ const assertNoOtherActiveStage = async (tx, subProject) => {
   }
 };
 
+/**
+ * Tahapan yang ditutup (completed ATAU cancelled — keduanya final) terkunci
+ * datanya (L8). Karena itu tidak boleh ada urusan yang tertinggal di tengah
+ * jalan: alat yang masih teralokasi menggantung, progress/request yang menunggu
+ * keputusan tidak akan pernah bisa diputuskan, material di jalan tidak pernah
+ * bisa diterima. Dihitung SETELAH baris tahapan dikunci (lockForClosing).
+ */
+const assertStageClosable = async (tx, row) => {
+  await lockForClosing(tx, 'subProjectId', row.id);
+  const subProjectId = row.id;
+  const [allocations, progress, materialRequests, equipmentRequests, undelivered] = await Promise.all([
+    tx.subProjectEquipmentAllocation.count({ where: { subProjectId, status: 'assigned' } }),
+    tx.dailyProgressLog.count({ where: { subProjectId, status: 'submitted' } }),
+    tx.materialRequest.count({ where: { subProjectId, status: { in: ['submitted', 'waiting_finance_approval'] } } }),
+    tx.equipmentRequest.count({ where: { subProjectId, status: { in: ['submitted', 'equipment_review'] } } }),
+    tx.materialDelivery.count({
+      where: { cancelledAt: null, materialRequest: { subProjectId }, receipts: { none: { cancelledAt: null } } },
+    }),
+  ]);
+  assertNothingOpen(`Tahapan ${row.subProjectType}`, [
+    [allocations, 'alat masih teralokasi'],
+    [progress, 'progress harian menunggu validasi'],
+    [materialRequests, 'request material menunggu keputusan'],
+    [equipmentRequests, 'request alat menunggu keputusan'],
+    [undelivered, 'surat jalan belum diterima'],
+  ]);
+};
+
 const changeStatus = async (projectId, id, status) => {
   const row = await findOrFail(projectId, id);
 
@@ -366,22 +395,9 @@ const changeStatus = async (projectId, id, status) => {
     );
   }
 
-  // Menutup tahapan sementara alat masih terikat padanya membuat alat itu
-  // menggantung: alokasinya hidup tapi tahapannya tidak lagi mencatat progress.
-  if (status === 'completed') {
-    const activeAllocations = await prisma.subProjectEquipmentAllocation.count({
-      where: { subProjectId: id, status: 'assigned' },
-    });
-    if (activeAllocations > 0) {
-      throw httpError(
-        `Masih ada ${activeAllocations} alat teralokasi ke tahapan ini. Selesaikan atau kembalikan alatnya dulu.`,
-        409
-      );
-    }
-  }
-
   const updated = await prisma.$transaction(async (tx) => {
     if (status === 'active') await assertNoOtherActiveStage(tx, row);
+    if (CLOSED_STATUSES.includes(status)) await assertStageClosable(tx, row);
     await claimTransition(tx.subProject, { id, status: row.status }, { status });
     return tx.subProject.findUnique({
       where: { id },

@@ -2,6 +2,8 @@ const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const { toDateOnly, coerceDates, pickWritable, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
+const { claimTransition } = require('../../utils/status-transition.js');
+const { CLOSED_STATUSES, lockForClosing, assertNothingOpen } = require('./context-lock.js');
 
 // ============================================================
 // Tiga tipe project sengaja DIPISAH FISIK (keputusan PM), bukan satu tabel
@@ -186,6 +188,39 @@ const STATUS_TRANSITIONS = {
   cancelled: [],
 };
 
+/**
+ * Project yang ditutup (completed ATAU cancelled) terkunci datanya (L8) — tidak
+ * boleh ada urusan tertinggal. Dihitung setelah baris project dikunci FOR UPDATE.
+ * - Construction: semua tahapan sudah ditutup — data hidup di tahapan, dan
+ *   tahapan punya syaratnya sendiri (sub-project.service).
+ * - Supply: request material menunggu keputusan, surat jalan belum diterima.
+ * - Rental: request alat menunggu keputusan Divisi Alat.
+ */
+const assertProjectClosable = async (tx, config, id) => {
+  if (config.model === 'constructionProject') {
+    await tx.$queryRaw`SELECT id FROM construction_projects WHERE id = ${id} FOR UPDATE`;
+    const openStages = await tx.subProject.count({ where: { constructionProjectId: id, status: { in: ['planned', 'active'] } } });
+    return assertNothingOpen('Project', [[openStages, 'tahapan belum ditutup (selesaikan atau batalkan tahapannya dulu)']]);
+  }
+  if (config.model === 'externalSupplyProject') {
+    await lockForClosing(tx, 'externalSupplyProjectId', id);
+    const [requests, undelivered] = await Promise.all([
+      tx.materialRequest.count({ where: { externalSupplyProjectId: id, status: { in: ['submitted', 'waiting_finance_approval'] } } }),
+      tx.materialDelivery.count({
+        where: { cancelledAt: null, materialRequest: { externalSupplyProjectId: id }, receipts: { none: { cancelledAt: null } } },
+      }),
+    ]);
+    return assertNothingOpen('Kontrak supply', [
+      [requests, 'request material menunggu keputusan'], [undelivered, 'surat jalan belum diterima'],
+    ]);
+  }
+  await lockForClosing(tx, 'externalRentalProjectId', id);
+  const requests = await tx.equipmentRequest.count({
+    where: { externalRentalProjectId: id, status: { in: ['submitted', 'equipment_review'] } },
+  });
+  return assertNothingOpen('Kontrak rental', [[requests, 'request alat menunggu keputusan']]);
+};
+
 const changeStatus = async (kind, id, status) => {
   const { config, row } = await findOrFail(kind, id);
 
@@ -201,25 +236,10 @@ const changeStatus = async (kind, id, status) => {
     );
   }
 
-  // Construction project tidak boleh ditutup kalau masih ada tahapan berjalan —
-  // menutupnya membuat progress tahapan itu berhenti dihitung padahal
-  // pekerjaannya masih jalan, dan tagihannya jadi mandek tanpa jejak.
-  if (status === 'completed' && config.model === 'constructionProject') {
-    const openStages = await prisma.subProject.count({
-      where: { constructionProjectId: id, status: { in: ['planned', 'active'] } },
-    });
-    if (openStages > 0) {
-      throw httpError(
-        `Masih ada ${openStages} sub-project yang belum selesai atau dibatalkan. Tutup atau batalkan tahapannya dulu.`,
-        409
-      );
-    }
-  }
-
-  const updated = await prisma[config.model].update({
-    where: { id },
-    data: { status },
-    include: includeFor(config),
+  const updated = await prisma.$transaction(async (tx) => {
+    if (CLOSED_STATUSES.includes(status)) await assertProjectClosable(tx, config, id);
+    await claimTransition(tx[config.model], { id, status: row.status }, { status });
+    return tx[config.model].findUnique({ where: { id }, include: includeFor(config) });
   });
   return shapeProject(config, updated);
 };

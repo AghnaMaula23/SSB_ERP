@@ -509,7 +509,7 @@ Tetap mock — **wajar**, backend-nya belum dibangun. Dicatat supaya tidak dikir
 | Klaim pendapatan alat (`incomeClaimService.js`) | localStorage | Build Order 6 (E4b) |
 | Verifikasi kas lapangan (`fieldCashMockService.js`) | localStorage | Build Order 7 |
 | Pekerja per tahapan (`fieldMockService.js`) | localStorage | Build Order 7 (Labor Payroll) |
-| Folder & berkas proyek (`admin/files`, `fileStore.js`) | localStorage + IndexedDB | **Terblokir BE** — keputusannya sudah ada (`docs/keputusan-desain-lampiran.md` L7: folder project satu tingkat + folder sistem baca-saja untuk surat jalan & bukti penerimaan), tapi API berkas project belum dibangun (lampiran tahap 3) |
+| Folder & berkas proyek (`admin/files`, `fileStore.js`) | localStorage + IndexedDB | **API tersedia (17 Okt 2026), kecuali Arsip Penutupan (menyusul)** — Swagger tag *Project Files* + `docs/keputusan-desain-lampiran.md` L8. Susunan berubah: halaman atas = daftar project, lalu tahapan (konstruksi), lalu folder. Kategori, tag, tahun manual & arsip manual dibuang; hapus = sampah 30 hari; folder "Arsip Penutupan" (XLSX otomatis saat tahapan/project ditutup). `fileStore.js` & `projectSources.js` bisa diganti sekarang; unduh lewat `GET /api/files/{file.id}/url` |
 | Log aktivitas / notifikasi (`activityLogService.js`) | localStorage | Tidak direncanakan — boleh tetap lokal |
 
 **Aturan untuk modul berikutnya:** sebelum membuat layar untuk modul yang
@@ -609,3 +609,33 @@ bagian "Workhour — koreksi, sesi rental, operator".
   (Lapangan, Divisi Alat). Tombol "Batalkan" per baris timesheet + isian alasan. Koreksi =
   batalkan lalu catat ulang (tidak ada edit). Response `maintenanceImpact` = setting yang
   counternya ditarik. 409 kalau tahapan/kontrak sudah ditutup.
+
+## E24. Unduh data tabel sebelum tahapan/project ditutup (17 Okt 2026)
+
+Keputusan L8 (`docs/keputusan-desain-lampiran.md`): arsip XLSX dibuat backend HANYA saat
+tahapan/project ditutup. Selama berjalan, data diunduh dari halaman sumbernya — tombol
+CSV di FE. Audit 17 Okt:
+
+- **Belum punya CSV:** `SubProjectVolumePage` (kontrak volume / progress harian),
+  `InventoryPage` + `InventoryMovementPage` (stok, mutasi, penerimaan material),
+  `SubProjectEquipmentPage` (alokasi alat). `WorkersPage` menyusul bersama API Pekerja.
+- **Perbaiki `utils/csv.js`** (dipakai semua tombol CSV):
+  - tambah BOM `\uFEFF` di awal — tanpa itu Excel salah membaca huruf non-ASCII;
+  - pakai pemisah `;` — Excel berlocale Indonesia membuka CSV koma sebagai satu kolom.
+- **CSV harus memuat SEMUA baris, bukan yang tampil.** `TimesheetPage` & rental
+  `UnitTimesheet` memuat maksimal 100 log (`limit: 100`); CSV-nya terpotong diam-diam.
+  Ambil semua halaman (`meta.total`) sebelum menyusun CSV.
+
+## E25. Menutup tahapan/project kini bersyarat & mengunci data (17 Okt 2026)
+
+Detail: `docs/keputusan-desain-lampiran.md` L8 "Tahapan / project selesai = terkunci".
+
+- `PUT .../sub-projects/:id/status` dengan `completed` **atau** `cancelled` → **409** selama
+  masih ada alat teralokasi, progress `submitted`, request material/alat menunggu keputusan,
+  atau surat jalan belum diterima. Pesan menyebut semuanya sekaligus — tampilkan apa adanya.
+- Project konstruksi (`completed`/`cancelled`) → 409 selama ada tahapan planned/active.
+  Supply → 409 selama ada request material menunggu atau surat jalan belum diterima.
+  Rental → 409 selama ada request alat menunggu.
+- Setelah ditutup, tombol ubah/validasi progress, mutasi stok, penerimaan, delivery,
+  validasi/biaya/approve request material, jam kerja, dan operator dibalas **409
+  "... datanya terkunci"**. Sebaiknya disembunyikan untuk tahapan/kontrak yang ditutup.

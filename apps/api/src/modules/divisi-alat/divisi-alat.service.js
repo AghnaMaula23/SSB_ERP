@@ -4,6 +4,7 @@ const { assertNotFuture } = require('../../utils/date.js');
 const maintenance = require('./maintenance.service.js');
 const { toNumber, toDateOnly, pickWritable, ACTOR_SELECT } = require('../../utils/shape.js');
 const { claimTransition } = require('../../utils/status-transition.js');
+const { assertContextOpen } = require('../project/context-lock.js');
 
 const MAX_WORKHOUR_PER_DAY = 24;
 
@@ -598,8 +599,15 @@ const loadPoolItemContext = (client, id) => client.equipmentPoolItem.findUnique(
   },
 });
 
+/** Baris yang dikunci (FOR SHARE) saat menulis — sama dengan yang dikunci penutupan (L8). */
+const lockContextOf = (sourceType, context) => {
+  if (sourceType === 'internal_project') return { subProjectId: context.subProject.id };
+  if (sourceType === 'external_rental') return { externalRentalProjectId: context.equipmentPool.externalRentalProject.id };
+  return {};
+};
+
 /** Tahapan / kontrak rental pemilik log masih terbuka? Dipakai catat & batal. */
-const assertContextOpen = (sourceType, context) => {
+const assertWorkContextOpen = (sourceType, context) => {
   if (sourceType === 'internal_project' && context.subProject.status !== 'active') {
     throw httpError(`Tahapan berstatus "${context.subProject.status}" — jam kerjanya sudah terkunci`, 409);
   }
@@ -636,7 +644,7 @@ const resolveWorkhourContext = async (payload) => {
       throw httpError('manual_adjustment tidak terikat alokasi maupun pool item', 400);
     }
     if (!claimedItemId) throw httpError('equipmentItemId wajib diisi untuk manual_adjustment', 400);
-    return { equipmentItemId: claimedItemId, subProjectEquipmentAllocationId: null, equipmentPoolItemId: null };
+    return { equipmentItemId: claimedItemId, subProjectEquipmentAllocationId: null, equipmentPoolItemId: null, lock: {} };
   }
 
   const contextId = payload[rule.required];
@@ -667,7 +675,7 @@ const resolveWorkhourContext = async (payload) => {
       throw httpError(`Pool item berstatus "${context.status}" — unit ini tidak pernah bekerja di kontrak ini`, 409);
     }
   }
-  assertContextOpen(sourceType, context);
+  assertWorkContextOpen(sourceType, context);
 
   const derivedItemId = context.equipmentItemId;
   if (!derivedItemId) {
@@ -688,6 +696,7 @@ const resolveWorkhourContext = async (payload) => {
     equipmentItemId: derivedItemId,
     subProjectEquipmentAllocationId: sourceType === 'internal_project' ? contextId : null,
     equipmentPoolItemId: sourceType === 'external_rental' ? contextId : null,
+    lock: lockContextOf(sourceType, context),
   };
 };
 
@@ -732,12 +741,15 @@ const lockEquipmentItem = (tx, id) => tx.$queryRaw`SELECT id FROM equipment_item
  * di luar transaksi).
  */
 const recordEntries = async (context, sourceType, workDate, entries, userId) => {
-  const { equipmentItemId } = context;
+  const { lock, ...link } = context;
+  const { equipmentItemId } = link;
   const work = assertNotFuture(workDate, 'Tanggal kerja');
   const newHours = round2(entries.reduce((sum, e) => sum + Number(e.totalWorkhour), 0));
 
   try {
     return await prisma.$transaction(async (tx) => {
+      // Tahapan/kontrak yang ditutup bersamaan tidak bisa lolos (cek di luar transaksi hanya untuk pesan)
+      await assertContextOpen(tx, lock);
       await lockEquipmentItem(tx, equipmentItemId);
       const item = await tx.equipmentItem.findUnique({ where: { id: equipmentItemId } });
       if (!item) throw httpError(`Unit alat dengan ID ${equipmentItemId} tidak ditemukan`, 404);
@@ -767,7 +779,7 @@ const recordEntries = async (context, sourceType, workDate, entries, userId) => 
           data: {
             // Seluruh konteks (equipmentItemId + FK alokasi/pool item) berasal dari
             // resolveWorkhourContext, bukan dari request body.
-            ...context,
+            ...link,
             workDate: work,
             workSession: entry.workSession ?? null,
             startedAt: entry.startedAt ? new Date(entry.startedAt) : null,
@@ -859,14 +871,20 @@ const voidWorkhourLog = async (id, { reason }, userId) => {
   if (!log) throw httpError('Workhour log tidak ditemukan', 404);
   if (log.isVoided) throw httpError('Workhour log ini sudah dibatalkan', 409);
 
+  let lock = {};
   if (log.subProjectEquipmentAllocationId) {
-    assertContextOpen('internal_project', await loadAllocationContext(prisma, log.subProjectEquipmentAllocationId));
+    const context = await loadAllocationContext(prisma, log.subProjectEquipmentAllocationId);
+    assertWorkContextOpen('internal_project', context);
+    lock = lockContextOf('internal_project', context);
   } else if (log.equipmentPoolItemId) {
-    assertContextOpen('external_rental', await loadPoolItemContext(prisma, log.equipmentPoolItemId));
+    const context = await loadPoolItemContext(prisma, log.equipmentPoolItemId);
+    assertWorkContextOpen('external_rental', context);
+    lock = lockContextOf('external_rental', context);
   }
 
   const hours = toNumber(log.totalWorkhour);
   const result = await prisma.$transaction(async (tx) => {
+    await assertContextOpen(tx, lock);
     await lockEquipmentItem(tx, log.equipmentItemId);
     await claimTransition(tx.equipmentWorkhourLog, { id, isVoided: false }, {
       isVoided: true, voidReason: reason, voidedBy: userId, voidedAt: new Date(),

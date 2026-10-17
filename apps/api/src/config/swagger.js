@@ -19,6 +19,44 @@ const swaggerSpec = {
       }
     },
     schemas: {
+      ProjectFolderEntry: {
+        type: 'object',
+        description: 'Satu folder di direktori project. `kind: user` = folder buatan Admin (bisa di-rename/hapus). `kind: system` = baca-saja: lampiran modul (`delivery-notes`, `receipt-proofs`, dibaca dari tabel sumber — tidak disalin) atau `closing-archive` ("Arsip Penutupan", XLSX yang dibuat SEKALI saat tahapan/project ditutup). Ringkasan dihitung saat dibaca.',
+        properties: {
+          kind: { type: 'string', enum: ['user', 'system'] },
+          id: { type: 'integer', nullable: true, description: 'Hanya `user`' },
+          key: { type: 'string', nullable: true, enum: ['delivery-notes', 'receipt-proofs', 'closing-archive'], description: 'Hanya `system`' },
+          name: { type: 'string', example: 'Surat Jalan' },
+          subProjectId: { type: 'integer', nullable: true, description: 'Folder milik tahapan (konstruksi); null = tingkat project' },
+          fileCount: { type: 'integer', description: 'Berkas aktif (sampah tidak dihitung)' },
+          totalSize: { type: 'integer', description: 'Byte' },
+          lastUploadAt: { type: 'string', format: 'date-time', nullable: true },
+          createdBy: { type: 'object', nullable: true, properties: { id: { type: 'integer' }, username: { type: 'string' }, fullName: { type: 'string' } } },
+          createdAt: { type: 'string', format: 'date-time', nullable: true },
+        },
+      },
+      ProjectFile: {
+        type: 'object',
+        description: 'Berkas di folder user. Pengunggah, ukuran, jenis & status sampah hidup di tabel `files` (satu fakta), bukan disalin ke sini. Buka/unduh lewat `GET /api/files/{file.id}/url`.',
+        properties: {
+          id: { type: 'integer' },
+          folderId: { type: 'integer' },
+          folderName: { type: 'string' },
+          name: { type: 'string', example: 'Gambar Teknik Jembatan Rev-3', description: 'Nama tampilan, bisa diubah' },
+          description: { type: 'string', nullable: true },
+          kind: { type: 'string', enum: ['image', 'pdf', 'sheet', 'doc', 'cad'], description: 'Turunan dari mimeType' },
+          file: { type: 'object', properties: {
+            id: { type: 'integer' }, originalName: { type: 'string', description: 'Nama saat diunggah — dipakai sebagai nama unduhan' },
+            mimeType: { type: 'string' }, sizeBytes: { type: 'integer' }, uploadedAt: { type: 'string', format: 'date-time' },
+            uploadedBy: { type: 'object', properties: { id: { type: 'integer' }, username: { type: 'string' }, fullName: { type: 'string' } } },
+          } },
+          trashedAt: { type: 'string', format: 'date-time', nullable: true },
+          trashedBy: { type: 'object', nullable: true },
+          purgeAt: { type: 'string', format: 'date-time', nullable: true, description: 'Hanya di sampah: trashedAt + 30 hari — sesudahnya dihapus permanen' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
       ApprovalQueueItem: {
         type: 'object',
         description: 'Satu baris antrean Approval Center. Ringkasan untuk list — detail & aksi selalu lewat endpoint modul sumber.',
@@ -113,6 +151,7 @@ const swaggerSpec = {
     { name: 'Material Receipt', description: 'Penerimaan material per delivery (RM-5)' },
     { name: 'Material Stock', description: 'Stok material per tahapan konstruksi (RM-5)' },
     { name: 'Files', description: 'Unduh lampiran lewat signed URL' },
+    { name: 'Project Files', description: 'Berkas project: folder user, folder sistem baca-saja (lampiran modul + arsip penutupan XLSX), sampah 30 hari (L8)' },
     { name: 'Approval Center', description: 'Antrean baca-saja lintas modul (VIEW approval_queue). Aksi tetap di modul sumber' },
     { name: 'Income Records', description: 'Pencatatan pendapatan dan billing' },
     { name: 'Income Payments', description: 'Pembayaran client' },
@@ -408,7 +447,7 @@ const swaggerSpec = {
     '/projects/construction/{id}/status': {
       put: {
         tags: ['Construction Projects'], summary: 'Ubah status project',
-        description: 'Permission: project:update. Status diubah lewat endpoint SENDIRI supaya tidak pernah jadi efek samping edit data biasa. Transisi sah: planned→active|cancelled, active→planned|completed|cancelled. `completed` dan `cancelled` FINAL. Menutup project DITOLAK 409 kalau masih ada sub-project berstatus planned/active.',
+        description: 'Permission: project:update. Status diubah lewat endpoint SENDIRI supaya tidak pernah jadi efek samping edit data biasa. Transisi sah: planned→active|cancelled, active→planned|completed|cancelled. `completed` dan `cancelled` FINAL. Menutup project (`completed` MAUPUN `cancelled`, sejak 17 Okt 2026) DITOLAK 409 kalau masih ada sub-project berstatus planned/active — batalkan/selesaikan tahapannya dulu. Menutup (`completed`/`cancelled`) membuat arsip `project-summary` (rekap tahapan) dalam transaksi yang sama — 503 kalau storage tidak tersedia, status tidak berubah (L8).',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['status'],
@@ -500,7 +539,7 @@ const swaggerSpec = {
     '/projects/construction/{projectId}/sub-projects/{id}/status': {
       put: {
         tags: ['Sub-Projects'], summary: 'Ubah status tahapan',
-        description: 'Permission: sub-project:update. Mengaktifkan tahapan yang pendahulunya belum selesai BERHASIL, tapi response memuat `sequenceWarning` berisi daftar tahapan pendahulu yang masih terbuka — urutan tidak diblokir karena ERD menyebut "atau berdasarkan kesepakatan kontrak baru". Yang DIBLOKIR (409) adalah KEBERSAMAAN: dalam satu project hanya satu tahapan boleh `active` — aktifkan tahapan berikutnya setelah yang aktif ditutup (dikonfirmasi 14 Okt 2026). Menutup tahapan DITOLAK 409 kalau masih ada alat teralokasi.',
+        description: 'Permission: sub-project:update. Mengaktifkan tahapan yang pendahulunya belum selesai BERHASIL, tapi response memuat `sequenceWarning` berisi daftar tahapan pendahulu yang masih terbuka — urutan tidak diblokir karena ERD menyebut "atau berdasarkan kesepakatan kontrak baru". Yang DIBLOKIR (409) adalah KEBERSAMAAN: dalam satu project hanya satu tahapan boleh `active` — aktifkan tahapan berikutnya setelah yang aktif ditutup (dikonfirmasi 14 Okt 2026). Menutup tahapan DITOLAK 409 kalau masih ada alat teralokasi. **Tahapan selesai = terkunci (L8, dibangun bersama Berkas Project):** `completed` DAN `cancelled` ditolak 409 selama masih ada urusan terbuka — progress `submitted`, request material `submitted`/`waiting_finance_approval`, request alat `submitted`/`equipment_review`, delivery aktif tanpa penerimaan aktif, alokasi `assigned`; pesan menyebut jumlah per jenis. Sesudahnya semua jalur tulis data tahapan menolak 409: ubah/validasi progress, catat/batal mutasi stok, catat/batal penerimaan, ganti surat jalan/batal delivery, validasi/biaya/approve request material, catat/batal jam kerja (sudah sejak 17 Okt). **Arsip penutupan:** di request yang sama, sebelum status berubah, sistem menyusun XLSX `stage-progress`, `stage-equipment`, `stage-material` dari data tahapan (baris kepala: "Diarsipkan saat penutupan <waktu> oleh <user>", status akhir), mengunggahnya, lalu status + baris arsip ditulis dalam SATU transaksi; transaksi gagal → file dihapus. Storage tidak tersedia → 503 dan tahapan TIDAK ditutup (coba lagi). Request ini lebih lambat (±1–3 detik).',
         parameters: [
           { in: 'path', name: 'projectId', required: true, schema: { type: 'integer' } },
           { in: 'path', name: 'id', required: true, schema: { type: 'integer' } }
@@ -510,7 +549,8 @@ const swaggerSpec = {
           properties: { status: { type: 'string', enum: ['planned','active','completed','cancelled'] } }
         }}}},
         responses: { 200: { description: 'Status diubah. Berisi `sequenceWarning` (null kalau urutannya benar).' },
-          409: { description: 'Transisi tidak sah / masih ada alat teralokasi' } }
+          409: { description: 'Transisi tidak sah / masih ada alat teralokasi / masih ada urusan terbuka (progress, request, delivery)' },
+          503: { description: 'Storage belum dikonfigurasi/tidak tersedia — arsip tidak bisa dibuat, status tidak berubah' } }
       }
     },
 
@@ -621,7 +661,7 @@ const swaggerSpec = {
     },
     '/projects/external-rental/{id}/status': {
       put: {
-        tags: ['External Rental'], summary: 'Ubah status project', description: 'Permission: project:update. Tidak ada hard delete — project dibatalkan lewat status `cancelled`, yang bersifat FINAL.',
+        tags: ['External Rental'], summary: 'Ubah status project', description: 'Permission: project:update. Tidak ada hard delete — project dibatalkan lewat status `cancelled`, yang bersifat FINAL. Menutup (`completed`/`cancelled`) ditolak 409 selama masih ada request alat `submitted`/`equipment_review` (L8). Sesudahnya jam kerja, pembatalannya, dan operator unit terkunci (409). Menutup membuat arsip `rental-timesheet` — satu XLSX per pool item yang pernah terikat unit — dalam transaksi yang sama (503 kalau storage tidak tersedia, status tidak berubah).',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['status'],
@@ -654,7 +694,7 @@ const swaggerSpec = {
     },
     '/projects/external-supply/{id}/status': {
       put: {
-        tags: ['External Supply'], summary: 'Ubah status project', description: 'Permission: project:update. Tidak ada hard delete — project dibatalkan lewat status `cancelled`, yang bersifat FINAL.',
+        tags: ['External Supply'], summary: 'Ubah status project', description: 'Permission: project:update. Tidak ada hard delete — project dibatalkan lewat status `cancelled`, yang bersifat FINAL. Menutup (`completed`/`cancelled`) ditolak 409 selama masih ada request material `submitted`/`waiting_finance_approval` atau delivery aktif tanpa penerimaan aktif (L8). Sesudahnya validasi/approve request material, ganti surat jalan/batal delivery, dan catat/batal penerimaan terkunci (409). Menutup membuat arsip `supply-deliveries` dalam transaksi yang sama (503 kalau storage tidak tersedia, status tidak berubah).',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['status'],
@@ -1953,9 +1993,172 @@ const swaggerSpec = {
     '/files/{id}/url': {
       get: {
         tags: ['Files'], summary: 'Signed URL untuk membuka/mengunduh lampiran',
-        description: 'Permission mengikuti modul pemilik file (surat jalan & bukti penerimaan → material-request:read). URL berlaku 5 menit (`expiresInSeconds`); kalau kedaluwarsa, minta lagi. PDF & gambar dibuka inline, lainnya diunduh. File yang sudah diganti (`superseded`) tetap bisa diunduh.',
+        description: 'Permission mengikuti modul pemilik file (surat jalan & bukti penerimaan → material-request:read; berkas project & arsip penutupan → project-file:read). Berkas di sampah → 404 (pulihkan dulu). URL berlaku 5 menit (`expiresInSeconds`); kalau kedaluwarsa, minta lagi. PDF & gambar dibuka inline, lainnya diunduh. File yang sudah diganti (`superseded`) tetap bisa diunduh.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         responses: { 200: { description: '{ id, originalName, mimeType, sizeBytes, status, url, expiresInSeconds }' }, 403: { description: 'Tidak berhak membaca modul pemilik' }, 404: { description: 'Tidak ada / tanpa pemilik' } },
+      },
+    },
+
+    // ========================================
+    // PROJECT FILES — Berkas Project (L8, docs/keputusan-desain-lampiran.md)
+    // ========================================
+    // Kontrak disepakati 17 Okt 2026, pembangunan di commit terpisah.
+    // Direktori: Project → (tahapan, konstruksi saja) → folder → berkas.
+    // Folder sistem & ekspor TIDAK disimpan: dibaca dari tabel sumber saat diminta.
+    '/project-files/projects': {
+      get: {
+        tags: ['Project Files'], summary: 'Daftar project (3 jenis) + ringkasan berkas',
+        description: 'Permission: project-file:read. Halaman awal Files. Semua project konstruksi, rental & supply (termasuk yang selesai/dibatalkan — FE yang menyaring). **Tidak dipaginasi**: puluhan project per tahun. Ringkasan (`folderCount`, `fileCount`, `totalSize`, `lastUploadAt`) hanya menghitung berkas di folder user yang tidak di sampah. `year` = tahun tanggal mulai (kontrak) project, jatuh ke tahun dibuat kalau kosong.',
+        parameters: [{ in: 'query', name: 'type', schema: { type: 'string', enum: ['construction', 'rental', 'supply'] } }],
+        responses: { 200: { description: 'Array `{ type, id, code, name, clientName, status, year, folderCount, fileCount, totalSize, lastUploadAt }`' } },
+      },
+    },
+    '/project-files/projects/{type}/{projectId}': {
+      get: {
+        tags: ['Project Files'], summary: 'Direktori satu project',
+        description: 'Permission: project-file:read. Satu panggilan memberi seluruh susunan folder. Folder sistem & tahapan muncul sendiri sejak project/tahapan dibuat (dibaca dari tabel sumber, tidak ada baris folder yang dibuat).\n\n' +
+          '| Jenis | `folders` (tingkat project) | `stages[].folders` |\n|---|---|---|\n' +
+          '| construction | Arsip Penutupan¹ (`project-summary`), folder user | Surat Jalan, Bukti Penerimaan, Arsip Penutupan¹ (`stage-progress`, `stage-equipment`, `stage-material`), folder user |\n' +
+          '| supply | Surat Jalan, Bukti Penerimaan, Arsip Penutupan¹ (`supply-deliveries`), folder user | — |\n' +
+          '| rental | Arsip Penutupan¹ (`rental-timesheet` per unit), folder user | — |\n\n' +
+          '¹ Hanya muncul setelah tahapan/project itu ditutup (`completed` atau `cancelled`). Sebelum itu data diunduh dari halaman sumbernya masing-masing.\n\n' +
+          'Folder sistem lampiran modul tampil hanya kalau user memegang permission read modul sumbernya (`material-request:read`). Urutan: sistem, lalu folder user menurut nama.',
+        parameters: [
+          { in: 'path', name: 'type', required: true, schema: { type: 'string', enum: ['construction', 'rental', 'supply'] } },
+          { in: 'path', name: 'projectId', required: true, schema: { type: 'integer' } },
+        ],
+        responses: {
+          200: { description: '`{ project: { type, id, code, name, clientName, status, year }, folders: ProjectFolderEntry[], stages: [{ subProjectId, subProjectType, status, folders: ProjectFolderEntry[] }] }` — `stages` kosong untuk rental/supply', content: { 'application/json': { schema: { type: 'object', properties: {
+            project: { type: 'object' },
+            folders: { type: 'array', items: { $ref: '#/components/schemas/ProjectFolderEntry' } },
+            stages: { type: 'array', items: { type: 'object', properties: { subProjectId: { type: 'integer' }, subProjectType: { type: 'string' }, status: { type: 'string' }, folders: { type: 'array', items: { $ref: '#/components/schemas/ProjectFolderEntry' } } } } },
+          } } } } },
+          404: { description: 'Project tidak ditemukan' },
+        },
+      },
+    },
+    '/project-files/projects/{type}/{projectId}/folders': {
+      post: {
+        tags: ['Project Files'], summary: 'Buat folder',
+        description: 'Permission: project-file:create. Folder SATU tingkat (tidak ada subfolder). `subProjectId` = folder milik tahapan — hanya untuk construction dan wajib tahapan project itu (composite FK). Nama unik per tempat (project atau tahapan yang sama), tanpa membedakan huruf besar/kecil → 409. Tidak dikunci status project/tahapan: dokumen (BAST, dsb.) justru datang setelah selesai.',
+        parameters: [
+          { in: 'path', name: 'type', required: true, schema: { type: 'string', enum: ['construction', 'rental', 'supply'] } },
+          { in: 'path', name: 'projectId', required: true, schema: { type: 'integer' } },
+        ],
+        requestBody: { required: true, content: { 'application/json': { schema: {
+          type: 'object', required: ['name'],
+          properties: { name: { type: 'string', maxLength: 120, example: 'Gambar Teknik' }, subProjectId: { type: 'integer', nullable: true } },
+        } } } },
+        responses: { 201: { description: 'ProjectFolderEntry (`kind: user`)' }, 400: { description: 'Nama kosong / subProjectId untuk rental-supply / tahapan bukan milik project' }, 404: { description: 'Project/tahapan tidak ditemukan' }, 409: { description: 'Nama folder sudah dipakai di tempat yang sama' } },
+      },
+    },
+    '/project-files/folders/{id}': {
+      patch: {
+        tags: ['Project Files'], summary: 'Ubah nama folder',
+        description: 'Permission: project-file:update. Hanya `name`. Folder tidak bisa dipindah ke project/tahapan lain.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name'], properties: { name: { type: 'string', maxLength: 120 } } } } } },
+        responses: { 200: { description: 'ProjectFolderEntry' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'Nama sudah dipakai' } },
+      },
+      delete: {
+        tags: ['Project Files'], summary: 'Hapus folder kosong',
+        description: 'Permission: project-file:delete. Hanya kalau BENAR-BENAR kosong — termasuk sampah — supaya berkas yang dipulihkan selalu punya folder. Folder berisi berkas di sampah baru bisa dihapus setelah berkasnya terhapus permanen (30 hari) atau dipulihkan & dipindah.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Dihapus' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'Masih berisi berkas (aktif atau di sampah) — pesan menyebut jumlahnya' } },
+      },
+    },
+    '/project-files/folders/{id}/files': {
+      get: {
+        tags: ['Project Files'], summary: 'Isi folder user',
+        description: 'Permission: project-file:read. Berkas di sampah tidak tampil (lihat endpoint trash). Urut terbaru diunggah.',
+        parameters: [
+          { in: 'path', name: 'id', required: true, schema: { type: 'integer' } },
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'q', schema: { type: 'string' }, description: 'Cari di nama tampilan, nama file asli, dan deskripsi (tanpa membedakan huruf)' },
+          { in: 'query', name: 'kind', schema: { type: 'string', enum: ['image', 'pdf', 'sheet', 'doc', 'cad'] } },
+        ],
+        responses: { 200: { description: 'Paginated ProjectFile', content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } }, 404: { description: 'Folder tidak ditemukan' } },
+      },
+      post: {
+        tags: ['Project Files'], summary: 'Unggah berkas',
+        description: 'Permission: project-file:create. multipart/form-data, SATU file di field `file`. Profil `project` (L3): PDF, JPG, PNG, WebP, DWG, XLSX, DOCX — maks 50 MB, jenis diperiksa dari ISI file (bukan ekstensi). `.xls`/`.doc`, HEIC, berkas ber-makro, arsip & executable ditolak 400. File ke storage dulu, lalu satu transaksi DB; DB gagal → file dihapus (L4). Kunci storage `project-files/YYYY/MM/<uuid>.<ext>`.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'multipart/form-data': { schema: {
+          type: 'object', required: ['file', 'name'],
+          properties: { file: { type: 'string', format: 'binary' }, name: { type: 'string', maxLength: 150 }, description: { type: 'string', maxLength: 500 } },
+        } } } },
+        responses: { 201: { description: 'ProjectFile' }, 400: { description: 'File tidak ada / jenis atau ukuran tidak diterima / nama kosong' }, 404: { description: 'Folder tidak ditemukan' }, 503: { description: 'Storage belum dikonfigurasi' } },
+      },
+    },
+    '/project-files/files/{id}': {
+      get: {
+        tags: ['Project Files'], summary: 'Detail berkas',
+        description: 'Permission: project-file:read. Berkas di sampah tetap bisa dibaca detailnya (untuk layar sampah), tapi tidak bisa diunduh.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'ProjectFile' }, 404: { description: 'Tidak ditemukan' } },
+      },
+      patch: {
+        tags: ['Project Files'], summary: 'Ubah nama/deskripsi atau pindah folder',
+        description: 'Permission: project-file:update. `folderId` = pindah ke folder user lain di PROJECT YANG SAMA (boleh antar tahapan / tingkat project). Isi file tidak bisa diganti dan tidak ada versi — revisi diunggah sebagai berkas baru. Berkas di sampah → 409 (pulihkan dulu).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: {
+          name: { type: 'string', maxLength: 150 }, description: { type: 'string', maxLength: 500, nullable: true }, folderId: { type: 'integer' },
+        } } } } },
+        responses: { 200: { description: 'ProjectFile' }, 400: { description: 'Folder tujuan milik project lain' }, 404: { description: 'Berkas/folder tidak ditemukan' }, 409: { description: 'Berkas di sampah' } },
+      },
+      delete: {
+        tags: ['Project Files'], summary: 'Pindahkan ke sampah',
+        description: 'Permission: project-file:delete. Tidak menghapus: `files.status = trashed` + `trashed_by/at`. Dihapus permanen 30 hari setelah masuk sampah (per berkas) oleh pembersih (`npm run files:cleanup`). Lampiran bukti modul lain tidak pernah bisa ke sampah.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'ProjectFile dengan `trashedAt` & `purgeAt`' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'Sudah di sampah' } },
+      },
+    },
+    '/project-files/files/{id}/restore': {
+      post: {
+        tags: ['Project Files'], summary: 'Pulihkan dari sampah',
+        description: 'Permission: project-file:delete. Kembali ke folder asalnya (folder tidak bisa dihapus selama berisi sampah). Atomik: dua permintaan bersamaan → satu 409.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        responses: { 200: { description: 'ProjectFile' }, 404: { description: 'Tidak ditemukan / sudah dihapus permanen' }, 409: { description: 'Tidak di sampah' } },
+      },
+    },
+    '/project-files/projects/{type}/{projectId}/trash': {
+      get: {
+        tags: ['Project Files'], summary: 'Sampah satu project',
+        description: 'Permission: project-file:read. Berkas di sampah dari semua folder user project ini (termasuk folder tahapan), urut paling baru dibuang. Tiap baris memuat `folderName` dan `purgeAt`.',
+        parameters: [
+          { in: 'path', name: 'type', required: true, schema: { type: 'string', enum: ['construction', 'rental', 'supply'] } },
+          { in: 'path', name: 'projectId', required: true, schema: { type: 'integer' } },
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+        ],
+        responses: { 200: { description: 'Paginated ProjectFile' }, 404: { description: 'Project tidak ditemukan' } },
+      },
+    },
+    '/project-files/projects/{type}/{projectId}/system-folders/{key}': {
+      get: {
+        tags: ['Project Files'], summary: 'Isi folder sistem (baca-saja)',
+        description: 'Permission: project-file:read (+ `material-request:read` untuk delivery-notes/receipt-proofs). `closing-archive`: arsip XLSX yang dibuat SEKALI saat tahapan (pakai `subProjectId`) atau project (tanpa `subProjectId`) ditutup — tidak bisa diubah, dipindah, atau dibuang ke sampah. Lampiran modul dibaca langsung dari tabel sumber — TIDAK disalin (L7).\n\n' +
+          '| archiveKey | Dibuat saat | Isi (satu sheet per baris) |\n|---|---|---|\n' +
+          '| `stage-progress` | tahapan ditutup | Kontrak tahapan; progress harian + kondisi lapangan + status validasi |\n' +
+          '| `stage-equipment` | tahapan ditutup | Alokasi alat (unit, diterima, status); jam kerja per log + total per unit |\n' +
+          '| `stage-material` | tahapan ditutup | Request material + rincian biaya; surat jalan; penerimaan; mutasi stok; saldo per material |\n' +
+          '| `project-summary` | project konstruksi ditutup | Rekap tahapan: jenis, status, nilai kontrak, target & volume tervalidasi, progress %, nilai tertagih |\n' +
+          '| `supply-deliveries` | supply ditutup | Tanggal, no. surat jalan, jenis kendaraan, nopol, sopir, material, asal, tujuan, volume; total per satuan |\n' +
+          '| `rental-timesheet` | rental ditutup (1 file per unit) | Penyewa, periode, alat, operator; per tanggal sesi pagi/siang/overtime (awal, akhir, jam), total jam, hari kerja, keterangan; baris jumlah |\n\n' +
+          'Log/dokumen yang dibatalkan tidak ikut. Sheet Pekerja (`stage-labor`) menyusul bersama modul Pekerja — berlaku untuk tahapan yang ditutup sesudahnya.\n\n' +
+          '`delivery-notes`: surat jalan aktif tiap delivery (yang sudah diganti tidak tampil). `receipt-proofs`: semua bukti penerimaan. Delivery/receipt yang dibatalkan tetap tampil dengan `cancelled: true` (pembatalan juga riwayat). delivery-notes/receipt-proofs: construction WAJIB `subProjectId` (hidup di tahapan), supply tanpa; rental tidak punya (404). Buka file lewat `GET /api/files/{fileId}/url`.',
+        parameters: [
+          { in: 'path', name: 'type', required: true, schema: { type: 'string', enum: ['construction', 'rental', 'supply'] } },
+          { in: 'path', name: 'projectId', required: true, schema: { type: 'integer' } },
+          { in: 'path', name: 'key', required: true, schema: { type: 'string', enum: ['delivery-notes', 'receipt-proofs', 'closing-archive'] } },
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+        ],
+        responses: {
+          200: { description: 'Paginated. delivery-notes/receipt-proofs: `{ fileId, originalName, mimeType, sizeBytes, kind, uploadedAt, uploadedBy, cancelled, source: { type: "material-delivery"|"material-receipt", id, code, deliveryNoteNumber, materialName, subProjectId, subProjectType } }`. closing-archive: `{ fileId, originalName, mimeType, sizeBytes, uploadedAt, uploadedBy (yang menutup), archiveKey, closedStatus: "completed"|"cancelled", equipmentPoolItemId }` — isi tiap arsip lihat tabel di deskripsi tag/L8' },
+          400: { description: 'subProjectId wajib (construction) / dilarang (supply) / bukan tahapan project ini' },
+          403: { description: 'Tidak memegang permission read modul sumber' },
+          404: { description: 'Project tidak ditemukan / key tidak berlaku untuk jenis project ini' },
+        },
       },
     },
 

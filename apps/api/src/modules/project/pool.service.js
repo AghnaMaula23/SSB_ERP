@@ -1,5 +1,6 @@
 const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
+const { assertContextOpen } = require('./context-lock.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const { toNumber, pickWritable, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 
@@ -309,7 +310,7 @@ const bindItemUnit = async (poolId, id, equipmentItemId) => {
 const setItemOperator = async (poolId, id, operatorName) => {
   const pool = await prisma.equipmentPool.findUnique({
     where: { id: poolId },
-    select: { ownerType: true, externalRentalProject: { select: { rentalProjectCode: true, status: true } } },
+    select: { ownerType: true, externalRentalProject: { select: { id: true, rentalProjectCode: true, status: true } } },
   });
   if (!pool) throw httpError('Equipment pool tidak ditemukan', 404);
   if (pool.ownerType !== 'external_rental_project') {
@@ -323,10 +324,13 @@ const setItemOperator = async (poolId, id, operatorName) => {
     throw httpError(`Pool item berstatus "${poolItem.status}", tidak bisa diberi operator`, 409);
   }
 
-  const updated = await prisma.equipmentPoolItem.update({
-    where: { id },
-    data: { operatorName: operatorName?.trim() || null },
-    include: { equipmentType: true, equipmentItem: { select: { id: true, assetCode: true, currentStatus: true } } },
+  const updated = await prisma.$transaction(async (tx) => {
+    await assertContextOpen(tx, { externalRentalProjectId: pool.externalRentalProject.id });
+    return tx.equipmentPoolItem.update({
+      where: { id },
+      data: { operatorName: operatorName?.trim() || null },
+      include: { equipmentType: true, equipmentItem: { select: { id: true, assetCode: true, currentStatus: true } } },
+    });
   });
   return shapePoolItem(updated);
 };

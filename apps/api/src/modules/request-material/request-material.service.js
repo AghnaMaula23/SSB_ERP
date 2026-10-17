@@ -3,6 +3,7 @@ const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const { claimTransition } = require('../../utils/status-transition.js');
+const { assertContextOpen } = require('../project/context-lock.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 const materialPoolService = require('../project/material-pool.service.js');
 const deliveryService = require('./material-delivery.service.js');
@@ -137,6 +138,9 @@ const findOrFail = async (id, client = prisma) => {
   return row;
 };
 
+/** Konteks pemilik request — untuk kunci tahapan/kontrak yang sudah ditutup (L8). */
+const contextOf = (row) => ({ subProjectId: row.subProjectId, externalSupplyProjectId: row.externalSupplyProjectId });
+
 const assertNotOwnRequest = (row, userId, action) => {
   if (row.requestedBy === userId) {
     throw httpError(`Anda mengajukan request ini, jadi tidak boleh ${action} sendiri`, 403);
@@ -239,6 +243,7 @@ const create = async (payload, userId) => {
   }
 
   const row = await prisma.$transaction(async (tx) => {
+    await assertContextOpen(tx, { [config.fkField]: contextId });
     const requestCode = await nextDocumentNumber(tx, REQUEST_DOC_TYPE, { pad: REQUEST_DOC_PAD });
     const created = await tx.materialRequest.create({
       data: {
@@ -316,6 +321,7 @@ const adminValidate = async (id, { items: changes }, userId) => {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    await assertContextOpen(tx, contextOf(row));
     await claimTransition(tx.materialRequest, { id, status: 'submitted' }, { updatedAt: new Date() });
     for (const change of changes) {
       await tx.materialRequestItem.update({
@@ -364,6 +370,7 @@ const replaceCosts = async (id, { costs }, userId) => {
   const updated = await prisma.$transaction(async (tx) => {
     // Klaim header: penggantian tidak boleh mendarat pada request yang baru saja
     // diteruskan, ditolak, atau dibatalkan di saat yang sama.
+    await assertContextOpen(tx, contextOf(row));
     await claimTransition(tx.materialRequest, { id, status: 'submitted' }, { updatedAt: new Date() });
     await tx.materialRequestCost.deleteMany({ where: { materialRequestId: id } });
     await tx.materialRequestCost.createMany({
@@ -393,6 +400,7 @@ const submitToFinance = async (id, { notes }, userId) => {
   assertNotOwnRequest(row, userId, 'meneruskannya');
 
   const updated = await prisma.$transaction(async (tx) => {
+    await assertContextOpen(tx, contextOf(row));
     await claimTransition(tx.materialRequest, { id, status: 'submitted' }, {
       status: 'waiting_finance_approval',
       adminReviewedBy: userId,
@@ -475,6 +483,7 @@ const approve = async (id, { notes, materialPoolId }, userId) => {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    await assertContextOpen(tx, contextOf(row));
     await claimTransition(tx.materialRequest, { id, status: 'waiting_finance_approval' }, {
       status: 'approved',
       financeReviewedBy: userId,
