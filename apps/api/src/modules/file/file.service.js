@@ -38,6 +38,11 @@ const OWNERS = [
     permission: 'project-file:read',
     find: (fileId) => prisma.projectFile.findUnique({ where: { fileId }, select: { id: true } }),
   },
+  {
+    prefix: 'closing-archives',
+    permission: 'project-file:read',
+    find: (fileId) => prisma.projectClosingArchive.findUnique({ where: { fileId }, select: { id: true } }),
+  },
 ];
 
 const buildKey = (prefix, ext) => {
@@ -90,6 +95,47 @@ const withUploadedFiles = async (uploads, { prefix, userId }, fn) => {
 
 /** Bentuk satu file: `fn(tx, fileRow)`. */
 const withUploadedFile = (upload, options, fn) => withUploadedFiles([upload], options, (tx, [file]) => fn(tx, file));
+
+/**
+ * File yang DIBUAT SISTEM di dalam transaksi pemanggil (arsip penutupan, L8).
+ * Beda dengan withUploadedFiles: isinya disusun dari data yang dibaca di bawah
+ * kunci transaksi pemanggil, jadi unggah terjadi DI DALAM transaksi itu. Kalau
+ * transaksi gagal, pemanggil wajib memanggil `discard()` — objek yang sudah
+ * masuk storage dihapus (sisanya tetap tersapu sweepOrphans).
+ *
+ *   const store = generatedFileStore({ prefix, userId });
+ *   try { await prisma.$transaction(async (tx) => { await store.save(tx, {...}); ... }); }
+ *   catch (err) { await store.discard(); throw err; }
+ */
+const generatedFileStore = ({ prefix, userId }) => {
+  if (!OWNERS.some((o) => o.prefix === prefix)) throw new Error(`Prefix lampiran "${prefix}" belum terdaftar di OWNERS`);
+  const keys = [];
+  return {
+    save: async (tx, { buffer, originalName, mimeType, ext }) => {
+      const key = buildKey(prefix, ext);
+      try {
+        await storage.put(key, buffer, mimeType);
+      } catch (err) {
+        // Storage mati/tak terjangkau: pemanggil (penutupan) dibatalkan dengan pesan yang bisa ditindaklanjuti
+        if (err.statusCode) throw err;
+        console.error(`[FILE] gagal menyimpan ${key}: ${err.message}`);
+        throw httpError('Penyimpanan file sedang tidak tersedia, jadi arsip tidak bisa dibuat. Coba lagi beberapa saat.', 503);
+      }
+      keys.push(key);
+      return tx.file.create({
+        data: {
+          storageKey: key,
+          originalName,
+          mimeType,
+          sizeBytes: buffer.length,
+          sha256: crypto.createHash('sha256').update(buffer).digest('hex'),
+          uploadedBy: userId,
+        },
+      });
+    },
+    discard: () => removeQuietly(keys),
+  };
+};
 
 /** File lama dipertahankan sebagai riwayat, ditandai penggantinya (L6). */
 const markSuperseded = (tx, oldFileId, newFileId) =>
@@ -178,5 +224,5 @@ const purgeTrash = async () => {
 };
 
 module.exports = {
-  withUploadedFile, withUploadedFiles, markSuperseded, getDownloadUrl, sweepOrphans, purgeTrash, shapeFile,
+  withUploadedFile, withUploadedFiles, generatedFileStore, markSuperseded, getDownloadUrl, sweepOrphans, purgeTrash, shapeFile,
 };

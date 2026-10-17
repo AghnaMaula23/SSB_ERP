@@ -15,7 +15,7 @@ router.use(authenticate);
 
 const PROJECT_TYPES = ['construction', 'rental', 'supply'];
 const FILE_KINDS = ['image', 'pdf', 'sheet', 'doc', 'cad'];
-const SYSTEM_KEYS = ['delivery-notes', 'receipt-proofs'];
+const SYSTEM_KEYS = ['delivery-notes', 'receipt-proofs', 'closing-archive'];
 
 const idParam = param('id').isInt({ min: 1 }).withMessage('ID tidak valid').toInt();
 const projectParams = [

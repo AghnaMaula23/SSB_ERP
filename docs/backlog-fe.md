@@ -509,7 +509,7 @@ Tetap mock — **wajar**, backend-nya belum dibangun. Dicatat supaya tidak dikir
 | Klaim pendapatan alat (`incomeClaimService.js`) | localStorage | Build Order 6 (E4b) |
 | Verifikasi kas lapangan (`fieldCashMockService.js`) | localStorage | Build Order 7 |
 | Pekerja per tahapan (`fieldMockService.js`) | localStorage | Build Order 7 (Labor Payroll) |
-| Folder & berkas proyek (`admin/files`, `fileStore.js`) | localStorage + IndexedDB | **API tersedia (17 Okt 2026), kecuali Arsip Penutupan (menyusul)** — Swagger tag *Project Files* + `docs/keputusan-desain-lampiran.md` L8. Susunan berubah: halaman atas = daftar project, lalu tahapan (konstruksi), lalu folder. Kategori, tag, tahun manual & arsip manual dibuang; hapus = sampah 30 hari; folder "Arsip Penutupan" (XLSX otomatis saat tahapan/project ditutup). `fileStore.js` & `projectSources.js` bisa diganti sekarang; unduh lewat `GET /api/files/{file.id}/url` |
+| Folder & berkas proyek (`admin/files`, `fileStore.js`) | localStorage + IndexedDB | **API tersedia (17 Okt 2026), termasuk Arsip Penutupan** — Swagger tag *Project Files* + `docs/keputusan-desain-lampiran.md` L8. Susunan berubah: halaman atas = daftar project, lalu tahapan (konstruksi), lalu folder. Kategori, tag, tahun manual & arsip manual dibuang; hapus = sampah 30 hari; folder "Arsip Penutupan" (XLSX otomatis saat tahapan/project ditutup). `fileStore.js` & `projectSources.js` bisa diganti sekarang; unduh lewat `GET /api/files/{file.id}/url` |
 | Log aktivitas / notifikasi (`activityLogService.js`) | localStorage | Tidak direncanakan — boleh tetap lokal |
 
 **Aturan untuk modul berikutnya:** sebelum membuat layar untuk modul yang
@@ -639,3 +639,10 @@ Detail: `docs/keputusan-desain-lampiran.md` L8 "Tahapan / project selesai = terk
 - Setelah ditutup, tombol ubah/validasi progress, mutasi stok, penerimaan, delivery,
   validasi/biaya/approve request material, jam kerja, dan operator dibalas **409
   "... datanya terkunci"**. Sebaiknya disembunyikan untuk tahapan/kontrak yang ditutup.
+- Menutup kini juga membuat **Arsip Penutupan** (XLSX) di request yang sama — bisa
+  ±1–3 detik; tampilkan loading. **503** = storage tidak tersedia, status TIDAK berubah:
+  tampilkan pesannya dan biarkan user mencoba lagi.
+- Arsip muncul di halaman Files sebagai folder sistem `closing-archive` ("Arsip
+  Penutupan") di tahapan/project yang ditutup; isinya lewat
+  `GET /api/project-files/projects/:type/:projectId/system-folders/closing-archive[?subProjectId=]`,
+  unduh lewat `GET /api/files/:fileId/url`. Tidak ada tombol hapus/ubah untuk arsip.

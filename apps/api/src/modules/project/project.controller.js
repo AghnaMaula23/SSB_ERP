@@ -47,7 +47,7 @@ const updateProject = async (req, res, next) => {
 
 const changeProjectStatus = async (req, res, next) => {
   try {
-    const data = await service.changeStatus(req.projectKind, req.params.id, req.body.status);
+    const data = await service.changeStatus(req.projectKind, req.params.id, req.body.status, req.user.id);
     return success(res, data, `Status project berhasil diubah menjadi "${req.body.status}"`);
   } catch (err) { next(err); }
 };
@@ -98,7 +98,7 @@ const updateSubProject = async (req, res, next) => {
 
 const changeSubProjectStatus = async (req, res, next) => {
   try {
-    const data = await subProject.changeStatus(req.params.projectId, req.params.id, req.body.status);
+    const data = await subProject.changeStatus(req.params.projectId, req.params.id, req.body.status, req.user.id);
     return success(res, data, `Status sub-project berhasil diubah menjadi "${req.body.status}"`);
   } catch (err) { next(err); }
 };

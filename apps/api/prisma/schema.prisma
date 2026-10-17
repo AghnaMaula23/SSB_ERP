@@ -923,7 +923,8 @@ model ConstructionProject {
   equipmentPools EquipmentPool[]
   materialPools  MaterialPool[]
 
-  fileFolders ProjectFileFolder[]
+  fileFolders     ProjectFileFolder[]
+  closingArchives ProjectClosingArchive[]
 
   @@index([status])
   @@map("construction_projects")
@@ -953,7 +954,8 @@ model ExternalRentalProject {
   equipmentPools    EquipmentPool[]
   equipmentRequests EquipmentRequest[]
 
-  fileFolders ProjectFileFolder[]
+  fileFolders     ProjectFileFolder[]
+  closingArchives ProjectClosingArchive[]
 
   @@index([status])
   @@map("external_rental_projects")
@@ -980,7 +982,8 @@ model ExternalSupplyProject {
   materialRequests MaterialRequest[]
   materialPools    MaterialPool[]
 
-  fileFolders ProjectFileFolder[]
+  fileFolders     ProjectFileFolder[]
+  closingArchives ProjectClosingArchive[]
 
   @@index([status])
   @@map("external_supply_projects")
@@ -1023,7 +1026,8 @@ model SubProject {
   materialRequests     MaterialRequest[]
   stockMovements       MaterialStockMovement[]
 
-  fileFolders ProjectFileFolder[]
+  fileFolders     ProjectFileFolder[]
+  closingArchives ProjectClosingArchive[]
 
   // Satu construction project hanya boleh punya satu tahapan per tipe
   @@unique([constructionProjectId, subProjectType])
@@ -1152,6 +1156,7 @@ model EquipmentPoolItem {
   equipmentItem        EquipmentItem?                  @relation(fields: [equipmentItemId], references: [id])
   allocations          SubProjectEquipmentAllocation[]
   workhourLogs         EquipmentWorkhourLog[]
+  closingArchives      ProjectClosingArchive[]
 
   @@index([equipmentPoolId])
   @@index([equipmentRequestItemId])
@@ -1588,6 +1593,7 @@ model File {
   deliveryNoteOf MaterialDelivery?
   receiptProofOf MaterialReceiptAttachment?
   projectFile    ProjectFile?
+  closingArchive ProjectClosingArchive?
 
   @@index([status, trashedAt])
   @@map("files")
@@ -1645,6 +1651,37 @@ model ProjectFile {
 
   @@index([folderId])
   @@map("project_files")
+}
+
+/// Arsip Penutupan (L8): XLSX yang dibuat SEKALI di dalam transaksi penutupan
+/// tahapan/project — baca-saja, tidak bisa diubah/dipindah/dibuang. Cakupan sama
+/// dengan folder (tepat satu project, opsional tahapan via composite FK);
+/// `equipment_pool_item_id` = arsip timesheet per unit rental. Siapa & kapan =
+/// files.uploaded_by/at (yang menutup); status akhir dibaca dari tahapan/project.
+/// Sekali per cakupan per jenis: unique index parsial di SQL.
+model ProjectClosingArchive {
+  id                      Int      @id @default(autoincrement())
+  constructionProjectId   Int?     @map("construction_project_id")
+  externalRentalProjectId Int?     @map("external_rental_project_id")
+  externalSupplyProjectId Int?     @map("external_supply_project_id")
+  subProjectId            Int?     @map("sub_project_id")
+  equipmentPoolItemId     Int?     @map("equipment_pool_item_id")
+  archiveKey              String   @map("archive_key") @db.VarChar(40)
+  fileId                  Int      @unique @map("file_id")
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  constructionProject   ConstructionProject?   @relation(fields: [constructionProjectId], references: [id], onDelete: Restrict)
+  externalRentalProject ExternalRentalProject? @relation(fields: [externalRentalProjectId], references: [id], onDelete: Restrict)
+  externalSupplyProject ExternalSupplyProject? @relation(fields: [externalSupplyProjectId], references: [id], onDelete: Restrict)
+  subProject            SubProject?            @relation(fields: [subProjectId, constructionProjectId], references: [id, constructionProjectId], onDelete: Restrict)
+  equipmentPoolItem     EquipmentPoolItem?     @relation(fields: [equipmentPoolItemId], references: [id], onDelete: Restrict)
+  file                  File                   @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([constructionProjectId])
+  @@index([externalRentalProjectId])
+  @@index([externalSupplyProjectId])
+  @@index([subProjectId])
+  @@map("project_closing_archives")
 }
 
 // ============================================================

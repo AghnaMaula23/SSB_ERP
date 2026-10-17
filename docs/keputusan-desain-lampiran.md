@@ -111,7 +111,8 @@ satu tempat). Folder buatan user: satu tingkat, sesuai FE.
 3. Berkas project — kontrak disepakati 17 Okt 2026 (L8 di bawah), dibangun dalam tiga
    commit: (a) berkas project + folder sistem + sampah (DIBANGUN 17 Okt, migrasi
    `20261017150000_project_files`), (b) kunci tahapan/project
-   selesai (DIBANGUN 17 Okt, tanpa migrasi), (c) arsip penutupan XLSX. Prasyarat rental (sesi & operator) sudah masuk `bf16510`.
+   selesai (DIBANGUN 17 Okt, tanpa migrasi), (c) arsip penutupan XLSX (DIBANGUN 17 Okt,
+   migrasi `20261017180000_project_closing_archives`). Prasyarat rental (sesi & operator) sudah masuk `bf16510`.
 
 ## L8. Berkas Project (kontrak 17 Oktober 2026)
 
@@ -269,6 +270,24 @@ status akhir. Log/dokumen yang dibatalkan tidak ikut.
 
 Dependency baru: `exceljs`. CSV tidak dipakai untuk arsip — Excel berlocale Indonesia
 salah membaca pemisah koma.
+
+**Dibangun 17 Okt 2026** (`src/modules/project-file/closing-archive.service.js`):
+- Dipasang di `changeStatus` tahapan & project, di dalam transaksi yang sama dengan
+  `assertStageClosable`/`assertProjectClosable` — data dibaca lewat `tx` setelah baris
+  dikunci FOR UPDATE. File disimpan lewat `generatedFileStore` (`file.service.js`):
+  unggah di dalam transaksi; gagal → `discard()` menghapus objeknya.
+- Storage mati → 503, status tidak berubah, tidak ada baris/objek tertinggal (diuji
+  dengan mematikan storage). Dua penutupan bersamaan → satu 200, satu 409, arsip tidak dobel.
+- Rental: satu timesheet per pool item yang pernah terikat unit. Log lama tanpa
+  `work_session` masuk kolom "Tanpa sesi" — tidak ditebak.
+- Jenis arsip baru (mis. `stage-labor`) = baris baru di `STAGE_ARCHIVES` + migrasi yang
+  memperluas `project_closing_archives_scope_check`.
+- Catatan dependency: `exceljs@4.4.0` membawa `uuid` versi lama (advisory moderate: cek
+  batas buffer pada v3/v5/v6 saat argumen buffer diberikan). exceljs hanya memakainya
+  untuk ID internal tanpa input kita — dampak praktis nihil; dipantau sampai exceljs
+  memperbarui dependency-nya.
+- Waktu penutupan di replika (storage lokal): 0,02–0,08 detik. Di Supabase Storage
+  bertambah satu unggahan jaringan per file (tahapan = 3 file).
 
 **Belum masuk:** sheet Pekerja (bersama modul Pekerja), income/outcome/laba per tahapan
 (setelah GL; "laba per tahapan" butuh aturan PM membagi biaya alat, gaji staf & overhead),

@@ -138,6 +138,64 @@ const systemFolderEntries = async (scope, subProjectId, user) => {
 };
 
 // ------------------------------------------------------------
+// Arsip Penutupan — XLSX yang dibuat saat tahapan/project ditutup
+// (closing-archive.service). Folder ini baru muncul setelah ada arsipnya.
+// ------------------------------------------------------------
+
+const CLOSING_ARCHIVE = { key: 'closing-archive', name: 'Arsip Penutupan' };
+
+/** Cakupan arsip: satu tahapan, atau tingkat project (tanpa tahapan). */
+const archiveScope = (kind, projectId, subProjectId) => (subProjectId
+  ? { subProjectId }
+  : { [PROJECT_KINDS[kind].fk]: projectId, subProjectId: null });
+
+const archiveFolderEntry = async (scope, subProjectId) => {
+  const agg = await prisma.file.aggregate({
+    where: { closingArchive: { is: scope } }, _count: { _all: true }, _sum: { sizeBytes: true }, _max: { uploadedAt: true },
+  });
+  if (agg._count._all === 0) return [];
+  return [{
+    kind: 'system', id: null, key: CLOSING_ARCHIVE.key, name: CLOSING_ARCHIVE.name, subProjectId: subProjectId ?? null,
+    fileCount: agg._count._all, totalSize: agg._sum.sizeBytes ?? 0, lastUploadAt: agg._max.uploadedAt,
+    createdBy: null, createdAt: null,
+  }];
+};
+
+const listClosingArchive = async (kind, projectId, subProjectId, { page, limit }) => {
+  const where = { closingArchive: { is: archiveScope(kind, projectId, subProjectId) } };
+  const [rows, total] = await Promise.all([
+    prisma.file.findMany({
+      where,
+      include: {
+        uploadedByUser: { select: ACTOR_SELECT },
+        closingArchive: { include: {
+          subProject: { select: { status: true } },
+          constructionProject: { select: { status: true } },
+          externalRentalProject: { select: { status: true } },
+          externalSupplyProject: { select: { status: true } },
+        } },
+      },
+      orderBy: [{ originalName: 'asc' }, { id: 'asc' }],
+      skip: (page - 1) * limit, take: limit,
+    }),
+    prisma.file.count({ where }),
+  ]);
+  return {
+    data: rows.map((f) => {
+      const a = f.closingArchive;
+      // Status akhir tidak disalin ke arsip: tahapan/project yang ditutup statusnya final
+      const owner = a.subProject ?? a.constructionProject ?? a.externalRentalProject ?? a.externalSupplyProject;
+      return {
+        fileId: f.id, originalName: f.originalName, mimeType: f.mimeType, sizeBytes: f.sizeBytes,
+        uploadedAt: f.uploadedAt, uploadedBy: shapeActor(f.uploadedByUser),
+        archiveKey: a.archiveKey, closedStatus: owner.status, equipmentPoolItemId: a.equipmentPoolItemId,
+      };
+    }),
+    total, page, limit,
+  };
+};
+
+// ------------------------------------------------------------
 // Ringkasan folder user — dihitung saat dibaca, hanya berkas yang tidak di sampah
 // ------------------------------------------------------------
 
@@ -219,6 +277,7 @@ const getDirectory = async (kind, projectId, user) => {
   const projectScope = systemScopeFor(kind, projectId, null);
   const projectFolders = [
     ...(projectScope ? await systemFolderEntries(projectScope, null, user) : []),
+    ...await archiveFolderEntry(archiveScope(kind, projectId, null), null),
     ...userFolders(null),
   ];
 
@@ -232,7 +291,11 @@ const getDirectory = async (kind, projectId, user) => {
       subProjectId: sp.id,
       subProjectType: sp.subProjectType,
       status: sp.status,
-      folders: [...await systemFolderEntries({ subProjectId: sp.id }, sp.id, user), ...userFolders(sp.id)],
+      folders: [
+        ...await systemFolderEntries({ subProjectId: sp.id }, sp.id, user),
+        ...await archiveFolderEntry({ subProjectId: sp.id }, sp.id),
+        ...userFolders(sp.id),
+      ],
     })));
   }
 
@@ -457,6 +520,16 @@ const listTrash = async (kind, projectId, { page = 1, limit = 20 }) => {
 
 const listSystemFolder = async (kind, projectId, key, { subProjectId, page = 1, limit = 20 }, user) => {
   await findProjectOrFail(kind, projectId);
+
+  if (key === CLOSING_ARCHIVE.key) {
+    if (subProjectId) {
+      if (kind !== 'construction') throw httpError('subProjectId hanya untuk project konstruksi', 400);
+      const sp = await prisma.subProject.findUnique({ where: { id: subProjectId }, select: { constructionProjectId: true } });
+      if (!sp || sp.constructionProjectId !== projectId) throw httpError('Tahapan ini bukan milik project tersebut', 400);
+    }
+    return listClosingArchive(kind, projectId, subProjectId, { page, limit });
+  }
+
   const folder = SYSTEM_FOLDERS.find((f) => f.key === key);
   if (!folder || kind === 'rental') throw httpError('Folder sistem ini tidak ada untuk jenis project tersebut', 404);
 

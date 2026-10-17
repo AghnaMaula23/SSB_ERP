@@ -189,4 +189,4 @@ const cancelMovement = async (id, { reason }, userId) => {
   return shapeMovement(updated);
 };
 
-module.exports = { getStock, listMovements, createMovement, cancelMovement, lockSubProject, assertNotNegative };
+module.exports = { getStock, listMovements, createMovement, cancelMovement, lockSubProject, assertNotNegative, balances };

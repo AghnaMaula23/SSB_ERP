@@ -4,6 +4,7 @@ const { nextDocumentNumber } = require('../../utils/document-number.js');
 const { toDateOnly, coerceDates, pickWritable, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 const { claimTransition } = require('../../utils/status-transition.js');
 const { CLOSED_STATUSES, lockForClosing, assertNothingOpen } = require('./context-lock.js');
+const closingArchive = require('../project-file/closing-archive.service.js');
 
 // ============================================================
 // Tiga tipe project sengaja DIPISAH FISIK (keputusan PM), bukan satu tabel
@@ -221,7 +222,7 @@ const assertProjectClosable = async (tx, config, id) => {
   return assertNothingOpen('Kontrak rental', [[requests, 'request alat menunggu keputusan']]);
 };
 
-const changeStatus = async (kind, id, status) => {
+const changeStatus = async (kind, id, status, userId) => {
   const { config, row } = await findOrFail(kind, id);
 
   if (row.status === status) throw httpError(`${config.label} sudah berstatus "${status}"`, 409);
@@ -236,11 +237,23 @@ const changeStatus = async (kind, id, status) => {
     );
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    if (CLOSED_STATUSES.includes(status)) await assertProjectClosable(tx, config, id);
-    await claimTransition(tx[config.model], { id, status: row.status }, { status });
-    return tx[config.model].findUnique({ where: { id }, include: includeFor(config) });
-  });
+  // Penutupan membuat Arsip Penutupan (L8) di transaksi yang sama — lihat sub-project.service
+  const closing = CLOSED_STATUSES.includes(status);
+  const store = closing ? closingArchive.createStore(userId) : null;
+  let updated;
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      if (closing) {
+        await assertProjectClosable(tx, config, id);
+        await closingArchive.archiveProject(tx, store, config.model, id, status, userId);
+      }
+      await claimTransition(tx[config.model], { id, status: row.status }, { status });
+      return tx[config.model].findUnique({ where: { id }, include: includeFor(config) });
+    });
+  } catch (err) {
+    if (store) await store.discard();
+    throw err;
+  }
   return shapeProject(config, updated);
 };
 

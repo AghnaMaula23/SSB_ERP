@@ -2,6 +2,7 @@ const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { claimTransition } = require('../../utils/status-transition.js');
 const { CLOSED_STATUSES, lockForClosing, assertNothingOpen } = require('./context-lock.js');
+const closingArchive = require('../project-file/closing-archive.service.js');
 const { toNumber, toDateOnly, coerceDates, pickWritable, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 
 // Urutan tahapan baku. Dipakai sebagai sequenceOrder default dan sebagai acuan
@@ -380,7 +381,7 @@ const assertStageClosable = async (tx, row) => {
   ]);
 };
 
-const changeStatus = async (projectId, id, status) => {
+const changeStatus = async (projectId, id, status, userId) => {
   const row = await findOrFail(projectId, id);
 
   if (row.status === status) throw httpError(`Sub-project sudah berstatus "${status}"`, 409);
@@ -395,15 +396,28 @@ const changeStatus = async (projectId, id, status) => {
     );
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    if (status === 'active') await assertNoOtherActiveStage(tx, row);
-    if (CLOSED_STATUSES.includes(status)) await assertStageClosable(tx, row);
-    await claimTransition(tx.subProject, { id, status: row.status }, { status });
-    return tx.subProject.findUnique({
-      where: { id },
-      include: { constructionProject: true, createdByUser: { select: ACTOR_SELECT } },
+  // Penutupan membuat Arsip Penutupan (L8) DI DALAM transaksi yang sama, dari data
+  // yang sudah dikunci. Gagal di mana pun → status tidak berubah, file dibuang.
+  const closing = CLOSED_STATUSES.includes(status);
+  const store = closing ? closingArchive.createStore(userId) : null;
+  let updated;
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      if (status === 'active') await assertNoOtherActiveStage(tx, row);
+      if (closing) {
+        await assertStageClosable(tx, row);
+        await closingArchive.archiveStage(tx, store, row.id, status, userId);
+      }
+      await claimTransition(tx.subProject, { id, status: row.status }, { status });
+      return tx.subProject.findUnique({
+        where: { id },
+        include: { constructionProject: true, createdByUser: { select: ACTOR_SELECT } },
+      });
     });
-  });
+  } catch (err) {
+    if (store) await store.discard();
+    throw err;
+  }
 
   return {
     ...shapeSubProject(updated, await calculateProgress(updated)),
