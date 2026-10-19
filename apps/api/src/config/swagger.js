@@ -19,6 +19,77 @@ const swaggerSpec = {
       }
     },
     schemas: {
+      // Modul Pekerja — docs/skema-tenaga-kerja-harian.md P1–P11
+      Worker: {
+        type: 'object',
+        description: 'Identitas pekerja (master GLOBAL, tidak terikat project/tahapan). Upah TIDAK di sini — milik penugasan.',
+        properties: {
+          id: { type: 'integer' },
+          workerCode: { type: 'string', example: 'PWK-000001', description: 'Dibuat sistem' },
+          fullName: { type: 'string', example: 'Dedi Kurniawan' },
+          idNumber: { type: 'string', nullable: true, example: '3275010294880001', description: 'NIK, 16 digit; unik kalau diisi' },
+          phone: { type: 'string', nullable: true },
+          defaultRole: { type: 'string', nullable: true, example: 'Operator Excavator' },
+          joinedAt: { type: 'string', format: 'date', nullable: true },
+          yearsOfService: { type: 'integer', nullable: true, description: 'Turunan dari joinedAt (tidak disimpan)' },
+          notes: { type: 'string', nullable: true },
+          createdBy: { type: 'object', properties: { id: { type: 'integer' }, fullName: { type: 'string' } } },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      WorkerAssignment: {
+        type: 'object',
+        description: 'Kesepakatan kerja satu pekerja di satu tahapan. Tanpa kolom status: `isActive` = endDate kosong atau ≥ hari ini (turunan).',
+        properties: {
+          id: { type: 'integer' },
+          subProjectId: { type: 'integer' },
+          worker: { type: 'object', properties: { id: { type: 'integer' }, workerCode: { type: 'string' }, fullName: { type: 'string' }, idNumber: { type: 'string', nullable: true }, phone: { type: 'string', nullable: true } } },
+          workerType: { type: 'string', enum: ['contract', 'daily'] },
+          assignedRole: { type: 'string', nullable: true, description: 'Peran di tahapan ini; null → pakai worker.defaultRole' },
+          dailyWage: { type: 'number', example: 150000, description: 'Upah sepakat per hari — juga untuk pekerja KONTRAK (P3)' },
+          startDate: { type: 'string', format: 'date' },
+          endDate: { type: 'string', format: 'date', nullable: true },
+          isActive: { type: 'boolean', description: 'Turunan' },
+          loggedDays: { type: 'integer', description: 'Jumlah log tahapan ini yang memuat pekerja ini (turunan)' },
+          notes: { type: 'string', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      LaborLogItem: {
+        type: 'object',
+        description: 'SATU BARIS = SATU ORANG. totalWage = dailyWage + overtimeAmount (tanpa pengali, P2) — dihitung, tidak disimpan.',
+        properties: {
+          id: { type: 'integer' },
+          worker: { type: 'object', properties: { id: { type: 'integer' }, workerCode: { type: 'string' }, fullName: { type: 'string' } } },
+          workerRole: { type: 'string', example: 'Harian K3' },
+          workerType: { type: 'string', enum: ['contract', 'daily'] },
+          dailyWage: { type: 'number' },
+          overtimeAmount: { type: 'number', description: '0 = tidak lembur' },
+          totalWage: { type: 'number' },
+          taskNotes: { type: 'string', nullable: true },
+          assignmentDailyWage: { type: 'number', nullable: true, description: 'Upah di penugasan tahapan ini; null = tanpa penugasan' },
+          wageDiffersFromAssignment: { type: 'boolean', description: 'Penanda untuk pemeriksa klaim (P7)' },
+        },
+      },
+      LaborLog: {
+        type: 'object',
+        description: 'Log tenaga kerja satu tahapan satu tanggal. Tanpa status & tanpa validasi (P1). Total dihitung saat dibaca.',
+        properties: {
+          id: { type: 'integer' },
+          subProjectId: { type: 'integer' },
+          workDate: { type: 'string', format: 'date' },
+          notes: { type: 'string', nullable: true },
+          summary: { type: 'object', properties: {
+            totalWorkers: { type: 'integer' }, contractWorkers: { type: 'integer' }, dailyWorkers: { type: 'integer' },
+            overtimeWorkers: { type: 'integer' }, totalWage: { type: 'number' }, totalOvertime: { type: 'number' },
+          } },
+          items: { type: 'array', items: { $ref: '#/components/schemas/LaborLogItem' }, description: 'Hanya di detail & response tulis; list tidak memuat items' },
+          createdBy: { type: 'object', properties: { id: { type: 'integer' }, fullName: { type: 'string' } } },
+          updatedBy: { type: 'object', nullable: true, properties: { id: { type: 'integer' }, fullName: { type: 'string' } } },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
       ProjectFolderEntry: {
         type: 'object',
         description: 'Satu folder di direktori project. `kind: user` = folder buatan Admin (bisa di-rename/hapus). `kind: system` = baca-saja: lampiran modul (`delivery-notes`, `receipt-proofs`, dibaca dari tabel sumber — tidak disalin) atau `closing-archive` ("Arsip Penutupan", XLSX yang dibuat SEKALI saat tahapan/project ditutup). Ringkasan dihitung saat dibaca.',
@@ -153,11 +224,13 @@ const swaggerSpec = {
     { name: 'Files', description: 'Unduh lampiran lewat signed URL' },
     { name: 'Project Files', description: 'Berkas project: folder user, folder sistem baca-saja (lampiran modul + arsip penutupan XLSX), sampah 30 hari (L8)' },
     { name: 'Approval Center', description: 'Antrean baca-saja lintas modul (VIEW approval_queue). Aksi tetap di modul sumber' },
+    { name: 'Pekerja', description: 'Master pekerja (global) + penugasan per tahapan — docs/skema-tenaga-kerja-harian.md' },
+    { name: 'Log Tenaga Kerja', description: 'Log pekerja harian per tahapan per tanggal, satu baris = satu orang, tanpa validasi (P1)' },
     { name: 'Income Records', description: 'Pencatatan pendapatan dan billing' },
     { name: 'Income Payments', description: 'Pembayaran client' },
     { name: 'Equipment Income Claims', description: 'Klaim pendapatan alat oleh Divisi Alat' },
     { name: 'Finance Field', description: 'Pengeluaran operasional lapangan' },
-    { name: 'Daily Labor', description: 'Upah harian dan klaim pembayaran' },
+    { name: 'Daily Labor', description: 'PLACEHOLDER September — klaim upah & bukti bayar dirancang ulang di sesi klaim (docs/skema-tenaga-kerja-harian.md "Hilir")' },
     { name: 'Chart of Accounts', description: 'Master akun keuangan' },
     { name: 'Journal Entries', description: 'Jurnal umum debit-credit' },
     { name: 'Financial Corrections', description: 'Koreksi transaksi keuangan' },
@@ -2144,7 +2217,7 @@ const swaggerSpec = {
           '| `project-summary` | project konstruksi ditutup | Rekap tahapan: jenis, status, nilai kontrak, target & volume tervalidasi, progress %, nilai tertagih |\n' +
           '| `supply-deliveries` | supply ditutup | Tanggal, no. surat jalan, jenis kendaraan, nopol, sopir, material, asal, tujuan, volume; total per satuan |\n' +
           '| `rental-timesheet` | rental ditutup (1 file per unit) | Penyewa, periode, alat, operator; per tanggal sesi pagi/siang/overtime (awal, akhir, jam), total jam, hari kerja, keterangan; baris jumlah |\n\n' +
-          'Log/dokumen yang dibatalkan tidak ikut. Sheet Pekerja (`stage-labor`) menyusul bersama modul Pekerja — berlaku untuk tahapan yang ditutup sesudahnya.\n\n' +
+          'Log/dokumen yang dibatalkan tidak ikut. `stage-labor` (tahapan ditutup; Log Pekerja per baris, Rekap per Pekerja, Penugasan) menyusul bersama modul Pekerja — berlaku untuk tahapan yang ditutup sesudahnya.\n\n' +
           '`delivery-notes`: surat jalan aktif tiap delivery (yang sudah diganti tidak tampil). `receipt-proofs`: semua bukti penerimaan. Delivery/receipt yang dibatalkan tetap tampil dengan `cancelled: true` (pembatalan juga riwayat). delivery-notes/receipt-proofs: construction WAJIB `subProjectId` (hidup di tahapan), supply tanpa; rental tidak punya (404). Buka file lewat `GET /api/files/{fileId}/url`.',
         parameters: [
           { in: 'path', name: 'type', required: true, schema: { type: 'string', enum: ['construction', 'rental', 'supply'] } },
@@ -2301,6 +2374,146 @@ const swaggerSpec = {
     '/income/claims/{id}': { get: { tags: ['Equipment Income Claims'], summary: 'Detail claim + items', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } } },
     '/income/claims/{id}/approve': { put: { tags: ['Equipment Income Claims'], summary: 'Finance approve claim', description: 'Role: finance. Triggers GL journal + cash-in Kas Alat.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Approved + journal + cash transaction' } } } },
     '/income/claims/{id}/reject': { put: { tags: ['Equipment Income Claims'], summary: 'Finance reject claim', description: 'Role: finance', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Rejected' } } } },
+
+    // ========================================
+    // 7b. PEKERJA & LOG TENAGA KERJA — docs/skema-tenaga-kerja-harian.md P1–P11
+    // ========================================
+    '/workers': {
+      get: {
+        tags: ['Pekerja'], summary: 'List master pekerja',
+        description: 'Permission: worker:read. Master GLOBAL — pekerja yang sama dipakai lintas tahapan & project. `search` mencocokkan nama, kode, atau NIK.',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' }, { $ref: '#/components/parameters/SearchParam' }],
+        responses: { 200: { description: 'Paginated Worker' } },
+      },
+      post: {
+        tags: ['Pekerja'], summary: 'Daftarkan pekerja',
+        description: 'Permission: worker:create (Admin, Lapangan). Cukup `fullName` — pekerja sekali-datang bisa dibuat langsung dari layar input log (P6). `workerCode` dibuat sistem (ditolak kalau dikirim). NIK opsional, 16 digit, unik di antara yang terisi (409).',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['fullName'], properties: {
+          fullName: { type: 'string', maxLength: 150 }, idNumber: { type: 'string', pattern: '^[0-9]{16}$' }, phone: { type: 'string', maxLength: 30 },
+          defaultRole: { type: 'string', maxLength: 100 }, joinedAt: { type: 'string', format: 'date', description: 'Tidak di masa depan' }, notes: { type: 'string' },
+        } } } } },
+        responses: { 201: { description: 'Worker' }, 400: { description: 'Validasi gagal / workerCode dikirim' }, 409: { description: 'NIK sudah terdaftar' } },
+      },
+    },
+    '/workers/{id}': {
+      get: {
+        tags: ['Pekerja'], summary: 'Detail pekerja + riwayat penugasan',
+        description: 'Permission: worker:read. Worker + `assignments` (WorkerAssignment per tahapan, dengan kode project & jenis tahapan) + `laborSummary` per tahapan: `{ subProjectId, loggedDays, totalWage }` — menjawab "bekerja berapa hari di mana".',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Worker + assignments + laborSummary' }, 404: { description: 'Tidak ditemukan' } },
+      },
+      put: {
+        tags: ['Pekerja'], summary: 'Ubah identitas pekerja',
+        description: 'Permission: worker:update. Field sama dengan POST, semua opsional; `idNumber: null` mengosongkan NIK. Perbaikan nama ikut tampil di log lama (log merujuk master, P6); upah & peran di log TIDAK berubah.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: {
+          fullName: { type: 'string', maxLength: 150 }, idNumber: { type: 'string', nullable: true, pattern: '^[0-9]{16}$' }, phone: { type: 'string', nullable: true },
+          defaultRole: { type: 'string', nullable: true }, joinedAt: { type: 'string', format: 'date', nullable: true }, notes: { type: 'string', nullable: true },
+        } } } } },
+        responses: { 200: { description: 'Worker' }, 409: { description: 'NIK sudah terdaftar' } },
+      },
+      delete: {
+        tags: ['Pekerja'], summary: 'Hapus pekerja (salah input)',
+        description: 'Permission: worker:delete (Admin). Hanya kalau belum punya penugasan maupun baris log — selain itu 409.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Dihapus' }, 409: { description: 'Sudah punya penugasan / tercatat di log' } },
+      },
+    },
+    '/worker-assignments': {
+      get: {
+        tags: ['Pekerja'], summary: 'List penugasan',
+        description: 'Permission: worker:read. Wajib salah satu: `subProjectId` (daftar pekerja tahapan — layar WorkersPage) atau `projectWorkerId`. `activeOn=YYYY-MM-DD` = hanya yang bertugas pada tanggal itu (startDate ≤ tanggal ≤ endDate/kosong) — dipakai FE untuk mengisi awal log harian. `active=true|false` = relatif hari ini. Tanpa paginasi kalau `subProjectId` diisi (satu tahapan = puluhan baris).',
+        parameters: [
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'projectWorkerId', schema: { type: 'integer' } },
+          { in: 'query', name: 'workerType', schema: { type: 'string', enum: ['contract', 'daily'] } },
+          { in: 'query', name: 'active', schema: { type: 'string', enum: ['true', 'false'] } },
+          { in: 'query', name: 'activeOn', schema: { type: 'string', format: 'date' } },
+          { $ref: '#/components/parameters/SearchParam' },
+        ],
+        responses: { 200: { description: 'Array WorkerAssignment (+ `summary`: total, aktif, upah harian aktif)' }, 400: { description: 'subProjectId / projectWorkerId wajib salah satu' } },
+      },
+      post: {
+        tags: ['Pekerja'], summary: 'Tugaskan pekerja ke tahapan',
+        description: 'Permission: worker:create. Tahapan `planned`/`active` (409 selainnya, termasuk ditutup). Satu penugasan per (tahapan, pekerja) — 409 kalau sudah ada (ubah yang ada, mis. kosongkan endDate untuk memanggil kembali). Penugasan opsional untuk pekerja harian; log tetap bisa mencatat pekerja tanpa penugasan.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['subProjectId', 'projectWorkerId', 'workerType', 'dailyWage', 'startDate'], properties: {
+          subProjectId: { type: 'integer' }, projectWorkerId: { type: 'integer' },
+          workerType: { type: 'string', enum: ['contract', 'daily'] }, assignedRole: { type: 'string', maxLength: 100 },
+          dailyWage: { type: 'number', minimum: 1 }, startDate: { type: 'string', format: 'date' },
+          endDate: { type: 'string', format: 'date', description: '≥ startDate' }, notes: { type: 'string' },
+        } } } } },
+        responses: { 201: { description: 'WorkerAssignment' }, 400: { description: 'Validasi gagal' }, 404: { description: 'Tahapan / pekerja tidak ditemukan' }, 409: { description: 'Sudah ditugaskan / tahapan tidak planned-active' } },
+      },
+    },
+    '/worker-assignments/{id}': {
+      get: { tags: ['Pekerja'], summary: 'Detail penugasan', description: 'Permission: worker:read.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'WorkerAssignment' } } },
+      put: {
+        tags: ['Pekerja'], summary: 'Ubah penugasan / keluarkan dari tahapan',
+        description: 'Permission: worker:update. `subProjectId` & `projectWorkerId` tidak bisa diubah (400). "Keluarkan" = isi `endDate`; panggil kembali = `endDate: null`. Mengubah `dailyWage` TIDAK mengubah log yang sudah tercatat (upah disimpan per baris log). Tahapan ditutup → 409. Saat tahapan ditutup, penugasan dengan endDate kosong diisi tanggal penutupan otomatis.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: {
+          workerType: { type: 'string', enum: ['contract', 'daily'] }, assignedRole: { type: 'string', nullable: true },
+          dailyWage: { type: 'number', minimum: 1 }, startDate: { type: 'string', format: 'date' },
+          endDate: { type: 'string', format: 'date', nullable: true }, notes: { type: 'string', nullable: true },
+        } } } } },
+        responses: { 200: { description: 'WorkerAssignment' }, 409: { description: 'Tahapan ditutup' } },
+      },
+      delete: {
+        tags: ['Pekerja'], summary: 'Hapus penugasan (salah input)',
+        description: 'Permission: worker:delete (Admin). Hanya kalau pekerja itu belum pernah tercatat di log tahapan ini — selain itu 409 (keluarkan lewat endDate).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Dihapus' }, 409: { description: 'Sudah tercatat di log / tahapan ditutup' } },
+      },
+    },
+    '/labor-logs': {
+      get: {
+        tags: ['Log Tenaga Kerja'], summary: 'List log per tahapan',
+        description: 'Permission: labor-log:read. Urut workDate terbaru. Tiap log memuat `summary` (total orang, kontrak/harian, lembur, total upah) tanpa items. `projectWorkerId` = log yang memuat pekerja itu. Response juga memuat `periodSummary` atas SEMUA log yang cocok filter (bukan hanya halaman ini).',
+        parameters: [
+          { in: 'query', name: 'subProjectId', required: true, schema: { type: 'integer' } },
+          { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'projectWorkerId', schema: { type: 'integer' } },
+          { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+        ],
+        responses: { 200: { description: 'Paginated LaborLog (tanpa items) + periodSummary' } },
+      },
+      post: {
+        tags: ['Log Tenaga Kerja'], summary: 'Catat log harian (header + semua pekerja sekaligus)',
+        description: 'Permission: labor-log:create (Lapangan). Satu transaksi (P9). Tahapan harus `active` dan belum ditutup (409); `workDate` tidak di masa depan; satu log per (tahapan, tanggal) — 409, ubah yang ada. `items` minimal 1; tiap baris WAJIB `projectWorkerId` (P6 — pekerja baru dibuat dulu lewat POST /workers), tidak boleh dobel dalam satu log (400), dan pekerja yang sama tidak boleh sudah tercatat di log LAIN pada tanggal yang sama di tahapan/project mana pun (409 menyebut tahapannya, P10). `workerRole`/`workerType`/`dailyWage` dikirim apa adanya — FE mengisinya awal dari penugasan (`GET /worker-assignments?subProjectId=&activeOn=`). Total TIDAK dikirim (dihitung; ditolak kalau dikirim).',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['subProjectId', 'workDate', 'items'], properties: {
+          subProjectId: { type: 'integer' }, workDate: { type: 'string', format: 'date' }, notes: { type: 'string' },
+          items: { type: 'array', minItems: 1, maxItems: 300, items: { type: 'object', required: ['projectWorkerId', 'workerRole', 'workerType', 'dailyWage'], properties: {
+            projectWorkerId: { type: 'integer' }, workerRole: { type: 'string', maxLength: 100 },
+            workerType: { type: 'string', enum: ['contract', 'daily'] }, dailyWage: { type: 'number', minimum: 1 },
+            overtimeAmount: { type: 'number', minimum: 0, default: 0, description: 'Rupiah; alasan di taskNotes (P7)' }, taskNotes: { type: 'string' },
+          } } },
+        } } } } },
+        responses: { 201: { description: 'LaborLog dengan items' }, 400: { description: 'Validasi gagal / pekerja dobel dalam log' }, 404: { description: 'Tahapan / pekerja tidak ditemukan' }, 409: { description: 'Tahapan tidak aktif atau ditutup / log tanggal itu sudah ada / pekerja sudah tercatat di log lain tanggal itu' } },
+      },
+    },
+    '/labor-logs/{id}': {
+      get: {
+        tags: ['Log Tenaga Kerja'], summary: 'Detail log + semua pekerja',
+        description: 'Permission: labor-log:read. Items diurut nama; tiap baris memuat `assignmentDailyWage` & `wageDiffersFromAssignment`.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'LaborLog dengan items' }, 404: { description: 'Tidak ditemukan' } },
+      },
+      put: {
+        tags: ['Log Tenaga Kerja'], summary: 'Ubah log — kirim DAFTAR LENGKAP pekerja',
+        description: 'Permission: labor-log:update (Lapangan). `items` (kalau dikirim) = daftar lengkap; server menyelaraskan per projectWorkerId: yang ada diubah (id baris tetap), yang baru dibuat, yang tidak dikirim dihapus (P9). Aturan baris sama dengan POST. `subProjectId` & `workDate` tidak bisa diubah (400) — salah tanggal = hapus lalu catat ulang (P8). Tahapan ditutup → 409. `updatedBy` dicatat. (Sesi klaim: log yang sudah diklaim akan ditolak 409.)',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: {
+          notes: { type: 'string', nullable: true },
+          items: { type: 'array', minItems: 1, maxItems: 300, items: { type: 'object', required: ['projectWorkerId', 'workerRole', 'workerType', 'dailyWage'], properties: {
+            projectWorkerId: { type: 'integer' }, workerRole: { type: 'string' }, workerType: { type: 'string', enum: ['contract', 'daily'] },
+            dailyWage: { type: 'number', minimum: 1 }, overtimeAmount: { type: 'number', minimum: 0 }, taskNotes: { type: 'string', nullable: true },
+          } } },
+        } } } } },
+        responses: { 200: { description: 'LaborLog dengan items' }, 400: { description: 'Validasi gagal' }, 409: { description: 'Tahapan ditutup / pekerja sudah tercatat di log lain tanggal itu' } },
+      },
+      delete: {
+        tags: ['Log Tenaga Kerja'], summary: 'Hapus log beserta barisnya',
+        description: 'Permission: labor-log:delete (Lapangan). Tahapan ditutup → 409. (Sesi klaim: log yang sudah diklaim akan ditolak 409.)',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Dihapus' }, 409: { description: 'Tahapan ditutup' } },
+      },
+    },
 
     // ========================================
     // 8. FINANCE FIELD & LABOR

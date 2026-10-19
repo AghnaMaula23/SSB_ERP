@@ -1,6 +1,6 @@
 # Backlog Frontend — ConstructERP
 
-Terakhir diperbarui: 16 Oktober 2026 (audit FE↔BE).
+Terakhir diperbarui: 19 Oktober 2026 (audit ulang FE↔BE, lihat E27).
 
 Berisi apa yang **backend sudah
 sediakan** tapi FE belum pakai, dan di mana bentuk data FE berbeda dari API.
@@ -50,7 +50,7 @@ boleh ditampilkan apa adanya.
 Urutan prioritas ada di **E17**.
 
 **Sudah selesai, jangan dikerjakan lagi:** E1, E2, E4 (Purchase Order), E4c (Kas Alat),
-dan bagian Project pada E4b.
+E8, E22 bagian 1, dan bagian Project pada E4b. E3 tinggal `ModuleSelection.jsx`.
 
 ---
 
@@ -86,7 +86,12 @@ pada kebetulan FE tidak mengirimnya.
 Mengirimnya sekarang dibalas 400 dengan pesan yang mengarahkan ke halaman
 Maintenance. Aturannya ditegakkan, bukan diharapkan.
 
-## E3. `hasPermission()` mem-bypass super_admin — WAJIB DIPERBAIKI (15 Okt 2026)
+## E3. `hasPermission()` mem-bypass super_admin — SEBAGIAN BERES (19 Okt 2026)
+
+> **Status 19 Okt 2026:** `permissions.js` sudah beres (hanya membaca `permissions`).
+> **Sisa:** `ModuleSelection.jsx:17-19` masih memakai `isSuperAdmin` untuk membuka
+> kartu modul. Ganti dengan cek permission `equipment:read` / `project:read` saja —
+> super_admin sudah memegang semua `:read`, jadi aksesnya tidak berubah.
 
 `apps/web/src/services/permissions.js`:
 
@@ -211,7 +216,10 @@ dengan peta alias untuk nilai lama.
 Dari audit `feature/be-div-alat` dan push Rafi `72c455a` (modul Admin). Build
 dan lint FE bersih; semua path API yang dipanggil modul Admin cocok dengan route.
 
-## E8. Pool item mengirim dan menampilkan kuantitas — MEMBLOKIR CONTRACT
+## E8. Pool item mengirim dan menampilkan kuantitas — BERES (19 Okt 2026)
+
+> **Status 19 Okt 2026:** input "Jumlah" dan pengiriman `requestedQuantity` pool item
+> sudah dihapus dari FE. DROP kolom pool item di backend **tidak lagi terblokir FE**.
 
 - `admin/project/pages/PoolItemFormPage.jsx` punya input **"Jumlah"**, dan
   `projectService.addPoolItem` mengirim `requestedQuantity`.
@@ -410,8 +418,8 @@ prioritas.
 | 2 | **E9b** buang isian "dikerjakan oleh" (`performedBy`) maintenance beserta `getMaintenancePerformedByOptions` (`/api/users` selalu 403 untuk divisi_alat lalu jatuh ke nama palsu) | Nama palsu tersimpan; kolom `performed_by` dijadwalkan DROP |
 | 3 | **E4e** hapus fallback localStorage di `maintenanceService.js` | Aspek "tersimpan" padahal tidak ada di database |
 | 4 | **E10** status tindakan damage & kaitan PO di localStorage; aturan FE "wajib PO approved untuk resolve" tidak ada di backend | Tidak terlihat user lain; aturan berbeda |
-| 5 | **E8** hapus input "Jumlah" pool item | Memblokir migrasi backend |
-| 6 | **E3** bypass super_admin di `hasPermission` & `ModuleSelection` | Tombol tulis selalu berakhir 403 |
+| 5 | ~~**E8** hapus input "Jumlah" pool item~~ — **BERES 19 Okt** | Memblokir migrasi backend |
+| 6 | **E3** bypass super_admin — `hasPermission` **beres**, sisa `ModuleSelection` | Tombol tulis selalu berakhir 403 |
 | 7 | **E4d** sambungkan layar ambang per jenis ke API (lihat E4d) | Angka ambang tidak pernah sampai ke database |
 | 8 | **E11** data demo rental/supply bercampur data asli | User tidak bisa membedakan kontrak asli dari contoh |
 
@@ -526,6 +534,9 @@ menebak kontrak (E9, E4e, E10, E11, ambang maintenance).
 Detail: Swagger tag *Approval Center* dan `docs/keputusan-desain-approval-center.md`.
 
 **1. Perlu dikerjakan SEGERA (memutus layar yang sudah ada):**
+
+> **Status 19 Okt 2026:** alasan tolak PR & progress sudah dikirim, komentar usang
+> sudah dibuang. **Sisa:** menampilkan alasan ke pengaju (butir terakhir di bawah).
 
 - **Tolak PR sekarang wajib `notes`.** `rejectPurchaseRequest(id)` di
   `admin/approvals/services/approvalService.js` mengirim tanpa body → dibalas **400**
@@ -646,3 +657,69 @@ Detail: `docs/keputusan-desain-lampiran.md` L8 "Tahapan / project selesai = terk
   Penutupan") di tahapan/project yang ditutup; isinya lewat
   `GET /api/project-files/projects/:type/:projectId/system-folders/closing-archive[?subProjectId=]`,
   unduh lewat `GET /api/files/:fileId/url`. Tidak ada tombol hapus/ubah untuk arsip.
+
+## E26. Kontrak modul Pekerja disetujui — API BELUM ADA (19 Okt 2026)
+
+Detail: Swagger tag *Pekerja* & *Log Tenaga Kerja*, `docs/skema-tenaga-kerja-harian.md`
+P1–P11. Mock `fieldMockService.js` (pekerja) tetap dipakai sampai API dibangun, tapi
+bentuk layarnya sudah bisa disiapkan:
+
+- **Master pekerja GLOBAL** (`/workers`), bukan per tahapan. `WorkersPage` per tahapan
+  menjadi daftar **penugasan** (`/worker-assignments?subProjectId=`); "+ Tambah Pekerja"
+  = pilih dari master (atau daftarkan baru), lalu isi jenis, peran, upah, tanggal mulai.
+- **NIK opsional** (16 digit kalau diisi), unik global — hapus validasi wajib 16 digit.
+- **Kontrak juga berupah harian** — kolom upah TIDAK dimatikan untuk `contract`
+  (nilai enum `contract`/`daily`, bukan `kontrak`/`harian`).
+- **Status active/standby/off_duty dibuang.** Penugasan punya `startDate`/`endDate`;
+  "Keluarkan" = isi `endDate`, bukan hapus. `groupName` dibuang.
+- **Layar log harian** (baru): satu form untuk semua pekerja satu tanggal, isi awal dari
+  `GET /worker-assignments?subProjectId=&activeOn=<tanggal>`; total baris =
+  upah + lembur, tanpa pengali; lembur = nominal (checkbox hanya memunculkan isian).
+  Simpan ulang mengirim daftar LENGKAP. Tidak ada tombol validasi — log tidak divalidasi.
+- **Siapa boleh apa (P4):** log harian ditulis **Lapangan** saja (`labor-log:create/update/delete`);
+  Admin & Finance hanya membaca log. Master & penugasan: Admin dan Lapangan
+  (`worker:create/update`), hapus hanya Admin (`worker:delete`). Tombol di layar Admin
+  disaring dengan `hasPermission`, bukan nama role.
+- **Pekerja sekali-datang (P6):** setiap baris log wajib merujuk master, jadi layar log
+  butuh aksi "daftarkan cepat" cukup dengan nama (`POST /workers { fullName }`) tanpa
+  keluar dari form. Penugasan tetap opsional untuk pekerja harian.
+- **Satu orang satu log per tanggal (P10):** orang yang sama di tahapan/project lain pada
+  tanggal yang sama → **409** yang menyebut tahapannya. Tampilkan pesannya apa adanya.
+- **P11 masih terbuka** (upah operator alat lewat log ini atau lewat Divisi Alat) — jangan
+  menambah logika khusus operator di layar sampai PM menjawab.
+- CSV `WorkersPage` (E24) menyusul bersama API.
+
+---
+
+# Audit ulang FE↔BE (19 Oktober 2026)
+
+## E27. Ringkasan status — apa yang masih terbuka
+
+Backend lengkap untuk semua kontrak di backlog ini **kecuali Pekerja (E26)**. Build
+dan lint FE bersih. Status butir yang masih terbuka, dikelompokkan menurut pemiliknya:
+
+**Modul Divisi Alat (`modules/alat`) — belum disentuh sejak audit 16 Okt.** Semua butir
+wajib E17 di modul ini masih terbuka: E9a (`DUMMY_PROJECTS`), E9b (`performedBy` di
+`DamageLogActionModal` + `/api/users`; **ini yang kini menahan DROP `performed_by`**),
+E4e, E4d, E10, ditambah kebersihan E5, E6, `resolveDamageIssue`.
+
+**Modul Admin — sisa pekerjaan:**
+
+| Butir | Sisa |
+|---|---|
+| E3 | `ModuleSelection.jsx` masih memakai `isSuperAdmin` |
+| E11 | Data demo rental/supply (termasuk delivery demo di `deliveryService`) |
+| E21 Files | Halaman masih `fileStore.js` (localStorage + IndexedDB); API `/api/project-files` sudah ada |
+| E22 | Alasan keputusan (`adminNotes`/`financeNotes`/`validationNotes`) belum tampil ke pengaju |
+| E23 | Seluruhnya: `rental-sheet`, hapus `sessionOf()`, batalkan log, operator |
+| E24 | Seluruhnya: BOM + pemisah `;` di `utils/csv.js`, CSV halaman volume/stok/alokasi, CSV timesheet terpotong 100 baris |
+| E25 | Loading + 503 saat menutup, sembunyikan tombol tulis setelah ditutup |
+
+**Layar yang belum ada (E20):** seluruh sisi **Finance** (approve/reject PR + nominal
+aktual, approve request material — antrean FE sekarang hanya `stage: 'admin'`), seluruh
+modul **Lapangan** (request alat & material, delivery, penerimaan), keputusan Divisi Alat
+untuk request alat, manajemen akun, master material/supplier/jenis alat, kategori kas.
+
+**Tetap mock dan wajar (E21):** income, klaim pendapatan alat, kas lapangan, pekerja
+(sampai E26 dibangun), log aktivitas.
+
