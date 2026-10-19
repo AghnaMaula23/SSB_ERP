@@ -6,7 +6,12 @@ function readUser() {
   }
 }
 
+/**
+ * Tanpa bypass role: sejak 15 Okt 2026 super_admin hanya memantau (`*:read`
+ * plus manajemen akun), dan permission di /api/auth/me sudah mencerminkan hak
+ * aksesnya yang sebenarnya (backlog-fe E3).
+ */
 export function hasPermission(permission) {
   const user = readUser();
-  return user.roles?.includes('super_admin') || user.permissions?.includes(permission) || false;
+  return user.permissions?.includes(permission) || false;
 }

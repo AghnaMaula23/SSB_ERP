@@ -25,10 +25,10 @@ export default function ProjectListView({ projects, loading, error, canCreate, o
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="Total Project" value={projects.length} accent />
-        <MetricCard label="Active" value={counts.active || 0} tone="teal" />
-        <MetricCard label="Planned" value={counts.planned || 0} />
-        <MetricCard label="Completed" value={counts.completed || 0} tone="emerald" />
+        <MetricCard label="Total Project" value={projects.length} accent loading={loading} />
+        <MetricCard label="Active" value={counts.active || 0} tone="teal" loading={loading} />
+        <MetricCard label="Planned" value={counts.planned || 0} loading={loading} />
+        <MetricCard label="Completed" value={counts.completed || 0} tone="emerald" loading={loading} />
       </div>
 
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}

@@ -172,13 +172,13 @@ export async function updateProgressLog(subProjectId, logId, form, { hadConditio
 
 /**
  * status: 'validated' | 'rejected' | 'submitted' (mencabut validasi).
- * Alasan penolakan belum bisa dikirim — backend menolak `notes` sampai
- * Approval Center tersedia.
+ * `notes` wajib untuk 'rejected' (400 tanpa alasan), opsional untuk lainnya;
+ * tersimpan di `validationNotes`.
  */
-export async function setProgressValidation(subProjectId, logId, status) {
+export async function setProgressValidation(subProjectId, logId, status, notes) {
   return apiRequest(`/api/projects/sub-projects/${subProjectId}/progress-logs/${logId}/validate`, {
     method: 'PUT',
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(notes?.trim() ? { status, notes: notes.trim() } : { status }),
   });
 }
 
@@ -250,8 +250,8 @@ export async function addPoolItem(poolId, form) {
     method: 'POST',
     body: JSON.stringify({
       equipmentTypeId: Number(form.equipmentTypeId),
+      // Satu pool item = satu unit; kuantitas tidak dikirim (backlog E8).
       equipmentItemId: form.equipmentItemId ? Number(form.equipmentItemId) : null,
-      requestedQuantity: Number(form.requestedQuantity || 1),
     }),
   });
 }

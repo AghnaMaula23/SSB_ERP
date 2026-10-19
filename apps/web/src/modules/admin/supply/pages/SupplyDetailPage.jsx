@@ -1,19 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Breadcrumb, MetricCard, MockBanner, Notice, StatusBadge } from '../../project/components/ProjectUi.jsx';
 import { STATUS_TRANSITIONS, formatDate, formatNumber } from '../../project/utils/projectFormat.js';
-import { DELIVERY_COLUMNS, SUPPLY_STATUS } from '../utils/supplyFormat.js';
+import { DELIVERY_COLUMNS, SUPPLY_STATUS, totalsByUnit } from '../utils/supplyFormat.js';
 import { changeSupplyProjectStatus } from '../services/supplyService.js';
 import { changeDemoSupplyStatus } from '../services/demoSupplyService.js';
-import { listDeliveries, removeDelivery } from '../services/deliveryMockService.js';
+import { getDeliveryNoteUrl, listProjectDeliveries } from '../services/deliveryService.js';
 import { downloadCsv } from '../../../../utils/csv.js';
 
 const COLUMN_PREF_KEY = 'admin-supply-columns';
+// Kolom pelengkap disembunyikan sampai user memilih sendiri lewat menu Columns,
+// supaya tabel tetap terbaca tanpa menggulir ke samping.
+const DEFAULT_HIDDEN = ['vehicleType', 'originLocation'];
 
 function readHiddenColumns() {
   try {
-    return JSON.parse(localStorage.getItem(COLUMN_PREF_KEY) || '[]');
+    const stored = localStorage.getItem(COLUMN_PREF_KEY);
+    return stored ? JSON.parse(stored) : DEFAULT_HIDDEN;
   } catch {
-    return [];
+    return DEFAULT_HIDDEN;
   }
 }
 
@@ -58,42 +62,53 @@ const STATUS_ACTIONS = {
   completed: { label: '✓ Selesai', className: 'btn btn-danger text-xs shadow-sm', confirm: 'Tandai kontrak supply selesai? Data kontrak tidak bisa diubah lagi.' },
 };
 
-/** Rekap ritase satu kontrak supply. Header dari API, ritase data contoh. */
+/**
+ * Rekap ritase satu kontrak supply — baca-saja. Ritase dicatat Divisi Lapangan
+ * lewat API delivery (backlog E15); kontrak contoh memakai data contoh.
+ */
 export default function SupplyDetailPage({ project, projects, permissions, initialNotice, onNavigate, onProjectChanged }) {
-  const [deliveries, setDeliveries] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const [result, setResult] = useState({ key: null, rows: [], error: '' });
   const [hidden, setHidden] = useState(readHiddenColumns);
   const [search, setSearch] = useState('');
   const [material, setMaterial] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [showCancelled, setShowCancelled] = useState(false);
   const [notice, setNotice] = useState({ tone: 'success', text: initialNotice || '' });
   const [busy, setBusy] = useState(false);
   const isFinal = ['completed', 'cancelled'].includes(project.status);
-  const canRecord = !isFinal;
+  const loading = result.key !== project.id;
 
   useEffect(() => {
     let cancelled = false;
-    listDeliveries(project.id).then((rows) => { if (!cancelled) setDeliveries(rows); });
+    listProjectDeliveries(project)
+      .then((rows) => { if (!cancelled) setResult({ key: project.id, rows, error: '' }); })
+      .catch((error) => { if (!cancelled) setResult({ key: project.id, rows: [], error: error.message }); });
     return () => { cancelled = true; };
-  }, [project.id, reloadKey]);
+  }, [project]);
 
-  const rows = useMemo(() => deliveries || [], [deliveries]);
+  const rows = useMemo(() => (loading ? [] : result.rows), [loading, result.rows]);
+  const active = useMemo(() => rows.filter((row) => !row.isCancelled), [rows]);
   const materials = useMemo(() => [...new Set(rows.map((row) => row.material))].sort(), [rows]);
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return rows
-      .filter((row) => (!query || [row.deliveryNoteNo, row.plateNumber, row.driverName, row.originLocation, row.destinationLocation].some((value) => String(value || '').toLowerCase().includes(query)))
+      .filter((row) => (showCancelled || !row.isCancelled)
+        && (!query || [row.deliveryNoteNo, row.plateNumber, row.driverName, row.supplier, row.originLocation, row.destinationLocation].some((value) => String(value || '').toLowerCase().includes(query)))
         && (!material || row.material === material)
         && (!startDate || row.deliveryDate >= startDate)
         && (!endDate || row.deliveryDate <= endDate))
       .sort((a, b) => (a.deliveryDate === b.deliveryDate ? a.deliveryNoteNo.localeCompare(b.deliveryNoteNo) : a.deliveryDate.localeCompare(b.deliveryDate)));
-  }, [endDate, material, rows, search, startDate]);
+  }, [endDate, material, rows, search, showCancelled, startDate]);
 
-  const totalVolume = filtered.reduce((sum, row) => sum + (row.volume || 0), 0);
-  const units = new Set(filtered.map((row) => row.plateNumber));
+  // Ritase batal boleh ditampilkan, tapi tidak ikut dihitung.
+  const counted = filtered.filter((row) => !row.isCancelled);
+  const totals = totalsByUnit(counted);
+  const fleet = new Set(counted.map((row) => row.plateNumber));
   const today = new Date().toISOString().slice(0, 10);
-  const todayRows = rows.filter((row) => row.deliveryDate === today);
+  const todayRows = active.filter((row) => row.deliveryDate === today);
+  const pendingReceipt = active.filter((row) => !row.received).length;
+  const cancelledCount = rows.length - active.length;
   const columns = DELIVERY_COLUMNS.filter((column) => !hidden.includes(column.key));
   const volumeIndex = columns.findIndex((column) => column.key === 'volume');
 
@@ -117,37 +132,66 @@ export default function SupplyDetailPage({ project, projects, permissions, initi
     }
   };
 
-  const handleRemove = async (row) => {
-    if (!window.confirm(`Hapus ritase ${row.deliveryNoteNo}?`)) return;
-    await removeDelivery(project.id, row.id);
-    setNotice({ tone: 'success', text: `Ritase ${row.deliveryNoteNo} dihapus.` });
-    setReloadKey((key) => key + 1);
+  // URL file berlaku 5 menit — diminta setiap kali dibuka. Tab dibuka lebih
+  // dulu (masih di dalam klik) supaya tidak diblokir popup blocker.
+  const openNote = async (row) => {
+    const tab = window.open('', '_blank');
+    try {
+      const url = await getDeliveryNoteUrl(row.fileId);
+      if (tab) { tab.opener = null; tab.location.href = url; } else { window.location.assign(url); }
+    } catch (error) {
+      tab?.close();
+      setNotice({ tone: 'error', text: `Surat jalan ${row.deliveryNoteNo} tidak bisa dibuka: ${error.message}` });
+    }
   };
 
   const exportCsv = () => {
-    downloadCsv(`ritase-${project.projectCode}.csv`, filtered, DELIVERY_COLUMNS.map((column) => ({ label: column.label, value: (row) => row[column.key] })));
+    downloadCsv(`ritase-${project.projectCode}.csv`, filtered, [
+      ...DELIVERY_COLUMNS.map((column) => ({
+        label: column.label,
+        value: (row) => (column.key === 'received' ? (row.received ? 'Diterima' : 'Belum') : row[column.key]),
+      })),
+      { label: 'Satuan', value: (row) => row.unit },
+      { label: 'Status', value: (row) => (row.isCancelled ? `Dibatalkan: ${row.cancelReason || ''}` : 'Aktif') },
+    ]);
   };
 
   const cell = (row, key) => {
     if (key === 'deliveryDate') return <span className="whitespace-nowrap">{formatDate(row.deliveryDate)}</span>;
-    if (key === 'deliveryNoteNo') return <span className="whitespace-nowrap font-mono text-xs font-semibold text-slate-800">{row.deliveryNoteNo}</span>;
+    if (key === 'deliveryNoteNo') {
+      return (
+        <span className="whitespace-nowrap">
+          {row.fileId
+            ? <button type="button" onClick={() => openNote(row)} className="font-mono text-xs font-semibold text-teal-700 hover:underline" title="Buka file surat jalan">📎 {row.deliveryNoteNo}</button>
+            : <span className="font-mono text-xs font-semibold text-slate-800">{row.deliveryNoteNo}</span>}
+          {row.isCancelled && <span className="ml-1.5 rounded bg-red-50 px-1 py-0.5 text-[10px] font-bold uppercase text-red-600" title={row.cancelReason || undefined}>Batal</span>}
+        </span>
+      );
+    }
     if (key === 'plateNumber') return <span className="whitespace-nowrap font-mono text-xs">{row.plateNumber}</span>;
-    if (key === 'volume') return <span className="font-mono font-bold text-slate-900">{formatNumber(row.volume)}</span>;
+    if (key === 'received') {
+      if (row.isCancelled) return <span className="text-[11px] text-slate-400">-</span>;
+      return row.received
+        ? <span className="whitespace-nowrap text-[11px] font-semibold text-emerald-700">✓ Diterima</span>
+        : <span className="whitespace-nowrap text-[11px] font-semibold text-amber-700">Belum</span>;
+    }
+    if (key === 'volume') return <span className="whitespace-nowrap font-mono font-bold text-slate-900">{formatNumber(row.volume)} <span className="text-[11px] font-medium text-slate-500">{row.unit}</span></span>;
     return row[key] || '-';
   };
 
   const transitions = permissions.updateProject ? STATUS_TRANSITIONS[project.status] || [] : [];
+  const totalText = totals.length ? totals.map((total) => `${formatNumber(total.volume)} ${total.unit}`).join(' · ') : '0';
 
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Breadcrumb items={[{ label: 'Supply', href: '#/admin/supply' }, { label: project.clientName || 'Kontrak' }, { label: 'Timesheet Detail' }]} />
+        <Breadcrumb items={[{ label: 'Supply', href: '#/admin/supply' }, { label: project.clientName || 'Kontrak' }, { label: 'Rekap Ritase' }]} />
         <label className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
           Kontrak
           <select
             value={project.id}
             onChange={(event) => onNavigate(`admin/supply/${event.target.value}`)}
-            className="input-control h-9 w-64 text-xs normal-case tracking-normal"
+            className="input-control h-9 w-full max-w-sm text-xs normal-case tracking-normal sm:w-80"
             aria-label="Ganti kontrak supply"
           >
             {projects.map((option) => <option key={option.id} value={option.id}>{option.clientName ? `${option.clientName} — ` : ''}{option.projectName}{option.isDemo ? ' (contoh)' : ''}</option>)}
@@ -181,19 +225,16 @@ export default function SupplyDetailPage({ project, projects, permissions, initi
       </div>
 
       <Notice tone={notice.tone} onDismiss={() => setNotice({ tone: 'success', text: '' })}>{notice.text}</Notice>
-      <MockBanner>
-        {project.isDemo
-          ? 'Kontrak ini kontrak contoh, dan seluruh datanya (termasuk ritase) hanya tersimpan di browser ini.'
-          : 'Header kontrak tersambung API, tetapi ritase / surat jalan belum punya tabel di backend — tersimpan hanya di browser ini dan terhapus saat sign out.'}
-      </MockBanner>
+      {project.isDemo && <MockBanner>Kontrak ini kontrak contoh, dan seluruh datanya (termasuk ritase) hanya tersimpan di browser ini.</MockBanner>}
+      {!loading && result.error && <Notice tone="error">Ritase gagal dimuat: {result.error}</Notice>}
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total Volume" value={<>{formatNumber(totalVolume)} <span className="text-sm font-medium text-slate-500">m³</span></>} hint={`${filtered.length} ritase pada filter ini`} accent tone="teal" />
-        <MetricCard label="Active Units" value={<>{units.size} <span className="text-sm font-medium text-slate-500">Trucks</span></>} hint={`${new Set(todayRows.map((row) => row.plateNumber)).size} unit jalan hari ini`} />
-        <MetricCard label="Rata-rata / Ritase" value={<>{filtered.length ? formatNumber(totalVolume / filtered.length) : '-'} <span className="text-sm font-medium text-slate-500">m³</span></>} hint={`${todayRows.length} ritase hari ini`} />
+        <MetricCard label="Total Volume" value={<span className="text-xl">{totalText}</span>} hint={`${counted.length} ritase pada filter ini`} accent tone="teal" loading={loading} />
+        <MetricCard label="Armada" value={<>{fleet.size} <span className="text-sm font-medium text-slate-500">kendaraan</span></>} hint={`${new Set(todayRows.map((row) => row.plateNumber)).size} jalan hari ini · ${todayRows.length} ritase`} loading={loading} />
+        <MetricCard label="Menunggu Penerimaan" value={pendingReceipt} hint={cancelledCount ? `${cancelledCount} ritase dibatalkan` : 'Belum dikonfirmasi penerima'} tone={pendingReceipt ? 'amber' : undefined} loading={loading} />
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800">ⓘ Operational Note</p>
-          <p className="mt-1.5 text-xs italic leading-relaxed text-amber-800">Semua jenis satuan volume dikonversi ke standar m³ proyek.</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800">ⓘ Pencatatan</p>
+          <p className="mt-1.5 text-xs leading-relaxed text-amber-800">Ritase & surat jalan dicatat Divisi Lapangan. Volume mengikuti satuan jenis material masing-masing.</p>
         </div>
       </div>
 
@@ -201,7 +242,7 @@ export default function SupplyDetailPage({ project, projects, permissions, initi
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_12rem_9.5rem_9.5rem_auto] lg:items-end">
           <div>
             <label htmlFor="sp-search" className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">Cari</label>
-            <input id="sp-search" value={search} onChange={(event) => setSearch(event.target.value)} className="input-control mt-1 text-xs" placeholder="Surat jalan, nopol, driver, lokasi..." />
+            <input id="sp-search" value={search} onChange={(event) => setSearch(event.target.value)} className="input-control mt-1 text-xs" placeholder="Surat jalan, nopol, driver, supplier..." />
           </div>
           <div>
             <label htmlFor="sp-material" className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">Material</label>
@@ -218,11 +259,14 @@ export default function SupplyDetailPage({ project, projects, permissions, initi
             <label htmlFor="sp-end" className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">Sampai</label>
             <input id="sp-end" type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} className="input-control mt-1 text-xs" />
           </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => { setSearch(''); setMaterial(''); setStartDate(''); setEndDate(''); }} className="btn btn-secondary text-xs">Reset</button>
-            {canRecord && <a href={`#/admin/supply/${project.id}/ritase/new`} className="btn btn-primary text-xs">+ Input Ritase</a>}
-          </div>
+          <button type="button" onClick={() => { setSearch(''); setMaterial(''); setStartDate(''); setEndDate(''); setShowCancelled(false); }} className="btn btn-secondary text-xs">Reset</button>
         </div>
+        {cancelledCount > 0 && (
+          <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
+            <input type="checkbox" checked={showCancelled} onChange={(event) => setShowCancelled(event.target.checked)} className="accent-teal-700" />
+            Tampilkan {cancelledCount} ritase yang dibatalkan
+          </label>
+        )}
       </section>
 
       <div className="table-container">
@@ -231,40 +275,32 @@ export default function SupplyDetailPage({ project, projects, permissions, initi
             <tr>
               <th className="w-12 text-center">No</th>
               {columns.map((column) => (
-                <th key={column.key} className={column.key === 'volume' ? 'bg-amber-300! text-right text-slate-900!' : ''}>{column.label}{column.key === 'volume' ? ' (m³)' : ''}</th>
+                <th key={column.key} className={`whitespace-nowrap ${column.key === 'volume' ? 'bg-amber-300! text-right text-slate-900!' : ''}`}>{column.label}</th>
               ))}
-              {canRecord && <th className="text-right">Aksi</th>}
             </tr>
           </thead>
           <tbody>
-            {!deliveries ? (
-              <tr><td colSpan={columns.length + 2} className="py-12 text-center text-sm text-slate-500">Memuat ritase...</td></tr>
+            {loading ? (
+              <tr><td colSpan={columns.length + 1} className="py-12 text-center text-sm text-slate-500">Memuat ritase...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={columns.length + 2} className="py-12 text-center text-sm text-slate-500">{rows.length ? 'Tidak ada ritase yang cocok dengan filter.' : 'Belum ada ritase tercatat.'}</td></tr>
+              <tr><td colSpan={columns.length + 1} className="py-12 text-center text-sm text-slate-500">{rows.length ? 'Tidak ada ritase yang cocok dengan filter.' : 'Belum ada ritase. Ritase muncul di sini setelah Divisi Lapangan mencatat surat jalan untuk request material kontrak ini.'}</td></tr>
             ) : filtered.map((row, index) => (
-              <tr key={row.id}>
+              <tr key={row.id} className={row.isCancelled ? 'bg-slate-50 opacity-60' : ''} title={row.isCancelled ? `Dibatalkan: ${row.cancelReason || '-'}` : undefined}>
                 <td className="text-center text-xs text-slate-500">{index + 1}</td>
                 {columns.map((column) => (
-                  <td key={column.key} className={column.key === 'volume' ? 'text-right' : 'text-xs text-slate-700'}>{cell(row, column.key)}</td>
+                  <td key={column.key} className={column.key === 'volume' ? `text-right ${row.isCancelled ? 'line-through' : ''}` : 'whitespace-nowrap text-xs text-slate-700'}>{cell(row, column.key)}</td>
                 ))}
-                {canRecord && (
-                  <td>
-                    <div className="flex justify-end gap-1">
-                      <a href={`#/admin/supply/${project.id}/ritase/${row.id}/edit`} className="btn btn-ghost px-2 py-1 text-[11px]">✎ Ubah</a>
-                      <button type="button" onClick={() => handleRemove(row)} className="btn btn-ghost px-2 py-1 text-[11px] text-red-600 hover:bg-red-50">Hapus</button>
-                    </div>
-                  </td>
-                )}
               </tr>
             ))}
           </tbody>
-          {filtered.length > 0 && (
+          {counted.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-slate-800 bg-slate-100">
                 <td colSpan={volumeIndex + 1} className="px-4 py-4 text-center text-base font-bold uppercase tracking-[0.3em] text-slate-900">Total</td>
-                <td className="px-4 py-4 text-right font-mono text-xl font-bold text-slate-900">{formatNumber(totalVolume)}</td>
+                <td className="whitespace-nowrap px-4 py-4 text-right font-mono text-lg font-bold text-slate-900">
+                  {totals.map((total) => <span key={total.unit} className="block">{formatNumber(total.volume)} <span className="text-xs font-medium text-slate-500">{total.unit}</span></span>)}
+                </td>
                 {columns.length - volumeIndex - 1 > 0 && <td colSpan={columns.length - volumeIndex - 1} />}
-                {canRecord && <td />}
               </tr>
             </tfoot>
           )}

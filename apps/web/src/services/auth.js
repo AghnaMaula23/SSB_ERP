@@ -23,8 +23,10 @@ export function clearSession() {
   localStorage.removeItem('maintenance_custom_aspects');
   localStorage.removeItem('admin_mock_inventory');
   localStorage.removeItem('admin_mock_workers');
+  localStorage.removeItem('admin_mock_workers_v2');
   localStorage.removeItem('admin_mock_supply_deliveries');
   localStorage.removeItem('admin_mock_supply_deliveries_v2');
+  localStorage.removeItem('admin_mock_supply_deliveries_v3');
   localStorage.removeItem('admin_mock_supply_projects');
   localStorage.removeItem('admin_mock_rental');
   localStorage.removeItem('admin_mock_income_records');

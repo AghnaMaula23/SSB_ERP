@@ -103,10 +103,10 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
       {state.error && !loading && <Notice tone="error">{state.error}</Notice>}
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="Total Jam" value={`${formatNumber(totalHours)} jam`} accent tone="teal" />
-        <MetricCard label="Hari Kerja" value={workDays} hint="Tanggal dengan jam tercatat" />
-        <MetricCard label="Unit Tercatat" value={perUnit.length} hint={`dari ${units.length} unit dialokasikan`} />
-        <MetricCard label="Rata-rata / Hari" value={workDays ? `${formatNumber(totalHours / workDays)} jam` : '-'} />
+        <MetricCard label="Total Jam" value={`${formatNumber(totalHours)} jam`} accent tone="teal" loading={loading} />
+        <MetricCard label="Hari Kerja" value={workDays} hint="Tanggal dengan jam tercatat" loading={loading} />
+        <MetricCard label="Unit Tercatat" value={perUnit.length} hint={`dari ${units.length} unit dialokasikan`} loading={loading} />
+        <MetricCard label="Rata-rata / Hari" value={workDays ? `${formatNumber(totalHours / workDays)} jam` : '-'} loading={loading} />
       </div>
 
       <section className="card-panel mb-4 p-4" aria-label="Filter timesheet">

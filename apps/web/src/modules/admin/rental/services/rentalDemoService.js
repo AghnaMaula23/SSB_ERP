@@ -7,6 +7,8 @@
 // log API, supaya halaman tidak perlu membedakan cara menampilkannya.
 // ============================================================
 
+import { DEMO_DATA_ENABLED } from '../../utils/demoMode.js';
+
 const STORE_KEY = 'admin_mock_rental';
 
 export const isDemoId = (id) => typeof id === 'string' && id.startsWith('demo-');
@@ -23,13 +25,13 @@ const PROJECTS = [
 
 const UNITS = {
   'demo-1': [
-    ['EXC', 'Excavator', 'SSB-EXC-DEMO1', 'Ahmad Suganda', 'include_solar', 'Komatsu', 'PC200-8'],
-    ['BLD', 'Buldoser', 'SSB-BLD-DEMO1', 'Hendrik W.', 'include_solar', 'CAT', 'D6R XL'],
-    ['DT', 'Dump Truck', 'SSB-DT-DEMO1', 'Siti Aminah', 'supir_only', 'Hino', 'FM260TI'],
+    ['EXC', 'Excavator', 'SSB-EXC-DEMO1', 'Ahmad Suganda', 'include_solar'],
+    ['BLD', 'Buldoser', 'SSB-BLD-DEMO1', 'Hendrik W.', 'include_solar'],
+    ['DT', 'Dump Truck', 'SSB-DT-DEMO1', 'Siti Aminah', 'supir_only'],
   ],
   'demo-2': [
-    ['EXC', 'Excavator', 'SSB-EXC-DEMO2', 'Bambang S.', 'supir_only', 'Komatsu', 'PC200-8'],
-    ['VBR', 'Vibro Roller', 'SSB-VBR-DEMO2', 'Dedi Kurniawan', 'include_solar', 'Sakai', 'SV512'],
+    ['EXC', 'Excavator', 'SSB-EXC-DEMO2', 'Bambang S.', 'supir_only'],
+    ['VBR', 'Vibro Roller', 'SSB-VBR-DEMO2', 'Dedi Kurniawan', 'include_solar'],
   ],
   'demo-3': [],
 };
@@ -68,13 +70,14 @@ function buildSeed() {
   const units = {};
   const logs = {};
   Object.entries(UNITS).forEach(([projectId, rows]) => {
-    units[projectId] = rows.map(([, typeName, assetCode, operator, packet, brand, model], index) => {
+    units[projectId] = rows.map(([, typeName, assetCode, operator, packet], index) => {
       const key = `d${projectId.replace('demo-', '')}-${index + 1}`;
       logs[key] = seedLogs(key, index);
       return {
         key, kind: 'demo', poolItemId: null, equipmentItemId: null, assetCode, typeName,
         requestCode: `REQ-DEMO-${projectId.replace('demo-', '')}${index + 1}`, status: 'active',
-        meta: { operator, packet, brand, model, periodStart: PROJECTS.find((p) => p.id === projectId).contractStartDate, periodEnd: PROJECTS.find((p) => p.id === projectId).contractEndDate },
+        neededDate: PROJECTS.find((p) => p.id === projectId).contractStartDate,
+        meta: { operator, packet },
       };
     });
   });
@@ -98,8 +101,9 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 
 // ---------------- Kontrak ----------------
 
+/** Kosong kalau sakelar data contoh mati — tautan demo-N lalu tampil "tidak ditemukan". */
 export async function listDemoRentalProjects() {
-  return clone(read().projects);
+  return DEMO_DATA_ENABLED ? clone(read().projects) : [];
 }
 
 export async function updateDemoRentalProject(id, form) {
@@ -148,7 +152,8 @@ export async function addDemoUnit(projectId, form, typeName) {
       key, kind: 'demo', poolItemId: null, equipmentItemId: null,
       assetCode: `${typeName.slice(0, 3).toUpperCase()}-DEMO-${list.length + 1}`,
       typeName, requestCode: `REQ-DEMO-${Date.now().toString().slice(-4)}`, status: 'active',
-      meta: { operator: form.operator, packet: form.packet, brand: form.brand, model: form.model, periodStart: form.periodStart, periodEnd: form.periodEnd, extra: form.extra },
+      neededDate: form.neededDate || null, locationDetail: form.locationDetail || null,
+      meta: { operator: form.operator, packet: form.packet, extra: form.extra },
     };
     list.push(unit);
     store.logs[key] = [];

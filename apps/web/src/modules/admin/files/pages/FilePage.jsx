@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Breadcrumb, EmptyPanel, LoadingPanel, Notice } from '../../project/components/ProjectUi.jsx';
-import { formatDateTime } from '../../project/utils/projectFormat.js';
-import { deleteFile, getFile, getFolder, readBlob } from '../services/fileStore.js';
+import { formatDate, formatDateTime } from '../../project/utils/projectFormat.js';
+import { getFile, getFolder, purgeDate, readBlob, restoreFile, trashFile } from '../services/fileStore.js';
 import { fileKind, formatBytes } from '../utils/filesFormat.js';
 
 /** Pratinjau & detail satu berkas. */
 export default function FilePage({ folderId, fileId, onDeleted }) {
+  const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState({ folder: null, file: null, url: '', error: '' });
   const [notice, setNotice] = useState('');
 
@@ -24,7 +25,7 @@ export default function FilePage({ folderId, fileId, onDeleted }) {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [fileId, folderId]);
+  }, [fileId, folderId, reloadKey]);
 
   const { folder, file, url, error } = state;
   if (error) return <EmptyPanel icon="🔎" title="Berkas tidak ditemukan" action={<a href={`#/admin/files/${folderId}`} className="btn btn-secondary text-xs">← Kembali ke folder</a>}>{error}</EmptyPanel>;
@@ -33,10 +34,19 @@ export default function FilePage({ folderId, fileId, onDeleted }) {
   const kind = fileKind(file);
 
   const remove = async () => {
-    if (!window.confirm(`Hapus berkas ${file.fileName}? Tidak bisa dibatalkan.`)) return;
+    if (!window.confirm(`Pindahkan ${file.fileName} ke sampah? Masih bisa dipulihkan selama 30 hari.`)) return;
     try {
-      await deleteFile(file.id);
-      onDeleted(`${file.name} dihapus.`);
+      await trashFile(file.id);
+      onDeleted(`${file.name} dipindahkan ke sampah.`);
+    } catch (requestError) {
+      setNotice(requestError.message);
+    }
+  };
+
+  const restore = async () => {
+    try {
+      await restoreFile(file.id);
+      setReloadKey((key) => key + 1);
     } catch (requestError) {
       setNotice(requestError.message);
     }
@@ -77,11 +87,14 @@ export default function FilePage({ folderId, fileId, onDeleted }) {
         <div className="flex gap-2">
           {url && <a href={url} download={file.fileName} className="btn btn-primary text-xs">↓ Unduh</a>}
           {url && <a href={url} target="_blank" rel="noreferrer" className="btn btn-secondary text-xs">↗ Buka di tab baru</a>}
-          <button type="button" onClick={remove} className="btn btn-ghost text-xs text-red-600 hover:bg-red-50">🗑 Hapus</button>
+          {file.trashedAt
+            ? <button type="button" onClick={restore} className="btn btn-secondary text-xs">↺ Pulihkan</button>
+            : <button type="button" onClick={remove} className="btn btn-ghost text-xs text-red-600 hover:bg-red-50">🗑 Pindahkan ke Sampah</button>}
         </div>
       </div>
 
       {notice && <Notice tone="error" onDismiss={() => setNotice('')}>{notice}</Notice>}
+      {file.trashedAt && <Notice tone="warning">Berkas ini ada di sampah sejak {formatDateTime(file.trashedAt)}{file.trashedBy?.fullName ? ` (oleh ${file.trashedBy.fullName})` : ''} dan akan terhapus permanen pada {formatDate(purgeDate(file))}.</Notice>}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <section className="card-panel overflow-hidden" aria-label="Pratinjau">{preview()}</section>

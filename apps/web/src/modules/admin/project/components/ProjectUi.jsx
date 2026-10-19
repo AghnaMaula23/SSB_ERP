@@ -89,13 +89,27 @@ export function Breadcrumb({ items }) {
   );
 }
 
-export function MetricCard({ label, value, hint, accent = false, tone = 'slate' }) {
+/**
+ * Kartu angka ringkasan. `loading` menampilkan placeholder, supaya angka 0
+ * sebelum data datang tidak terbaca sebagai data sungguhan.
+ */
+export function MetricCard({ label, value, hint, accent = false, tone = 'slate', loading = false }) {
   const valueTone = { slate: 'text-slate-900', teal: 'text-teal-700', emerald: 'text-emerald-700', amber: 'text-amber-700', red: 'text-red-600' };
   return (
-    <article className={`card-panel p-4 ${accent ? 'border-l-4 border-l-teal-600' : ''}`}>
+    <article className={`card-panel p-4 ${accent ? 'border-l-4 border-l-teal-600' : ''}`} aria-busy={loading || undefined}>
       <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-      <p className={`mt-1.5 text-xl font-bold tracking-tight sm:text-2xl ${valueTone[tone] || valueTone.slate}`}>{value}</p>
-      {hint && <p className="mt-0.5 truncate text-[11px] text-slate-400">{hint}</p>}
+      {loading ? (
+        <>
+          <span className="mt-2.5 block h-6 w-20 animate-pulse rounded-md bg-slate-200 sm:h-7" aria-hidden="true" />
+          {hint && <span className="mt-1.5 block h-2.5 w-28 animate-pulse rounded bg-slate-100" aria-hidden="true" />}
+          <span className="sr-only">Memuat…</span>
+        </>
+      ) : (
+        <>
+          <p className={`mt-1.5 text-xl font-bold tracking-tight sm:text-2xl ${valueTone[tone] || valueTone.slate}`}>{value}</p>
+          {hint && <p className="mt-0.5 truncate text-[11px] text-slate-400">{hint}</p>}
+        </>
+      )}
     </article>
   );
 }

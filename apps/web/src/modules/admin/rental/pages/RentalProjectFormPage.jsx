@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import FormPage, { Field, FormError, InfoCard, SectionDivider } from '../../project/components/FormPage.jsx';
 import { MockBanner } from '../../project/components/ProjectUi.jsx';
-import ProjectSourceField from '../../components/ProjectSourceField.jsx';
 import UnitFields from '../components/UnitFields.jsx';
 import { fieldErrorsFrom } from '../../project/utils/projectFormat.js';
 import { BILLING_METHODS } from '../utils/rentalFormat.js';
@@ -36,18 +35,16 @@ export default function RentalProjectFormPage({ project, onSubmitForm, onCancel,
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
     setErrors((current) => ({ ...current, [name]: undefined }));
-    // Periode unit pertama mengikuti periode kontrak selama belum diubah sendiri.
-    if (name === 'contractStartDate' || name === 'contractEndDate') {
-      const key = name === 'contractStartDate' ? 'periodStart' : 'periodEnd';
-      setUnit((current) => (current[key] === form[name] ? { ...current, [key]: value } : current));
-    }
+    // Tanggal & lokasi unit pertama mengikuti kontrak selama belum diubah sendiri.
+    const unitKey = { contractStartDate: 'neededDate', location: 'locationDetail' }[name];
+    if (unitKey) setUnit((current) => (current[unitKey] === form[name] ? { ...current, [unitKey]: value } : current));
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     const nextErrors = {};
     if (!form.clientName.trim()) nextErrors.clientName = 'Nama penyewa wajib diisi.';
-    if (!form.projectName.trim()) nextErrors.projectName = 'Pilih proyek.';
+    if (!form.projectName.trim()) nextErrors.projectName = 'Nama pekerjaan penyewa wajib diisi.';
     if (form.contractStartDate && form.contractEndDate && form.contractStartDate > form.contractEndDate) nextErrors.contractEndDate = 'Periode akhir tidak boleh sebelum periode mulai.';
     const nextUnitErrors = withUnit ? validateUnitForm(unit, { optional: true }) : {};
     setErrors(nextErrors);
@@ -82,6 +79,7 @@ export default function RentalProjectFormPage({ project, onSubmitForm, onCancel,
       footerNote={<><span className="text-red-500">*</span> wajib diisi</>}
       aside={(
         <InfoCard title="Alur sewa">
+          <p>SSB bertindak sebagai agen sewa: alat dikirim ke pekerjaan milik penyewa, bukan ke project konstruksi SSB.</p>
           <p>1. Kontrak tersimpan dengan kode RNT otomatis.</p>
           <p>2. Unit yang diminta dikirim sebagai <b>Request Alat</b> dan langsung masuk antrean Divisi Alat.</p>
           <p>3. Setelah disetujui, Divisi Alat menentukan unit fisiknya — baru timesheet bisa diisi.</p>
@@ -94,14 +92,14 @@ export default function RentalProjectFormPage({ project, onSubmitForm, onCancel,
       <Field label="Penyewa" htmlFor="clientName" required error={errors.clientName}>
         <input id="clientName" name="clientName" value={form.clientName} onChange={update} maxLength={255} className="input-control text-sm uppercase" placeholder="PT SINAR UTARA BANTEN" autoFocus={!isEdit} />
       </Field>
-      <ProjectSourceField
-        projectName={form.projectName}
-        location={form.location}
-        legacyName={project?.projectName}
-        legacyLocation={project?.location}
-        error={errors.projectName}
-        onChange={({ projectName, location }) => { setForm((current) => ({ ...current, projectName, location })); setErrors((current) => ({ ...current, projectName: undefined })); }}
-      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Nama Pekerjaan Penyewa" htmlFor="projectName" required error={errors.projectName}>
+          <input id="projectName" name="projectName" value={form.projectName} onChange={update} maxLength={255} className="input-control text-sm" placeholder="Contoh: Pematangan Lahan Cikande" />
+        </Field>
+        <Field label="Lokasi Kerja Alat" htmlFor="location" error={errors.location}>
+          <input id="location" name="location" value={form.location} onChange={update} maxLength={255} className="input-control text-sm" placeholder="Contoh: Cikande, Serang" />
+        </Field>
+      </div>
 
       <SectionDivider>Kontrak</SectionDivider>
       <div className="grid gap-4 sm:grid-cols-2">

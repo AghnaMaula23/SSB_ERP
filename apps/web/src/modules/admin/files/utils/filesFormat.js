@@ -4,7 +4,9 @@ export const PROJECT_KINDS = {
   supply: { label: 'Supply', icon: '🚚' },
 };
 
-export const FILE_CATEGORIES = ['Surat Jalan', 'Laporan Harian', 'Foto Lapangan', 'Gambar Teknik', 'Sertifikat', 'Kontrak', 'Logistik', 'Invoice', 'Lainnya'];
+// "Surat Jalan" sengaja tidak ada: surat jalan tampil dari folder sistem (L7),
+// bukan diunggah ulang — satu fakta di satu tempat.
+export const FILE_CATEGORIES = ['Laporan Harian', 'Foto Lapangan', 'Gambar Teknik', 'Sertifikat', 'Kontrak', 'Logistik', 'Invoice', 'Lainnya'];
 
 // Status folder mengikuti status proyeknya; folder bisa diarsipkan manual.
 export const FOLDER_STATUS = {
@@ -30,12 +32,25 @@ export function formatBytes(bytes) {
 export function fileKind(file) {
   const name = (file.fileName || '').toLowerCase();
   const type = file.mimeType || '';
+  // DWG dicek dulu: MIME-nya `image/vnd.dwg`, tapi tidak bisa ditampilkan sebagai gambar.
+  if (name.endsWith('.dwg')) return { kind: 'cad', icon: '📐', tone: 'bg-violet-50 text-violet-700' };
   if (type.startsWith('image/')) return { kind: 'image', icon: '🖼️', tone: 'bg-sky-50 text-sky-700' };
   if (type === 'application/pdf' || name.endsWith('.pdf')) return { kind: 'pdf', icon: '📕', tone: 'bg-red-50 text-red-700' };
-  if (/\.(xlsx?|csv)$/.test(name)) return { kind: 'sheet', icon: '📗', tone: 'bg-emerald-50 text-emerald-700' };
-  if (/\.(docx?)$/.test(name)) return { kind: 'doc', icon: '📘', tone: 'bg-blue-50 text-blue-700' };
-  if (name.endsWith('.dwg')) return { kind: 'cad', icon: '📐', tone: 'bg-violet-50 text-violet-700' };
+  if (/\.(xlsx|csv)$/.test(name)) return { kind: 'sheet', icon: '📗', tone: 'bg-emerald-50 text-emerald-700' };
+  if (/\.docx$/.test(name)) return { kind: 'doc', icon: '📘', tone: 'bg-blue-50 text-blue-700' };
   return { kind: 'other', icon: '📄', tone: 'bg-slate-100 text-slate-600' };
+}
+
+/**
+ * Pesan penolakan jenis berkas (profil `project`, L3) — null kalau diterima.
+ * Backend memeriksa isi berkas; di sini cukup ekstensi untuk umpan balik cepat.
+ */
+export function fileTypeError(fileName) {
+  const extension = (fileName.split('.').pop() || '').toLowerCase();
+  if (['heic', 'heif'].includes(extension)) return 'Foto HEIC tidak didukung. Atur kamera ke "Most Compatible" (JPG), lalu foto ulang.';
+  if (['xls', 'doc', 'xlsm', 'docm'].includes(extension)) return `Format .${extension} tidak diterima — simpan ulang sebagai .xlsx / .docx (tanpa makro).`;
+  if (!['pdf', 'jpg', 'jpeg', 'png', 'webp', 'dwg', 'xlsx', 'docx'].includes(extension)) return `Jenis berkas .${extension} tidak didukung.`;
+  return null;
 }
 
 export function timeAgo(iso) {

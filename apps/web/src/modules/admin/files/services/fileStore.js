@@ -1,11 +1,15 @@
 // ============================================================
-// PENYIMPANAN LOKAL — folder & berkas proyek.
+// PENYIMPANAN LOKAL — folder & berkas project buatan user.
 //
-// Backend BELUM punya modul file (multer terpasang tapi belum dipakai, belum
-// ada tabel dokumen). Sampai ada, metadata disimpan di localStorage dan isi
-// berkas di IndexedDB (localStorage terlalu kecil untuk file). Semuanya per
-// browser dan dibersihkan saat sign out. Fungsi dibuat async dengan bentuk
-// yang wajar untuk REST supaya halaman tidak perlu diubah saat diganti API.
+// Fondasi file backend sudah ada (tabel `files`, GET /api/files/:id/url), tapi
+// API berkas project — lampiran tahap 3 di docs/keputusan-desain-lampiran.md —
+// BELUM dibangun. Sampai ada, metadata disimpan di localStorage dan isi berkas
+// di IndexedDB, per browser, dibersihkan saat sign out. Aturannya mengikuti
+// keputusan lampiran supaya pergantian ke API tidak mengubah perilaku:
+//   L3  profil `project`: PDF, JPG, PNG, WebP, DWG, XLSX, DOCX; maks 50 MB
+//   L6  hapus = pindah ke sampah; terhapus permanen 30 hari setelahnya
+//   L7  folder user satu tingkat; surat jalan & bukti penerimaan tampil dari
+//       folder sistem baca-saja (systemFiles.js), tidak disalin ke sini
 // ============================================================
 
 const META_KEY = 'admin_mock_files';
@@ -13,7 +17,9 @@ const DB_NAME = 'constructerp-files';
 const BLOB_STORE = 'blobs';
 
 export const MAX_FILE_SIZE = 50 * 1024 * 1024;
-export const ACCEPTED_TYPES = '.pdf,.dwg,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc';
+export const ACCEPTED_TYPES = '.pdf,.jpg,.jpeg,.png,.webp,.dwg,.xlsx,.docx';
+export const TRASH_DAYS = 30;
+const TRASH_MS = TRASH_DAYS * 24 * 3600 * 1000;
 
 function readUser() {
   try {
@@ -65,12 +71,12 @@ const DEMO_FOLDERS = [
 ];
 
 const DEMO_FILES = [
-  ['Foto Fisik Surat Jalan 102', 'Foto_Fisik_Surat_Jalan_102.jpg', 'image/jpeg', 2.4, 'Surat Jalan', 'Agung Saputra', ['Ritase', 'Subang']],
+  ['Foto Progres Galian STA 12', 'Foto_Progres_Galian_STA12.jpg', 'image/jpeg', 2.4, 'Foto Lapangan', 'Agung Saputra', ['Galian', 'Subang']],
   ['Laporan Harian KM45 Subang', 'Laporan_Harian_KM45_Subang.pdf', 'application/pdf', 1.1, 'Laporan Harian', 'Rian Maulana', ['KM45']],
   ['Logistik Beton ReadyMix V2', 'Logistik_Beton_ReadyMix_V2.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 0.45, 'Logistik', 'Dina Kurnia', ['Beton', 'Rev-2']],
   ['Dokumentasi Tiang Pancang B', 'Dokumentasi_Tiang_Pancang_B.png', 'image/png', 5.8, 'Foto Lapangan', 'Agung Saputra', ['Struktur']],
   ['Sertifikasi Baja A500 Verified', 'Sertifikasi_Baja_A500_Verified.pdf', 'application/pdf', 3.2, 'Sertifikat', 'Rian Maulana', ['QC']],
-  ['Gambar Teknik Jembatan Rev-3', 'Gambar_Teknik_Jembatan_Rev3.dwg', 'application/acad', 12.6, 'Gambar Teknik', 'Dina Kurnia', ['Rev-3']],
+  ['Gambar Teknik Jembatan Rev-3', 'Gambar_Teknik_Jembatan_Rev3.dwg', 'image/vnd.dwg', 12.6, 'Gambar Teknik', 'Dina Kurnia', ['Rev-3']],
   ['Kontrak Sewa Alat Q3', 'Kontrak_Sewa_Alat_Q3.pdf', 'application/pdf', 0.9, 'Kontrak', 'Admin Kantor', ['Legal']],
 ];
 
@@ -116,19 +122,30 @@ function seed() {
   return { folders, files };
 }
 
+const write = (data) => localStorage.setItem(META_KEY, JSON.stringify(data));
+const isTrashed = (file) => Boolean(file.trashedAt);
+
+/** Berkas yang sudah 30 hari di sampah dihapus permanen saat data dibaca (L6). */
+function purgeExpired(data) {
+  const expired = data.files.filter((file) => isTrashed(file) && Date.now() - new Date(file.trashedAt).getTime() > TRASH_MS);
+  if (!expired.length) return data;
+  data.files = data.files.filter((file) => !expired.includes(file));
+  write(data);
+  expired.forEach((file) => { if (file.hasBlob) blobOp('readwrite', (store) => store.delete(file.id)).catch(() => {}); });
+  return data;
+}
+
 function read() {
   try {
     const stored = JSON.parse(localStorage.getItem(META_KEY) || 'null');
-    if (stored?.folders) return stored;
+    if (stored?.folders) return purgeExpired(stored);
   } catch {
     // jatuh ke data awal
   }
   const data = seed();
-  localStorage.setItem(META_KEY, JSON.stringify(data));
+  write(data);
   return data;
 }
-
-const write = (data) => localStorage.setItem(META_KEY, JSON.stringify(data));
 const nextId = (rows) => rows.reduce((max, row) => Math.max(max, row.id), 0) + 1;
 
 // ---------------- Folder ----------------
@@ -137,10 +154,11 @@ const nextId = (rows) => rows.reduce((max, row) => Math.max(max, row.id), 0) + 1
 export async function listFolders() {
   const { folders, files } = read();
   return folders.map((folder) => {
-    const own = files.filter((file) => file.folderId === folder.id);
+    const own = files.filter((file) => file.folderId === folder.id && !isTrashed(file));
     return {
       ...folder,
       fileCount: own.length,
+      trashCount: files.filter((file) => file.folderId === folder.id && isTrashed(file)).length,
       totalSize: own.reduce((sum, file) => sum + file.size, 0),
       lastUploadAt: own.reduce((latest, file) => (file.uploadedAt > latest ? file.uploadedAt : latest), ''),
     };
@@ -195,21 +213,33 @@ export async function setFolderArchived(folderId, archived) {
   return folder;
 }
 
-/** Folder hanya boleh dihapus kalau kosong — berkas tidak ikut hilang diam-diam. */
+/**
+ * Folder hanya boleh dihapus kalau tidak ada berkas aktif — berkas tidak ikut
+ * hilang diam-diam. Isi sampahnya ikut terhapus bersama folder.
+ */
 export async function deleteFolder(folderId) {
   const data = read();
-  if (data.files.some((file) => file.folderId === Number(folderId))) {
-    throw new Error('Folder masih berisi berkas. Pindahkan atau hapus berkasnya dulu.');
+  const own = data.files.filter((file) => file.folderId === Number(folderId));
+  if (own.some((file) => !isTrashed(file))) {
+    throw new Error('Folder masih berisi berkas. Pindahkan berkasnya ke sampah dulu.');
   }
+  data.files = data.files.filter((file) => file.folderId !== Number(folderId));
   data.folders = data.folders.filter((folder) => folder.id !== Number(folderId));
   write(data);
+  own.forEach((file) => { if (file.hasBlob) blobOp('readwrite', (store) => store.delete(file.id)).catch(() => {}); });
 }
 
 // ---------------- Berkas ----------------
 
-export async function listFiles(folderId) {
-  return read().files.filter((file) => file.folderId === Number(folderId)).sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+/** Berkas aktif satu folder, terbaru di atas. `{ trashed: true }` = isi sampahnya. */
+export async function listFiles(folderId, { trashed = false } = {}) {
+  return read().files
+    .filter((file) => file.folderId === Number(folderId) && isTrashed(file) === trashed)
+    .sort((a, b) => (trashed ? b.trashedAt.localeCompare(a.trashedAt) : b.uploadedAt.localeCompare(a.uploadedAt)));
 }
+
+/** Tanggal berkas di sampah terhapus permanen. */
+export const purgeDate = (file) => new Date(new Date(file.trashedAt).getTime() + TRASH_MS).toISOString();
 
 export async function getFile(fileId) {
   const file = read().files.find((row) => row.id === Number(fileId));
@@ -248,9 +278,24 @@ export async function uploadFile(folderId, form, blob) {
   return file;
 }
 
-export async function deleteFile(fileId) {
+/** Pindahkan ke sampah (L6) — masih bisa dipulihkan selama 30 hari. */
+export async function trashFile(fileId) {
   const data = read();
-  data.files = data.files.filter((file) => file.id !== Number(fileId));
+  const file = data.files.find((row) => row.id === Number(fileId));
+  if (!file) throw new Error('Berkas tidak ditemukan.');
+  const user = readUser();
+  file.trashedAt = new Date().toISOString();
+  file.trashedBy = { fullName: user.fullName || user.username };
   write(data);
-  await blobOp('readwrite', (store) => store.delete(Number(fileId))).catch(() => {});
+  return file;
+}
+
+export async function restoreFile(fileId) {
+  const data = read();
+  const file = data.files.find((row) => row.id === Number(fileId));
+  if (!file) throw new Error('Berkas tidak ditemukan — mungkin sudah terhapus permanen.');
+  delete file.trashedAt;
+  delete file.trashedBy;
+  write(data);
+  return file;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { EmptyPanel, LoadingPanel, MockBanner, Notice, StatusBadge } from '../../project/components/ProjectUi.jsx';
+import { Breadcrumb, EmptyPanel, LoadingPanel, MockBanner, Notice, PageHeader, StatusBadge } from '../../project/components/ProjectUi.jsx';
 import { deleteFolder, listFolders, setFolderArchived } from '../services/fileStore.js';
 import { listProjectSources } from '../services/projectSources.js';
 import { FOLDER_STATUS, PROJECT_KINDS, folderStatus, formatBytes, timeAgo } from '../utils/filesFormat.js';
@@ -82,16 +82,15 @@ export default function FolderManagerPage({ initialNotice }) {
 
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Project Folder Manager</h1>
-          <p className="mt-1 text-sm text-slate-500">Kelola dokumen proyek dan log lapangan untuk {activeCount} folder aktif.</p>
-        </div>
-        <a href="#/admin/files/new" className="btn btn-primary text-sm">🗂 Create New Folder</a>
-      </div>
+      <Breadcrumb items={[{ label: 'Divisi Admin' }, { label: 'Files' }]} />
+      <PageHeader
+        title="Project Folder Manager"
+        subtitle={`Kelola dokumen proyek dan log lapangan untuk ${activeCount} folder aktif.`}
+        actions={<a href="#/admin/files/new" className="btn btn-primary text-xs">🗂 Create New Folder</a>}
+      />
 
       <Notice tone={notice.tone} onDismiss={() => setNotice({ tone: 'success', text: '' })}>{notice.text}</Notice>
-      <MockBanner>Backend belum punya penyimpanan berkas — folder & berkas disimpan di browser ini (metadata + isi berkas) dan terhapus saat sign out. Kode proyek diambil dari API Project, Rental, dan Supply.</MockBanner>
+      <MockBanner>API berkas project belum tersedia — folder & berkas buatan user disimpan di browser ini dan terhapus saat sign out. Surat jalan & bukti penerimaan tampil dari API di folder sistem. Kode proyek diambil dari API Project, Rental, dan Supply.</MockBanner>
 
       <section className="card-panel mb-5 p-4" aria-label="Filter folder">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_11rem_9rem_9rem]">

@@ -15,14 +15,14 @@ import WorkhourFormPage from './WorkhourFormPage.jsx';
 import EquipmentPoolPage from './EquipmentPoolPage.jsx';
 import PoolItemFormPage from './PoolItemFormPage.jsx';
 import InventoryPage from './InventoryPage.jsx';
-import InventoryFormPage from './InventoryFormPage.jsx';
 import InventoryMovementPage from './InventoryMovementPage.jsx';
 import WorkersPage from './WorkersPage.jsx';
 import WorkerFormPage from './WorkerFormPage.jsx';
 import { getProject, listProjects, listSubProjects } from '../services/projectService.js';
 import { hasPermission } from '../../../../services/permissions.js';
 import { parseProjectRoute } from '../utils/projectRoute.js';
-import { formatDate, subProjectTypeLabel } from '../utils/projectFormat.js';
+import { formatDate, formatNumber, subProjectTypeLabel } from '../utils/projectFormat.js';
+import { MOVEMENT_TYPES } from '../utils/stockFormat.js';
 
 const FINAL_STATUSES = ['completed', 'cancelled'];
 
@@ -64,6 +64,7 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
     updateAllocation: hasPermission('allocation:update'),
     receiveAllocation: hasPermission('allocation:receive'),
     createWorkhour: hasPermission('workhour:create'),
+    createStockMovement: hasPermission('material-stock:create'),
   };
 
   // Pesan sukses yang dibawa ke halaman tujuan setelah form disimpan.
@@ -308,13 +309,21 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
             onSaved={(saved) => goWithNotice(`${stageBase}/timesheet`, `${saved.totalWorkhour} jam kerja ${saved.equipmentItem?.assetCode || ''} tanggal ${formatDate(saved.workDate)} tersimpan.`)}
           />
         );
-      case 'inventory-new':
-        return <InventoryFormPage key={route} project={project} stage={stage} onCancel={backTo('inventory')} onSaved={(saved) => goWithNotice(`${stageBase}/inventory`, `${saved.itemName} ditambahkan ke inventory.`)} />;
       case 'inventory-movement':
-        return <InventoryMovementPage key={route} project={project} stage={stage} itemId={selection.recordId} onCancel={backTo('inventory')} onSaved={(saved) => goWithNotice(`${stageBase}/inventory`, `Mutasi ${saved.itemName} tersimpan. Stok kini ${saved.stock} ${saved.unit}.`)} />;
+        if (!permissions.createStockMovement) return <NoAccess backHref={`#/${stageBase}/inventory`} backLabel="← Kembali">Pemakaian & koreksi stok dicatat Divisi Lapangan (material-stock:create).</NoAccess>;
+        return (
+          <InventoryMovementPage
+            key={route}
+            project={project}
+            stage={stage}
+            materialTypeId={selection.recordId}
+            onCancel={backTo('inventory')}
+            onSaved={(saved) => goWithNotice(`${stageBase}/inventory`, `${MOVEMENT_TYPES[saved.movementType]?.label || 'Mutasi'} ${formatNumber(saved.quantity)} ${saved.unit} ${saved.materialType?.materialName || ''} tersimpan.`)}
+          />
+        );
       case 'worker-new':
       case 'worker-edit':
-        return <WorkerFormPage key={route} project={project} stage={stage} workerId={selection.recordId} onCancel={backTo('pekerja')} onSaved={(saved) => goWithNotice(`${stageBase}/pekerja`, `Data ${saved.fullName} tersimpan.`)} />;
+        return <WorkerFormPage key={route} project={project} stage={stage} workerId={selection.recordId} onCancel={backTo('pekerja')} onSaved={(saved) => goWithNotice(`${stageBase}/pekerja`, `Penugasan ${saved.worker?.fullName || 'pekerja'} tersimpan.`)} />;
       default:
         break;
     }
@@ -325,7 +334,7 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
       case 'timesheet':
         return <TimesheetPage key={route} project={project} stage={stage} canRecord={permissions.createWorkhour} initialNotice={flashFor(route)} />;
       case 'inventory':
-        return <InventoryPage key={route} project={project} stage={stage} initialNotice={flashFor(route)} />;
+        return <InventoryPage key={route} project={project} stage={stage} canRecord={permissions.createStockMovement} initialNotice={flashFor(route)} />;
       case 'pekerja':
         return <WorkersPage key={route} project={project} stage={stage} initialNotice={flashFor(route)} />;
       default:

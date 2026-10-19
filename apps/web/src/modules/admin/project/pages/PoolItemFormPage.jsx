@@ -11,7 +11,7 @@ export default function PoolItemFormPage({ project, poolId, onCancel, onSaved })
   const [types, setTypes] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [unitState, setUnitState] = useState({ typeId: '', units: [], error: '' });
-  const [form, setForm] = useState({ equipmentTypeId: '', equipmentItemId: '', requestedQuantity: '1' });
+  const [form, setForm] = useState({ equipmentTypeId: '', equipmentItemId: '' });
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -50,7 +50,6 @@ export default function PoolItemFormPage({ project, poolId, onCancel, onSaved })
     event.preventDefault();
     const nextErrors = {};
     if (!form.equipmentTypeId) nextErrors.equipmentTypeId = 'Pilih jenis alat.';
-    if (!(Number(form.requestedQuantity) >= 1)) nextErrors.requestedQuantity = 'Jumlah minimal 1.';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -88,6 +87,7 @@ export default function PoolItemFormPage({ project, poolId, onCancel, onSaved })
       aside={(
         <InfoCard title="Unit fisik">
           <p>Unit boleh dikosongkan dulu dan diikat belakangan dari halaman Equipment Pool.</p>
+          <p>Satu item = satu unit. Butuh 3 unit? Tambahkan 3 item.</p>
           <p>Hanya unit operational yang tidak sedang terikat pool aktif lain yang bisa dipilih — satu unit tidak boleh berada di dua pool sekaligus.</p>
         </InfoCard>
       )}
@@ -101,17 +101,12 @@ export default function PoolItemFormPage({ project, poolId, onCancel, onSaved })
         </select>
       </Field>
 
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
-        <Field label="Unit Alat" htmlFor="equipmentItemId" error={errors.equipmentItemId || unitState.error} hint="Opsional — bisa diikat nanti.">
-          <select id="equipmentItemId" name="equipmentItemId" value={form.equipmentItemId} onChange={update} disabled={!form.equipmentTypeId || unitsLoading} className="input-control text-sm disabled:bg-slate-100">
-            <option value="">{!form.equipmentTypeId ? 'Pilih jenis alat dulu' : unitsLoading ? 'Memuat unit...' : 'Belum ditentukan'}</option>
-            {!unitsLoading && unitState.units.map((unit) => <option key={unit.id} value={unit.id}>{unit.itemCode} · {unit.merk} {unit.typeModel !== '-' ? unit.typeModel : ''}</option>)}
-          </select>
-        </Field>
-        <Field label="Jumlah" htmlFor="requestedQuantity" required error={errors.requestedQuantity}>
-          <input id="requestedQuantity" name="requestedQuantity" type="number" min="1" step="1" value={form.requestedQuantity} onChange={update} className="input-control font-mono text-sm" />
-        </Field>
-      </div>
+      <Field label="Unit Alat" htmlFor="equipmentItemId" error={errors.equipmentItemId || unitState.error} hint="Opsional — bisa diikat nanti.">
+        <select id="equipmentItemId" name="equipmentItemId" value={form.equipmentItemId} onChange={update} disabled={!form.equipmentTypeId || unitsLoading} className="input-control text-sm disabled:bg-slate-100">
+          <option value="">{!form.equipmentTypeId ? 'Pilih jenis alat dulu' : unitsLoading ? 'Memuat unit...' : 'Belum ditentukan'}</option>
+          {!unitsLoading && unitState.units.map((unit) => <option key={unit.id} value={unit.id}>{unit.itemCode} · {unit.merk} {unit.typeModel !== '-' ? unit.typeModel : ''}</option>)}
+        </select>
+      </Field>
     </FormPage>
   );
 }

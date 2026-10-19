@@ -92,10 +92,10 @@ export default function SubProjectEquipmentPage({ project, stage, permissions, i
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="Unit Aktif" value={<>{assigned.length}<span className="text-base text-slate-400">/{allocations.length}</span></>} hint="Alokasi berstatus assigned" accent />
-        <MetricCard label="Sudah Diterima" value={received.length} tone="emerald" hint="Dikonfirmasi Lapangan" />
-        <MetricCard label="Belum Diterima" value={assigned.length - received.length} tone={assigned.length - received.length > 0 ? 'amber' : 'slate'} hint="Dalam perjalanan / belum dikonfirmasi" />
-        <MetricCard label="Selesai / Kembali" value={allocations.filter((row) => ['completed', 'returned'].includes(row.status)).length} hint="Riwayat alokasi" />
+        <MetricCard label="Unit Aktif" value={<>{assigned.length}<span className="text-base text-slate-400">/{allocations.length}</span></>} hint="Alokasi berstatus assigned" accent loading={loading} />
+        <MetricCard label="Sudah Diterima" value={received.length} tone="emerald" hint="Dikonfirmasi Lapangan" loading={loading} />
+        <MetricCard label="Belum Diterima" value={assigned.length - received.length} tone={assigned.length - received.length > 0 ? 'amber' : 'slate'} hint="Dalam perjalanan / belum dikonfirmasi" loading={loading} />
+        <MetricCard label="Selesai / Kembali" value={allocations.filter((row) => ['completed', 'returned'].includes(row.status)).length} hint="Riwayat alokasi" loading={loading} />
       </div>
 
       {loadError && <Notice tone="error">{loadError}</Notice>}
@@ -188,9 +188,10 @@ export default function SubProjectEquipmentPage({ project, stage, permissions, i
       </div>
 
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Operational</span>
-        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" /> Maintenance</span>
-        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-400" /> Retired</span>
+        {/* Label sama dengan kolom "Kondisi Unit" (istilah modul Divisi Alat). */}
+        {[['operational', 'bg-emerald-500'], ['maintenance', 'bg-amber-400'], ['retired', 'bg-slate-400']].map(([status, dot]) => (
+          <span key={status} className="flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${dot}`} /> {equipmentStatusLabel(status)}</span>
+        ))}
       </div>
     </>
   );

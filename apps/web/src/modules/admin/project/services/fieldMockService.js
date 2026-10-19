@@ -1,87 +1,88 @@
 // ============================================================
-// DATA CONTOH — Inventory material & Pekerja per tahapan.
+// DATA CONTOH — Pekerja per tahapan.
 //
-// Backend-nya BELUM ADA: inventory menunggu modul Request Material, pekerja
-// menunggu Finance Field & Labor Payroll (lihat docs/skema-tenaga-kerja-harian.md).
-// Disimpan di localStorage per browser dan dibersihkan saat sign out
-// (services/auth.js). Bentuk fungsi dibuat async supaya halaman tidak perlu
-// diubah ketika diganti ke apiRequest.
+// Backend-nya BELUM ADA: pekerja menunggu Finance Field & Labor Payroll
+// (Build Order 7). Bentuk data mengikuti docs/skema-tenaga-kerja-harian.md:
+//   - `project_workers`                identitas, ditulis sekali, lintas tahapan
+//   - `sub_project_worker_assignments` kesepakatan kerja per tahapan
+//     (jenis, peran, upah harian, periode, status)
+// Upah milik penugasan, bukan orangnya — dan pekerja KONTRAK juga dibayar
+// harian, jadi upahnya ikut dihitung (keputusan 1 Okt 2026).
+// Disimpan di localStorage dan dibersihkan saat sign out (services/auth.js).
 // ============================================================
 
-const INVENTORY_KEY = 'admin_mock_inventory';
-const WORKER_KEY = 'admin_mock_workers';
+const STORE_KEY = 'admin_mock_workers_v2';
 
-export const INVENTORY_CATEGORIES = ['Fuel & Lubricants', 'Aggregates', 'Raw Materials', 'Geosynthetics', 'Maintenance', 'Lainnya'];
-export const INVENTORY_UNITS = ['Liter', 'm³', 'Sak (50kg)', 'Roll', 'Unit', 'Kg', 'Batang'];
+export const WORKER_TYPES = {
+  contract: { label: 'Kontrak', hint: 'Disewa selama tahapan berlangsung, dibayar harian' },
+  daily: { label: 'Harian', hint: 'Hadir ketika dipanggil, dibayar harian' },
+};
 
-export const WORKER_ROLES = ['Pelaksana', 'Foreman', 'Operator Excavator', 'Operator Dozer', 'Sopir DT', 'Checker', 'Tukang Cor', 'Tukang Besi', 'Harian K3', 'Helper'];
+export const WORKER_ROLES = ['Pelaksana Lapangan', 'Mandor', 'Operator Excavator', 'Operator Dozer', 'Sopir DT', 'Checker', 'Tukang Cor', 'Tukang Besi', 'Harian K3', 'Helper'];
+
 export const WORKER_STATUS = {
   active: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   standby: { label: 'Standby', className: 'bg-amber-50 text-amber-700 border-amber-200' },
   off_duty: { label: 'Off-Duty', className: 'bg-slate-100 text-slate-600 border-slate-200' },
+  inactive: { label: 'Selesai', className: 'bg-slate-50 text-slate-500 border-slate-200' },
 };
-export const EMPLOYMENT_TYPES = { harian: 'Harian', kontrak: 'Kontrak' };
 
-const daysAgo = (days, hour = 9) => {
+const yearsAgo = (years) => {
   const date = new Date();
-  date.setDate(date.getDate() - days);
-  date.setHours(hour, 15, 0, 0);
-  return date.toISOString();
+  date.setFullYear(date.getFullYear() - years);
+  return date.toISOString().slice(0, 10);
 };
 
-const seedInventory = () => {
-  const items = [
-    ['Solar B30 - High Speed Diesel', 'Fuel & Lubricants', 'Liter', 15400, 2000],
-    ['Batu Split 2/3', 'Aggregates', 'm³', 240.5, 50],
-    ['Semen Portland Tipe 1', 'Raw Materials', 'Sak (50kg)', 45, 100],
-    ['Geotextile Woven 250gr', 'Geosynthetics', 'Roll', 12, 5],
-    ['Spare Part CAT 320 Bucket Tooth', 'Maintenance', 'Unit', 8, 4],
-  ];
-  return items.map(([itemName, category, unit, stock, minStock], index) => ({
-    id: index + 1,
-    itemName,
-    category,
-    unit,
-    minStock,
-    stock,
-    updatedAt: daysAgo(index, 14 - index),
-    movements: [{ id: 1, type: 'in', quantity: stock, note: 'Saldo awal', date: daysAgo(index + 7).slice(0, 10), createdAt: daysAgo(index + 7) }],
-  }));
-};
-
-const seedWorkers = () => [
-  ['John Doe', '3275010294880001', 'Tukang Cor', 'Grup Beton 1', 'active', 'harian', '081234567801', 150000],
-  ['Maria Silva', '3275010298110002', 'Foreman', 'Grup Beton 1', 'standby', 'kontrak', '081234567802', 0],
-  ['Robert White', '3275010311440003', 'Tukang Besi', 'Grup Pembesian 2', 'active', 'harian', '081234567803', 140000],
-  ['Ali Mansur', '3275010311440099', 'Operator Excavator', 'Unit Alat Berat', 'off_duty', 'kontrak', '081234567804', 0],
-].map(([fullName, nik, role, groupName, status, employmentType, phone, dailyWage], index) => ({
-  id: index + 1, fullName, nik, role, groupName, status, employmentType, phone, dailyWage,
+// Identitas contoh. id_number boleh kosong — pekerja harian sering tidak menyerahkan NIK.
+const SEED_WORKERS = [
+  ['Slamet Riyadi', '3321010294880001', '081234567801', 'Mandor', 6],
+  ['Dedi Kurniawan', '3321010298110002', '081234567802', 'Operator Excavator', 4],
+  ['Budi Herlambang', '3321010311440003', '081234567803', 'Tukang Cor', 2],
+  ['Joko Susilo', null, '081234567804', 'Helper', 0],
+  ['Ahmad Fauzi', '3321010311440099', '081234567805', 'Sopir DT', 3],
+].map(([fullName, idNumber, phone, defaultRole, years], index) => ({
+  id: index + 1,
+  workerCode: `PWK-${String(index + 1).padStart(6, '0')}`,
+  fullName, idNumber, phone, defaultRole, joinedAt: yearsAgo(years), notes: '',
 }));
 
-function readStore(key) {
+// Penugasan contoh per tahapan: [workerId, jenis, peran, upah harian, status].
+const SEED_ASSIGNMENTS = [
+  [1, 'contract', 'Mandor', 250000, 'active'],
+  [2, 'contract', 'Operator Excavator', 220000, 'active'],
+  [3, 'daily', 'Tukang Cor', 150000, 'active'],
+  [4, 'daily', 'Helper', 120000, 'standby'],
+];
+
+function read() {
   try {
-    return JSON.parse(localStorage.getItem(key) || '{}') || {};
+    const stored = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    if (stored?.workers) return stored;
   } catch {
-    return {};
+    // jatuh ke data awal
   }
+  return { workers: SEED_WORKERS, assignments: {} };
 }
 
-function writeStore(key, store) {
-  localStorage.setItem(key, JSON.stringify(store));
-}
-
-/** Data per tahapan; diisi contoh saat tahapan pertama kali dibuka. */
-function readBucket(key, subProjectId, seed) {
-  const store = readStore(key);
-  if (!store[subProjectId]) {
-    store[subProjectId] = seed();
-    writeStore(key, store);
-  }
-  return { store, rows: store[subProjectId] };
-}
-
-const nextId = (rows) => rows.reduce((max, row) => Math.max(max, row.id), 0) + 1;
+const write = (store) => localStorage.setItem(STORE_KEY, JSON.stringify(store));
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const nextId = (rows) => rows.reduce((max, row) => Math.max(max, row.id), 0) + 1;
+
+/**
+ * Penugasan satu tahapan; diisi contoh saat tahapan pertama kali dibuka.
+ * Periode contoh dimulai bersama kontrak tahapan (`startDate`).
+ */
+function stageRows(store, subProjectId, startDate = null) {
+  if (!store.assignments[subProjectId]) {
+    store.assignments[subProjectId] = SEED_ASSIGNMENTS.map(([projectWorkerId, workerType, assignedRole, dailyWage, status], index) => ({
+      id: index + 1, projectWorkerId, workerType, assignedRole, dailyWage, status, startDate, endDate: null, notes: '',
+    }));
+    write(store);
+  }
+  return store.assignments[subProjectId];
+}
+
+const withWorker = (store, row) => ({ ...row, worker: store.workers.find((worker) => worker.id === row.projectWorkerId) || null });
 
 class MockValidationError extends Error {
   constructor(message, errors = []) {
@@ -90,112 +91,87 @@ class MockValidationError extends Error {
   }
 }
 
-// ---------------- Inventory ----------------
-
-export async function listInventory(subProjectId) {
-  return clone(readBucket(INVENTORY_KEY, subProjectId, seedInventory).rows);
+/** Semua identitas pekerja (lintas tahapan) — untuk memilih orang yang sudah terdaftar. */
+export async function listProjectWorkers() {
+  return clone(read().workers);
 }
 
-export async function getInventoryItem(subProjectId, itemId) {
-  const item = readBucket(INVENTORY_KEY, subProjectId, seedInventory).rows.find((row) => row.id === Number(itemId));
-  if (!item) throw new Error('Barang tidak ditemukan.');
-  return clone(item);
+export async function listWorkers(subProjectId, { startDate } = {}) {
+  const store = read();
+  return clone(stageRows(store, subProjectId, startDate || null).map((row) => withWorker(store, row)));
 }
 
-export async function createInventoryItem(subProjectId, form) {
-  const { store, rows } = readBucket(INVENTORY_KEY, subProjectId, seedInventory);
-  const name = form.itemName.trim();
-  if (rows.some((row) => row.itemName.toLowerCase() === name.toLowerCase())) {
-    throw new MockValidationError('Barang dengan nama ini sudah ada di inventory tahapan.', [{ field: 'itemName', message: 'Nama barang sudah dipakai.' }]);
+export async function getWorker(subProjectId, assignmentId) {
+  const store = read();
+  const row = stageRows(store, subProjectId).find((item) => item.id === Number(assignmentId));
+  if (!row) throw new Error('Penugasan pekerja tidak ditemukan.');
+  return clone(withWorker(store, row));
+}
+
+/**
+ * Simpan identitas (baru atau ubah). `form.projectWorkerId` kosong = orang
+ * baru. NIK unik hanya bila diisi.
+ */
+function saveIdentity(store, form) {
+  const idNumber = form.idNumber.trim() || null;
+  const existingId = form.projectWorkerId ? Number(form.projectWorkerId) : null;
+  if (idNumber && store.workers.some((worker) => worker.idNumber === idNumber && worker.id !== existingId)) {
+    throw new MockValidationError('NIK sudah terdaftar atas nama pekerja lain.', [{ field: 'idNumber', message: 'NIK sudah dipakai — pilih orangnya dari daftar pekerja terdaftar.' }]);
   }
-  const now = new Date().toISOString();
-  const stock = Number(form.initialStock || 0);
-  const item = {
-    id: nextId(rows),
-    itemName: name,
-    category: form.category,
-    unit: form.unit,
-    minStock: Number(form.minStock || 0),
-    stock,
-    updatedAt: now,
-    movements: stock > 0 ? [{ id: 1, type: 'in', quantity: stock, note: 'Saldo awal', date: now.slice(0, 10), createdAt: now }] : [],
+  const identity = {
+    fullName: form.fullName.trim(),
+    idNumber,
+    phone: form.phone.trim() || null,
+    defaultRole: form.defaultRole || form.assignedRole,
+    joinedAt: form.joinedAt || null,
   };
-  rows.unshift(item);
-  writeStore(INVENTORY_KEY, store);
-  return clone(item);
-}
-
-/** Mutasi stok: `in` menambah, `out` mengurangi (tidak boleh minus). */
-export async function recordInventoryMovement(subProjectId, itemId, form) {
-  const { store, rows } = readBucket(INVENTORY_KEY, subProjectId, seedInventory);
-  const item = rows.find((row) => row.id === Number(itemId));
-  if (!item) throw new Error('Barang tidak ditemukan.');
-  const quantity = Number(form.quantity);
-  const delta = form.type === 'out' ? -quantity : quantity;
-  if (item.stock + delta < 0) {
-    throw new MockValidationError(`Stok tidak cukup. Sisa ${item.stock} ${item.unit}.`, [{ field: 'quantity', message: 'Melebihi stok tersedia.' }]);
+  if (existingId) {
+    const index = store.workers.findIndex((worker) => worker.id === existingId);
+    store.workers[index] = { ...store.workers[index], ...identity };
+    return existingId;
   }
-  const now = new Date().toISOString();
-  item.stock = Math.round((item.stock + delta) * 100) / 100;
-  item.updatedAt = now;
-  item.movements.unshift({ id: nextId(item.movements), type: form.type, quantity, note: form.note.trim(), date: form.date, createdAt: now });
-  writeStore(INVENTORY_KEY, store);
-  return clone(item);
+  const id = nextId(store.workers);
+  store.workers.push({ id, workerCode: `PWK-${String(id).padStart(6, '0')}`, notes: '', ...identity });
+  return id;
 }
 
-// ---------------- Pekerja ----------------
-
-export async function listWorkers(subProjectId) {
-  return clone(readBucket(WORKER_KEY, subProjectId, seedWorkers).rows);
-}
-
-export async function getWorker(subProjectId, workerId) {
-  const worker = readBucket(WORKER_KEY, subProjectId, seedWorkers).rows.find((row) => row.id === Number(workerId));
-  if (!worker) throw new Error('Pekerja tidak ditemukan.');
-  return clone(worker);
-}
-
-const workerFromForm = (form) => ({
-  fullName: form.fullName.trim(),
-  nik: form.nik.trim(),
-  role: form.role,
-  groupName: form.groupName.trim(),
+const assignmentFromForm = (form) => ({
+  workerType: form.workerType,
+  assignedRole: form.assignedRole,
+  dailyWage: Number(form.dailyWage),
+  startDate: form.startDate || null,
+  endDate: form.endDate || null,
   status: form.status,
-  employmentType: form.employmentType,
-  phone: form.phone.trim(),
-  // Pekerja kontrak dibayar bulanan lewat payroll, bukan upah harian.
-  dailyWage: form.employmentType === 'harian' ? Number(form.dailyWage || 0) : 0,
+  notes: form.notes.trim(),
 });
 
-function assertUniqueNik(rows, nik, exceptId) {
-  if (rows.some((row) => row.nik === nik && row.id !== exceptId)) {
-    throw new MockValidationError('NIK sudah terdaftar di tahapan ini.', [{ field: 'nik', message: 'NIK sudah dipakai pekerja lain.' }]);
-  }
-}
-
 export async function createWorker(subProjectId, form) {
-  const { store, rows } = readBucket(WORKER_KEY, subProjectId, seedWorkers);
-  const data = workerFromForm(form);
-  assertUniqueNik(rows, data.nik);
-  const worker = { id: nextId(rows), ...data };
-  rows.push(worker);
-  writeStore(WORKER_KEY, store);
-  return clone(worker);
+  const store = read();
+  const rows = stageRows(store, subProjectId);
+  if (form.projectWorkerId && rows.some((row) => row.projectWorkerId === Number(form.projectWorkerId))) {
+    throw new MockValidationError('Pekerja ini sudah ditugaskan di tahapan ini.', [{ field: 'projectWorkerId', message: 'Sudah ada di tahapan ini — ubah penugasannya saja.' }]);
+  }
+  const projectWorkerId = saveIdentity(store, form);
+  const row = { id: nextId(rows), projectWorkerId, ...assignmentFromForm(form) };
+  rows.push(row);
+  write(store);
+  return clone(withWorker(store, row));
 }
 
-export async function updateWorker(subProjectId, workerId, form) {
-  const { store, rows } = readBucket(WORKER_KEY, subProjectId, seedWorkers);
-  const index = rows.findIndex((row) => row.id === Number(workerId));
-  if (index < 0) throw new Error('Pekerja tidak ditemukan.');
-  const data = workerFromForm(form);
-  assertUniqueNik(rows, data.nik, rows[index].id);
-  rows[index] = { ...rows[index], ...data };
-  writeStore(WORKER_KEY, store);
-  return clone(rows[index]);
+export async function updateWorker(subProjectId, assignmentId, form) {
+  const store = read();
+  const rows = stageRows(store, subProjectId);
+  const index = rows.findIndex((row) => row.id === Number(assignmentId));
+  if (index < 0) throw new Error('Penugasan pekerja tidak ditemukan.');
+  saveIdentity(store, { ...form, projectWorkerId: rows[index].projectWorkerId });
+  rows[index] = { ...rows[index], ...assignmentFromForm(form) };
+  write(store);
+  return clone(withWorker(store, rows[index]));
 }
 
-export async function removeWorker(subProjectId, workerId) {
-  const { store, rows } = readBucket(WORKER_KEY, subProjectId, seedWorkers);
-  store[subProjectId] = rows.filter((row) => row.id !== Number(workerId));
-  writeStore(WORKER_KEY, store);
+/** Melepas penugasan dari tahapan; identitas orangnya tetap ada. */
+export async function removeWorker(subProjectId, assignmentId) {
+  const store = read();
+  store.assignments[subProjectId] = stageRows(store, subProjectId).filter((row) => row.id !== Number(assignmentId));
+  write(store);
 }

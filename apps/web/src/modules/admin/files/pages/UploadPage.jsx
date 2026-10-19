@@ -3,14 +3,11 @@ import FormPage, { Field, FormError, InfoCard } from '../../project/components/F
 import { EmptyPanel, LoadingPanel, MockBanner } from '../../project/components/ProjectUi.jsx';
 import { fieldErrorsFrom } from '../../project/utils/projectFormat.js';
 import { ACCEPTED_TYPES, MAX_FILE_SIZE, getFolder, uploadFile } from '../services/fileStore.js';
-import { FILE_CATEGORIES, fileKind, formatBytes } from '../utils/filesFormat.js';
-
-const ACCEPTED_EXTENSIONS = ACCEPTED_TYPES.split(',');
+import { FILE_CATEGORIES, fileKind, fileTypeError, formatBytes } from '../utils/filesFormat.js';
 
 // Tebak kategori dari nama berkas supaya isian awalnya masuk akal.
 const guessCategory = (name) => {
   const lower = name.toLowerCase();
-  if (/surat.?jalan|sj[-_]/.test(lower)) return 'Surat Jalan';
   if (/laporan|harian|daily/.test(lower)) return 'Laporan Harian';
   if (/\.dwg$|gambar|drawing/.test(lower)) return 'Gambar Teknik';
   if (/sertifikat|certificate/.test(lower)) return 'Sertifikat';
@@ -49,9 +46,9 @@ export default function UploadPage({ folderId, onCancel, onSaved }) {
 
   const pickFile = (picked) => {
     if (!picked) return;
-    const extension = `.${picked.name.split('.').pop().toLowerCase()}`;
-    if (!ACCEPTED_EXTENSIONS.includes(extension)) {
-      setErrors((current) => ({ ...current, file: `Jenis berkas ${extension} tidak didukung.` }));
+    const typeError = fileTypeError(picked.name);
+    if (typeError) {
+      setErrors((current) => ({ ...current, file: typeError }));
       return;
     }
     if (picked.size > MAX_FILE_SIZE) {
@@ -59,7 +56,7 @@ export default function UploadPage({ folderId, onCancel, onSaved }) {
       return;
     }
     setFile(picked);
-    setPreviewUrl(picked.type.startsWith('image/') ? URL.createObjectURL(picked) : '');
+    setPreviewUrl(fileKind({ fileName: picked.name, mimeType: picked.type }).kind === 'image' ? URL.createObjectURL(picked) : '');
     setForm((current) => ({ ...current, name: current.name || prettyName(picked.name), category: current.category === 'Lainnya' ? guessCategory(picked.name) : current.category }));
     setErrors((current) => ({ ...current, file: undefined }));
   };
@@ -107,10 +104,11 @@ export default function UploadPage({ folderId, onCancel, onSaved }) {
       onCancel={onCancel}
       onSubmit={handleSubmit}
       submitLabel="Upload Sekarang"
-      footerNote="PDF, DWG, JPG, PNG, XLSX, DOCX · maks. 50 MB"
+      footerNote="PDF, JPG, PNG, WebP, DWG, XLSX, DOCX · maks. 50 MB"
       aside={(
         <InfoCard title="Tips">
           <p>Nama dokumen & kategori terisi otomatis dari nama berkas — ubah bila perlu.</p>
+          <p>Surat jalan & bukti penerimaan tidak perlu diunggah — sudah tampil otomatis di folder sistem proyek.</p>
           <p>Tag membantu pencarian, misalnya lokasi (<i>Jakarta-Pusat</i>) atau revisi (<i>Rev-2</i>). Tekan Enter atau koma untuk menambah.</p>
         </InfoCard>
       )}
@@ -146,7 +144,7 @@ export default function UploadPage({ folderId, onCancel, onSaved }) {
             <>
               <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-sky-100 text-2xl" aria-hidden="true">☁️</span>
               <p className="mt-3 text-sm font-bold text-slate-900">Pilih file atau tarik ke sini</p>
-              <p className="mt-0.5 text-xs text-slate-500">PDF, DWG, JPG, PNG, XLSX, DOCX (Maks. 50MB)</p>
+              <p className="mt-0.5 text-xs text-slate-500">PDF, JPG, PNG, WebP, DWG, XLSX, DOCX (Maks. 50MB)</p>
             </>
           )}
           <input ref={inputRef} type="file" accept={ACCEPTED_TYPES} className="sr-only" onChange={(event) => pickFile(event.target.files?.[0])} aria-label="Pilih berkas" />

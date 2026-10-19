@@ -99,10 +99,10 @@ export default function EquipmentPoolPage({ project, permissions, initialNotice 
       {loadError && <Notice tone="error">{loadError}</Notice>}
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="Pool Aktif" value={livePools.length} hint={`${pools?.length || 0} pool total`} accent />
-        <MetricCard label="Siap Dialokasikan" value={allItems.filter((item) => item.status === 'available' && item.equipmentItemId).length} tone="teal" hint="Available & terikat unit" />
-        <MetricCard label="Sedang Dipakai" value={count('assigned')} hint="Dialokasikan ke tahapan" />
-        <MetricCard label="Belum Terikat Unit" value={allItems.filter((item) => item.status === 'available' && !item.equipmentItemId).length} tone="amber" />
+        <MetricCard label="Pool Aktif" value={livePools.length} hint={`${pools?.length || 0} pool total`} accent loading={!pools && !loadError} />
+        <MetricCard label="Siap Dialokasikan" value={allItems.filter((item) => item.status === 'available' && item.equipmentItemId).length} tone="teal" hint="Available & terikat unit" loading={!pools && !loadError} />
+        <MetricCard label="Sedang Dipakai" value={count('assigned')} hint="Dialokasikan ke tahapan" loading={!pools && !loadError} />
+        <MetricCard label="Belum Terikat Unit" value={allItems.filter((item) => item.status === 'available' && !item.equipmentItemId).length} tone="amber" loading={!pools && !loadError} />
       </div>
 
       {!pools && !loadError ? (
@@ -144,7 +144,6 @@ export default function EquipmentPoolPage({ project, permissions, initialNotice 
                       <tr>
                         <th>Tipe Alat</th>
                         <th>Unit</th>
-                        <th className="text-center">Qty</th>
                         <th>Asal</th>
                         <th className="text-center">Status</th>
                         {permissions.updatePool && live && <th className="text-right">Aksi</th>}
@@ -152,7 +151,7 @@ export default function EquipmentPoolPage({ project, permissions, initialNotice 
                     </thead>
                     <tbody>
                       {(pool.items || []).length === 0 ? (
-                        <tr><td colSpan={6} className="py-8 text-center text-xs text-slate-500">Pool ini belum berisi alat.</td></tr>
+                        <tr><td colSpan={5} className="py-8 text-center text-xs text-slate-500">Pool ini belum berisi alat.</td></tr>
                       ) : pool.items.map((item) => (
                         <tr key={item.id}>
                           <td>
@@ -164,7 +163,6 @@ export default function EquipmentPoolPage({ project, permissions, initialNotice 
                               ? <span className="font-mono text-sm font-bold text-teal-700">{item.equipmentItem.assetCode}</span>
                               : <span className="text-[11px] font-semibold text-amber-700">Belum terikat unit</span>}
                           </td>
-                          <td className="text-center text-xs">{item.approvedQuantity || item.requestedQuantity}</td>
                           <td className="text-xs text-slate-600">{item.equipmentRequestItemId ? 'Request Alat' : 'Ditambah manual'}</td>
                           <td className="text-center"><StatusBadge status={item.status} map={POOL_ITEM_STATUS} /></td>
                           {permissions.updatePool && live && (
