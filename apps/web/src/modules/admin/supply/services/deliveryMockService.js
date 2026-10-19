@@ -1,17 +1,14 @@
 // ============================================================
-// DATA CONTOH — ritase / surat jalan pengiriman material supply.
+// DATA CONTOH — ritase kontrak supply contoh (demo-N) saja.
 //
-// Backend baru punya header external_supply_projects; tabel pengiriman per
-// ritase BELUM ADA. Disimpan di localStorage per browser dan dibersihkan saat
-// sign out (services/auth.js). Fungsinya async supaya halaman tidak perlu
-// diubah ketika diganti ke apiRequest.
+// Kontrak asli membaca /api/material-deliveries (deliveryService.js). Data
+// contoh dibangkitkan deterministik, baca-saja — pencatatan ritase milik
+// Divisi Lapangan (backlog E15). Disimpan di localStorage supaya stabil dan
+// dibersihkan saat sign out (services/auth.js).
 // ============================================================
 
-// v2: data contoh diperbanyak — kunci baru supaya isi lama ikut diganti.
-const STORE_KEY = 'admin_mock_supply_deliveries_v2';
-
-export const VEHICLE_TYPES = ['Dump Truck 10R', 'Dump Truck 6R', 'Hino FM260', 'Hino 500 FG', 'Trailer'];
-export const MATERIALS = ['Base A Aggregate', 'Base B Aggregate', 'Sub-Base B', 'Split 2/3', 'Split 1/2', 'Sand - Pasir Cuci', 'Pasir Urug', 'Tanah Timbun'];
+// v3: bentuk baris mengikuti API delivery (satuan, supplier, penerimaan).
+const STORE_KEY = 'admin_mock_supply_deliveries_v3';
 
 const daysAgo = (days) => {
   const date = new Date();
@@ -47,7 +44,8 @@ const random = (seedValue) => {
   };
 };
 
-const notePrefix = (projectId) => (/^\d+$/.test(String(projectId)) ? String(projectId).padStart(3, '0') : String(projectId).replace('demo-', 'D').toUpperCase());
+const notePrefix = (projectId) => String(projectId).replace('demo-', 'D').toUpperCase();
+const SUPPLIERS = ['CV Batu Alam Arjawinangun', 'PT Galunggung Pasir Jaya', 'CV Jatiluhur Agregat'];
 
 const seed = (projectId) => {
   const next = random([...String(projectId)].reduce((sum, char) => sum + char.charCodeAt(0), 7));
@@ -73,8 +71,13 @@ const seed = (projectId) => {
         originLocation,
         destinationLocation: `${destination} ${['Toll Subang', 'Proyek', 'Lokasi Kerja'][Math.floor(next() * 3)]}`,
         volume: Math.round((capacity + next() * 4.5) * 2) / 2,
-        notes: '',
-        createdAt: new Date().toISOString(),
+        unit: 'm³',
+        supplier: SUPPLIERS[ROUTES.findIndex((route) => route[0] === material) % SUPPLIERS.length],
+        isCancelled: false,
+        // Ritase hari ini sebagian belum dikonfirmasi penerimaannya.
+        received: day > 0 || next() > 0.5,
+        fileId: null,
+        isDemo: true,
       });
     }
   }
@@ -89,86 +92,13 @@ function readStore() {
   }
 }
 
-function bucket(projectId) {
+const clone = (value) => JSON.parse(JSON.stringify(value));
+
+export async function listDemoDeliveries(projectId) {
   const store = readStore();
   if (!store[projectId]) {
     store[projectId] = seed(projectId);
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch { /* data contoh tetap tampil tanpa disimpan */ }
   }
-  return { store, rows: store[projectId] };
-}
-
-const save = (store) => localStorage.setItem(STORE_KEY, JSON.stringify(store));
-const clone = (value) => JSON.parse(JSON.stringify(value));
-
-class MockValidationError extends Error {
-  constructor(message, errors = []) {
-    super(message);
-    this.errors = errors;
-  }
-}
-
-const fromForm = (form) => ({
-  deliveryDate: form.deliveryDate,
-  deliveryNoteNo: form.deliveryNoteNo.trim().toUpperCase(),
-  vehicleType: form.vehicleType,
-  plateNumber: form.plateNumber.trim().toUpperCase().replace(/\s+/g, ' '),
-  driverName: form.driverName.trim(),
-  material: form.material,
-  originLocation: form.originLocation.trim(),
-  destinationLocation: form.destinationLocation.trim(),
-  volume: Number(form.volume),
-  notes: form.notes.trim(),
-});
-
-// Nomor surat jalan unik per project — satu surat jalan = satu ritase.
-function assertUniqueNote(rows, noteNo, exceptId) {
-  if (rows.some((row) => row.deliveryNoteNo === noteNo && row.id !== exceptId)) {
-    throw new MockValidationError('Nomor surat jalan sudah tercatat.', [{ field: 'deliveryNoteNo', message: 'Nomor surat jalan sudah dipakai.' }]);
-  }
-}
-
-export async function listDeliveries(projectId) {
-  return clone(bucket(projectId).rows);
-}
-
-export async function getDelivery(projectId, id) {
-  const row = bucket(projectId).rows.find((item) => item.id === Number(id));
-  if (!row) throw new Error('Ritase tidak ditemukan.');
-  return clone(row);
-}
-
-export async function createDelivery(projectId, form) {
-  const { store, rows } = bucket(projectId);
-  const data = fromForm(form);
-  assertUniqueNote(rows, data.deliveryNoteNo);
-  const row = { id: rows.reduce((max, item) => Math.max(max, item.id), 0) + 1, ...data, createdAt: new Date().toISOString() };
-  rows.push(row);
-  save(store);
-  return clone(row);
-}
-
-export async function updateDelivery(projectId, id, form) {
-  const { store, rows } = bucket(projectId);
-  const index = rows.findIndex((item) => item.id === Number(id));
-  if (index < 0) throw new Error('Ritase tidak ditemukan.');
-  const data = fromForm(form);
-  assertUniqueNote(rows, data.deliveryNoteNo, rows[index].id);
-  rows[index] = { ...rows[index], ...data };
-  save(store);
-  return clone(rows[index]);
-}
-
-export async function removeDelivery(projectId, id) {
-  const { store, rows } = bucket(projectId);
-  store[projectId] = rows.filter((item) => item.id !== Number(id));
-  save(store);
-}
-
-/** Nomor surat jalan berikutnya sebagai saran isian form. */
-export async function suggestNoteNo(projectId) {
-  const { rows } = bucket(projectId);
-  const numbers = rows.map((row) => Number(String(row.deliveryNoteNo).split('-').pop())).filter(Number.isFinite);
-  const next = numbers.length ? Math.max(...numbers) + 1 : 1;
-  return `SJ-${notePrefix(projectId)}-${next}`;
+  return clone(store[projectId]);
 }

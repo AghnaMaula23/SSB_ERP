@@ -26,15 +26,15 @@ export default function SupplyProjectPickerPage({ projects, loading, error, canC
       <Breadcrumb items={[{ label: 'Divisi Admin' }, { label: 'Supply' }]} />
       <PageHeader
         title="Kontrak Supplier"
-        subtitle="Pilih kontrak supply untuk melihat dan mencatat ritase pengiriman material."
+        subtitle="SSB sebagai supplier material ke client eksternal. Pilih kontrak untuk melihat rekap ritase pengirimannya."
         actions={canCreate && <a href="#/admin/supply/new" className="btn btn-primary text-xs">+ Tambah Transaksi</a>}
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="Total Kontrak" value={projects.length} accent />
-        <MetricCard label="Operational" value={count('active')} tone="teal" />
-        <MetricCard label="Planned" value={count('planned')} />
-        <MetricCard label="Selesai" value={count('completed')} tone="emerald" />
+        <MetricCard label="Total Kontrak" value={projects.length} accent loading={loading} />
+        <MetricCard label="Operational" value={count('active')} tone="teal" loading={loading} />
+        <MetricCard label="Planned" value={count('planned')} loading={loading} />
+        <MetricCard label="Selesai" value={count('completed')} tone="emerald" loading={loading} />
       </div>
 
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error} Kontrak contoh tetap ditampilkan.</div>}
@@ -46,13 +46,13 @@ export default function SupplyProjectPickerPage({ projects, loading, error, canC
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem_9rem]">
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true">🔍</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} className="input-control pl-8 text-xs" placeholder="Cari client, proyek, kode, atau nomor kontrak..." aria-label="Cari kontrak" autoFocus />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} className="input-control pl-8 text-xs" placeholder="Cari client, nama pekerjaan, kode, atau nomor kontrak..." aria-label="Cari kontrak" autoFocus />
           </div>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="input-control text-xs" aria-label="Filter status">
             <option value="">Semua status</option>
             {Object.entries(SUPPLY_STATUS).map(([value, style]) => <option key={value} value={value}>{style.label}</option>)}
           </select>
-          <select value={year} onChange={(event) => setYear(event.target.value)} className="input-control text-xs" aria-label="Filter tahun proyek">
+          <select value={year} onChange={(event) => setYear(event.target.value)} className="input-control text-xs" aria-label="Filter tahun kontrak">
             <option value="">Semua tahun</option>
             {years.map((option) => <option key={option} value={option}>{option}</option>)}
           </select>

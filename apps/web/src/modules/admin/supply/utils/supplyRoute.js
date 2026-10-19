@@ -5,13 +5,12 @@
  *   admin/supply/new                          form project supply baru
  *   admin/supply/:id                          detail + rekap ritase
  *   admin/supply/:id/edit                     form ubah project supply
- *   admin/supply/:id/ritase/new               form input ritase
- *   admin/supply/:id/ritase/:deliveryId/edit  form ubah ritase
+ * Ritase tidak punya form di sini — dicatat Divisi Lapangan (backlog E15).
  * `:id` angka untuk kontrak dari API, atau `demo-N` untuk kontrak contoh
  * (dikembalikan sebagai string). Balikan null untuk rute lain.
  */
 export function parseSupplyRoute(route) {
-  const empty = { projectId: null, form: null, deliveryId: null };
+  const empty = { projectId: null, form: null };
   const parts = String(route).split('/');
   if (parts[0] !== 'admin' || parts[1] !== 'supply') return null;
   const rest = parts.slice(2);
@@ -25,8 +24,5 @@ export function parseSupplyRoute(route) {
   const base = { ...empty, projectId: isDemo ? rest[0] : Number(rest[0]) };
   if (rest.length === 1) return base;
   if (rest.length === 2 && rest[1] === 'edit') return { ...base, form: 'project-edit' };
-  if (rest[1] !== 'ritase') return null;
-  if (rest.length === 3 && rest[2] === 'new') return { ...base, form: 'delivery-new' };
-  if (rest.length === 4 && isId(rest[2]) && rest[3] === 'edit') return { ...base, form: 'delivery-edit', deliveryId: Number(rest[2]) };
   return null;
 }

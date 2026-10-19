@@ -69,7 +69,7 @@ export async function createRentalUnitRequest(projectId, form) {
     body: JSON.stringify({
       requestType: 'external_rental',
       externalRentalProjectId: Number(projectId),
-      neededDate: nullIfBlank(form.periodStart),
+      neededDate: nullIfBlank(form.neededDate),
       locationDetail: nullIfBlank(form.locationDetail),
       requestNotes: notes,
       items: [{

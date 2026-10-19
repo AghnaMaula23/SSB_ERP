@@ -8,17 +8,17 @@ import { isDemoId as isDemoRental, listDemoLogs, listDemoRentalProjects, listDem
 import { buildUnits } from '../../rental/utils/rentalFormat.js';
 import { listSupplyProjects } from '../../supply/services/supplyService.js';
 import { listDemoSupplyProjects } from '../../supply/services/demoSupplyService.js';
-import { listDeliveries } from '../../supply/services/deliveryMockService.js';
+import { listProjectDeliveries } from '../../supply/services/deliveryService.js';
 import { getItemById } from '../../../alat/services/alatService.js';
 import { emptyLine, suggestHourlyRate, suggestMaterialPrice } from '../utils/incomeFormat.js';
 
-/** API + data contoh; kalau API gagal, data contoh tetap dipakai. */
+/**
+ * Kontrak asli dari API + kontrak contoh (kalau sakelar data contoh nyala).
+ * API gagal = error ditampilkan, bukan diam-diam diganti data contoh (backlog E9).
+ */
 async function withDemo(apiCall, demoCall) {
-  const [api, demo] = await Promise.allSettled([apiCall(), demoCall()]);
-  return [
-    ...(api.status === 'fulfilled' ? api.value.data || [] : []),
-    ...(demo.status === 'fulfilled' ? demo.value : []),
-  ];
+  const [api, demo] = await Promise.all([apiCall(), demoCall()]);
+  return [...(api.data || []), ...demo];
 }
 
 export const listConstructionProjects = async () => (await listProjects({ limit: 100 })).data || [];
@@ -52,7 +52,7 @@ export async function rentalEquipmentLines(contract, startDate, endDate) {
     if (!hours) return null;
     const { rate, source } = await hourlyRateFor(unit.equipmentItemId, unit.typeName);
     return emptyLine('equipment_income', {
-      description: [unit.typeName, unit.meta?.brand, unit.meta?.model].filter(Boolean).join(' ') + (unit.assetCode ? ` · ${unit.assetCode}` : ''),
+      description: unit.typeName + (unit.assetCode ? ` · ${unit.assetCode}` : ''),
       quantity: String(hours),
       rateSnapshot: String(rate),
       rateSource: source,
@@ -63,20 +63,27 @@ export async function rentalEquipmentLines(contract, startDate, endDate) {
   return lines.filter(Boolean);
 }
 
-/** Supply: volume ritase per material pada periode tagihan → baris material_income. */
+/**
+ * Supply: volume ritase per material pada periode tagihan → baris material_income.
+ * Ritase dibatalkan tidak ikut; satuan mengikuti jenis material (tidak selalu m³).
+ */
 export async function supplyMaterialLines(contract, startDate, endDate) {
-  const deliveries = (await listDeliveries(contract.id)).filter((row) => inRange(row.deliveryDate, startDate, endDate));
+  const deliveries = (await listProjectDeliveries(contract))
+    .filter((row) => !row.isCancelled && inRange(row.deliveryDate, startDate, endDate));
   const byMaterial = new Map();
   deliveries.forEach((row) => {
-    const entry = byMaterial.get(row.material) || { volume: 0, trips: 0 };
+    const key = `${row.material}|${row.unit}`;
+    const entry = byMaterial.get(key) || { material: row.material, unit: row.unit, volume: 0, trips: 0 };
     entry.volume += Number(row.volume) || 0;
     entry.trips += 1;
-    byMaterial.set(row.material, entry);
+    byMaterial.set(key, entry);
   });
-  return [...byMaterial.entries()].map(([material, entry]) => emptyLine('material_income', {
-    description: material,
+  return [...byMaterial.values()].map((entry) => emptyLine('material_income', {
+    description: entry.material,
+    // Kode satuan Income memakai "m3"; master material menulis "m³".
+    unit: entry.unit === 'm³' ? 'm3' : entry.unit || 'm3',
     quantity: String(round2(entry.volume)),
-    rateSnapshot: String(suggestMaterialPrice(material)),
+    rateSnapshot: String(suggestMaterialPrice(entry.material)),
     sourceRef: `${entry.trips} ritase`,
   }));
 }

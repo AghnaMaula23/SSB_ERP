@@ -51,10 +51,10 @@ export default function IncomeListPage({ initialNotice }) {
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="Total Diajukan" value={formatCurrency(sumBy((row) => row.status !== 'rejected'))} accent />
-        <MetricCard label="Menunggu Finance" value={formatCurrency(sumBy((row) => row.status === 'submitted'))} tone="amber" hint={`${rows.filter((row) => row.status === 'submitted').length} pengajuan`} />
-        <MetricCard label="Terverifikasi / Lunas" value={formatCurrency(sumBy((row) => ['verified', 'partially_paid', 'paid'].includes(row.status)))} tone="emerald" />
-        <MetricCard label="Ditolak" value={rows.filter((row) => row.status === 'rejected').length} tone={rows.some((row) => row.status === 'rejected') ? 'red' : 'slate'} hint="Perlu diajukan ulang" />
+        <MetricCard label="Total Diajukan" value={formatCurrency(sumBy((row) => row.status !== 'rejected'))} accent loading={!records} />
+        <MetricCard label="Menunggu Finance" value={formatCurrency(sumBy((row) => row.status === 'submitted'))} tone="amber" hint={`${rows.filter((row) => row.status === 'submitted').length} pengajuan`} loading={!records} />
+        <MetricCard label="Terverifikasi / Lunas" value={formatCurrency(sumBy((row) => ['verified', 'partially_paid', 'paid'].includes(row.status)))} tone="emerald" loading={!records} />
+        <MetricCard label="Ditolak" value={rows.filter((row) => row.status === 'rejected').length} tone={rows.some((row) => row.status === 'rejected') ? 'red' : 'slate'} hint="Perlu diajukan ulang" loading={!records} />
       </div>
 
       <section className="card-panel mb-4 p-4" aria-label="Filter pendapatan">

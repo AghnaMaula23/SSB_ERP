@@ -64,17 +64,37 @@ function ScheduleCard({ project, progress }) {
 function StageRow({ project, stage, canUpdate, busy, onChangeStatus, onEdit }) {
   const progress = stage.progress || {};
   const transitions = canUpdate && !['completed', 'cancelled'].includes(project.status) ? STATUS_TRANSITIONS[stage.status] || [] : [];
+  const canEdit = canUpdate && !['completed', 'cancelled'].includes(stage.status);
   const volumeHref = `#/admin/projects/${project.id}/sub/${stage.id}/volume`;
+  const actionClass = 'rounded px-1.5 py-0.5 text-[11px] font-semibold transition disabled:opacity-40';
 
   return (
     <tr>
       <td>
         <a href={volumeHref} className="font-semibold text-slate-900 hover:text-teal-700">{subProjectTypeLabel(stage.subProjectType)}</a>
-        <p className="mt-0.5 text-[11px] text-slate-500">
-          Target {formatVolume(stage.targetVolume, stage.volumeUnit)}{stage.contractNo ? ` · ${stage.contractNo}` : ''}
-        </p>
+        <p className="mt-0.5 whitespace-nowrap text-[11px] text-slate-500">Target {formatVolume(stage.targetVolume, stage.volumeUnit)}</p>
+        {stage.contractNo && <p className="whitespace-nowrap font-mono text-[10px] text-slate-400">{stage.contractNo}</p>}
+        {/* Aksi di bawah nama tahapan — tabel tetap muat tanpa digulir ke samping. */}
+        {(transitions.length > 0 || canEdit) && (
+          <div className="-ml-1.5 mt-1.5 flex flex-wrap gap-x-1 gap-y-0.5">
+            {transitions.map((status) => (
+              <button
+                key={status}
+                type="button"
+                disabled={busy}
+                onClick={() => onChangeStatus(stage, status)}
+                className={`${actionClass} ${status === 'cancelled' ? 'text-red-600 hover:bg-red-50' : 'text-teal-700 hover:bg-teal-50'}`}
+              >
+                {STAGE_ACTIONS[status].label}
+              </button>
+            ))}
+            {canEdit && (
+              <button type="button" disabled={busy} onClick={() => onEdit(stage)} className={`${actionClass} text-slate-600 hover:bg-slate-100`} title="Ubah kontrak & target">✎ Ubah</button>
+            )}
+          </div>
+        )}
       </td>
-      <td><StatusBadge status={stage.status} map={PROJECT_STATUS} /></td>
+      <td className="whitespace-nowrap"><StatusBadge status={stage.status} map={PROJECT_STATUS} /></td>
       <td className="min-w-[11rem]">
         <div className="flex items-center gap-3">
           <ProgressBar value={progress.billableProgress || 0} secondary={progress.pendingProgress || 0} tone={stage.status === 'completed' ? 'emerald' : 'teal'} label={`Progress ${subProjectTypeLabel(stage.subProjectType)}`} />
@@ -87,24 +107,6 @@ function StageRow({ project, stage, canUpdate, busy, onChangeStatus, onEdit }) {
       <td className="whitespace-nowrap text-right text-xs">
         <p className="font-semibold text-slate-900">{formatCurrency(progress.billableAmount)}</p>
         <p className="text-[11px] text-slate-400">dari {formatCurrency(stage.contractValue)}</p>
-      </td>
-      <td>
-        <div className="flex flex-wrap justify-end gap-1">
-          {transitions.map((status) => (
-            <button
-              key={status}
-              type="button"
-              disabled={busy}
-              onClick={() => onChangeStatus(stage, status)}
-              className={`btn btn-ghost px-2 py-1 text-[11px] ${status === 'cancelled' ? 'text-red-600 hover:bg-red-50' : 'text-teal-700 hover:bg-teal-50'}`}
-            >
-              {STAGE_ACTIONS[status].label}
-            </button>
-          ))}
-          {canUpdate && !['completed', 'cancelled'].includes(stage.status) && (
-            <button type="button" disabled={busy} onClick={() => onEdit(stage)} className="btn btn-ghost px-2 py-1 text-[11px]" title="Ubah kontrak & target">✎ Ubah</button>
-          )}
-        </div>
       </td>
     </tr>
   );
@@ -137,10 +139,19 @@ export default function ProjectOverview({ project, stagesEntry, permissions, onP
   };
 
   const runStageStatus = async (stage, status) => {
-    if (!window.confirm(STAGE_ACTIONS[status].confirm)) return;
+    // Satu project hanya boleh punya satu tahapan aktif (backend 409). Tawarkan
+    // menutup tahapan yang sedang berjalan dulu, bukan menunggu ditolak.
+    const running = status === 'active' && stages.find((other) => other.id !== stage.id && other.status === 'active');
+    if (running) {
+      const runningLabel = subProjectTypeLabel(running.subProjectType);
+      if (!window.confirm(`Tahapan "${runningLabel}" masih aktif — dalam satu project hanya satu tahapan yang berjalan.\n\nTandai "${runningLabel}" Selesai (final, tidak bisa dibuka lagi) lalu aktifkan "${subProjectTypeLabel(stage.subProjectType)}"?`)) return;
+    } else if (!window.confirm(STAGE_ACTIONS[status].confirm)) {
+      return;
+    }
     setBusy(true);
     setNotice({ tone: 'success', text: '' });
     try {
+      if (running) await changeSubProjectStatus(project.id, running.id, 'completed');
       const updated = await changeSubProjectStatus(project.id, stage.id, status);
       await onReloadStages();
       // Backend mengizinkan tahapan aktif di luar urutan, tapi memperingatkan.
@@ -149,6 +160,8 @@ export default function ProjectOverview({ project, stagesEntry, permissions, onP
         : { tone: 'success', text: `${subProjectTypeLabel(stage.subProjectType)} kini berstatus "${PROJECT_STATUS[status]?.label || status}".` });
     } catch (error) {
       setNotice({ tone: 'error', text: error.message });
+      // 409 = status tahapan berubah di tempat lain; samakan tampilan dengan database.
+      if (error.status === 409) await onReloadStages().catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -224,7 +237,6 @@ export default function ProjectOverview({ project, stagesEntry, permissions, onP
                     <th>Status</th>
                     <th>Progress</th>
                     <th className="text-right">Siap Ditagih</th>
-                    <th className="text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>

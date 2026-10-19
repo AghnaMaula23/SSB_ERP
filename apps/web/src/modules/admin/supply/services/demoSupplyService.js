@@ -7,6 +7,8 @@
 // localStorage browser ini — dibersihkan saat sign out (services/auth.js).
 // ============================================================
 
+import { DEMO_DATA_ENABLED } from '../../utils/demoMode.js';
+
 const STORE_KEY = 'admin_mock_supply_projects';
 
 export const isDemoId = (id) => typeof id === 'string' && id.startsWith('demo-');
@@ -49,8 +51,9 @@ function read() {
 
 const write = (rows) => localStorage.setItem(STORE_KEY, JSON.stringify(rows));
 
+/** Kosong kalau sakelar data contoh mati — tautan demo-N lalu tampil "tidak ditemukan". */
 export async function listDemoSupplyProjects() {
-  return read();
+  return DEMO_DATA_ENABLED ? read() : [];
 }
 
 export async function updateDemoSupplyProject(id, form) {

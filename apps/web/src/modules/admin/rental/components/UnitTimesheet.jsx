@@ -129,7 +129,7 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
                     return [
                       <td key={`${session.key}-a`} className="border-r border-slate-100 px-2 py-2 text-center font-mono">{value?.start || '-'}</td>,
                       <td key={`${session.key}-b`} className="border-r border-slate-100 px-2 py-2 text-center font-mono">{value?.end || '-'}</td>,
-                      <td key={`${session.key}-s`} className="border-r border-slate-100 px-2 py-2 text-center font-semibold">{value ? formatNumber(value.hours) : row.empty ? '-' : '0'}</td>,
+                      <td key={`${session.key}-s`} className="border-r border-slate-100 px-2 py-2 text-center font-semibold">{value ? formatNumber(value.hours) : '-'}</td>,
                     ];
                   })}
                   <td className="border-r border-slate-100 bg-teal-50/50 px-3 py-2 text-center font-mono text-sm font-bold text-slate-900">{row.empty ? '-' : formatNumber(row.total)}</td>
@@ -148,7 +148,7 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
             <tfoot>
               <tr className="border-t-2 border-slate-300 bg-slate-100 text-sm font-bold text-slate-900">
                 <td colSpan={3} className="px-3 py-3 text-right text-[11px] uppercase tracking-wider text-slate-600">Jumlah Total</td>
-                {SESSIONS.map((session) => <td key={session.key} colSpan={3} className="border-l border-slate-200 px-3 py-3">{fmtHours(sum(session.key))} Jam</td>)}
+                {SESSIONS.map((session) => <td key={session.key} colSpan={3} className="border-l border-slate-200 px-3 py-3">{sum(session.key) ? `${fmtHours(sum(session.key))} Jam` : '-'}</td>)}
                 <td className="bg-teal-700 px-3 py-3 text-center text-white">{formatNumber(totalHours)} Jam</td>
                 <td className="px-3 py-3 text-center">{workDays} Hari</td>
                 <td className="px-3 py-3 text-slate-500">-</td>

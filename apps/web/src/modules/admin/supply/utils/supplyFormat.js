@@ -7,15 +7,25 @@ export const SUPPLY_STATUS = {
   cancelled: { label: 'Cancelled', className: 'bg-red-50 text-red-700 border-red-200' },
 };
 
-// Kolom tabel rekap ritase. `toggle: false` = selalu tampil.
+// Kolom tabel rekap ritase. `toggle: false` = selalu tampil. Volume selalu
+// diikuti satuan jenis materialnya (keputusan D1) — tidak ada satuan baku m³.
 export const DELIVERY_COLUMNS = [
   { key: 'deliveryDate', label: 'Tanggal' },
   { key: 'deliveryNoteNo', label: 'No. Surat Jalan', toggle: false },
+  { key: 'supplier', label: 'Supplier' },
   { key: 'vehicleType', label: 'Type Kendaraan' },
   { key: 'plateNumber', label: 'Nomor Polisi' },
   { key: 'driverName', label: 'Driver' },
   { key: 'material', label: 'Material' },
-  { key: 'originLocation', label: 'Gali (Lok. Tambang)' },
-  { key: 'destinationLocation', label: 'Bongkar (Lok. Project)' },
+  { key: 'originLocation', label: 'Asal Muat' },
+  { key: 'destinationLocation', label: 'Lokasi Bongkar' },
+  { key: 'received', label: 'Penerimaan' },
   { key: 'volume', label: 'Volume', toggle: false },
 ];
+
+/** Jumlahkan volume per satuan: [{ unit, volume }]. Satuan berbeda tidak dijumlahkan. */
+export function totalsByUnit(rows) {
+  const totals = new Map();
+  rows.forEach((row) => totals.set(row.unit || '-', (totals.get(row.unit || '-') || 0) + (Number(row.volume) || 0)));
+  return [...totals.entries()].map(([unit, volume]) => ({ unit, volume }));
+}

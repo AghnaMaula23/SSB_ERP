@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Breadcrumb, EmptyPanel, LoadingPanel, MetricCard, Notice, StatusBadge } from '../../project/components/ProjectUi.jsx';
-import { formatDateTime, initials, todayIso } from '../../project/utils/projectFormat.js';
+import { formatDate, formatDateTime, initials, todayIso } from '../../project/utils/projectFormat.js';
 import { Pager } from '../../approvals/components/ApprovalUi.jsx';
-import { getFolder, listFiles } from '../services/fileStore.js';
+import { getFolder, listFiles, purgeDate, restoreFile } from '../services/fileStore.js';
+import { SYSTEM_FOLDERS } from '../services/systemFiles.js';
+import SystemFileList from '../components/SystemFileList.jsx';
+import { useSystemFiles } from '../hooks/useSystemFiles.js';
 import { FILE_CATEGORIES, FOLDER_STATUS, PROJECT_KINDS, fileKind, folderStatus, formatBytes } from '../utils/filesFormat.js';
 
 const PAGE_SIZE = 8;
@@ -18,15 +21,25 @@ export default function FolderDetailPage({ folderId, initialNotice }) {
   const [category, setCategory] = useState('');
   const [type, setType] = useState('');
   const [page, setPage] = useState(1);
-  const [notice, setNotice] = useState(initialNotice || '');
+  const [notice, setNotice] = useState({ tone: 'success', text: initialNotice || '' });
+  const [view, setView] = useState('files');
+  const [trash, setTrash] = useState([]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const system = useSystemFiles(folder, view === 'deliveryNotes' || view === 'receiptProofs');
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getFolder(folderId), listFiles(folderId)])
-      .then(([folderRow, fileRows]) => { if (!cancelled) { setFolder(folderRow); setFiles(fileRows); } })
+    Promise.all([getFolder(folderId), listFiles(folderId), listFiles(folderId, { trashed: true })])
+      .then(([folderRow, fileRows, trashRows]) => { if (!cancelled) { setFolder(folderRow); setFiles(fileRows); setTrash(trashRows); } })
       .catch((error) => { if (!cancelled) setLoadError(error.message); });
     return () => { cancelled = true; };
-  }, [folderId]);
+  }, [folderId, reloadKey]);
+
+  const restore = async (file) => {
+    await restoreFile(file.id);
+    setNotice({ tone: 'success', text: `${file.name} dipulihkan.` });
+    setReloadKey((key) => key + 1);
+  };
 
   const rows = useMemo(() => files || [], [files]);
   const filtered = useMemo(() => {
@@ -60,7 +73,7 @@ export default function FolderDetailPage({ folderId, initialNotice }) {
             {folder.isDemo && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-violet-600">Contoh</span>}
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            <span className="font-mono font-semibold">{folder.projectCode}</span> · {PROJECT_KINDS[folder.projectKind]?.label} · Tahun {folder.year} · Kelola dokumentasi fisik surat jalan serta log harian lapangan.
+            <span className="font-mono font-semibold">{folder.projectCode}</span> · {PROJECT_KINDS[folder.projectKind]?.label} · Tahun {folder.year} · Dokumen proyek & log harian lapangan.
           </p>
         </div>
         <a
@@ -73,7 +86,62 @@ export default function FolderDetailPage({ folderId, initialNotice }) {
         </a>
       </div>
 
-      <Notice tone="success" onDismiss={() => setNotice('')}>{notice}</Notice>
+      <Notice tone={notice.tone} onDismiss={() => setNotice({ tone: 'success', text: '' })}>{notice.text}</Notice>
+
+      <nav className="mb-4 flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-xs" aria-label="Isi folder">
+        {[
+          { key: 'files', label: '📁 Berkas', count: rows.length },
+          { key: 'deliveryNotes', label: `${SYSTEM_FOLDERS.deliveryNotes.icon} ${SYSTEM_FOLDERS.deliveryNotes.label}`, system: true, count: system.data?.deliveryNotes?.length },
+          { key: 'receiptProofs', label: `${SYSTEM_FOLDERS.receiptProofs.icon} ${SYSTEM_FOLDERS.receiptProofs.label}`, system: true, count: system.data?.receiptProofs?.length },
+          { key: 'trash', label: '🗑 Sampah', count: trash.length },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setView(tab.key)}
+            aria-current={view === tab.key ? 'page' : undefined}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${view === tab.key ? 'bg-teal-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+          >
+            {tab.label}
+            {tab.count !== undefined && <span className={`ml-1.5 ${view === tab.key ? 'text-teal-100' : 'text-slate-400'}`}>{tab.count}</span>}
+            {tab.system && <span className={`ml-1.5 rounded px-1 text-[9px] uppercase ${view === tab.key ? 'bg-teal-600' : 'bg-slate-100 text-slate-500'}`}>Sistem</span>}
+          </button>
+        ))}
+      </nav>
+
+      {(view === 'deliveryNotes' || view === 'receiptProofs') && (
+        <section className="card-panel overflow-hidden" aria-label={SYSTEM_FOLDERS[view].label}>
+          <p className="border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-600">
+            <b className="text-slate-800">Folder sistem, baca-saja.</b> {SYSTEM_FOLDERS[view].hint} — tampil langsung dari datanya, tidak perlu diunggah ulang.
+          </p>
+          <SystemFileList kind={view} system={system} onError={(text) => setNotice({ tone: 'error', text })} />
+        </section>
+      )}
+
+      {view === 'trash' && (
+        <section className="card-panel overflow-hidden" aria-label="Sampah">
+          <p className="border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-600">Berkas di sampah terhapus permanen 30 hari setelah dipindahkan. Pulihkan sebelum tanggal itu.</p>
+          {trash.length === 0 ? <p className="py-12 text-center text-sm text-slate-500">Sampah kosong.</p> : (
+            <ul className="divide-y divide-slate-100">
+              {trash.map((file) => {
+                const kind = fileKind(file);
+                return (
+                  <li key={file.id} className="flex items-center gap-3 px-5 py-3">
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg opacity-60 ${kind.tone}`} aria-hidden="true">{kind.icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <a href={`#/admin/files/${folder.id}/file/${file.id}`} className="block truncate text-sm font-semibold text-slate-700 hover:text-teal-700">{file.name}</a>
+                      <p className="truncate text-[11px] text-slate-500">Dibuang {formatDateTime(file.trashedAt)}{file.trashedBy?.fullName ? ` oleh ${file.trashedBy.fullName}` : ''} · terhapus {formatDate(purgeDate(file))}</p>
+                    </div>
+                    <button type="button" onClick={() => restore(file)} className="btn btn-secondary text-xs">↺ Pulihkan</button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {view === 'files' && (<>
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard label="Total Berkas" value={rows.length.toLocaleString('id-ID')} accent />
@@ -157,6 +225,7 @@ export default function FolderDetailPage({ folderId, initialNotice }) {
         </div>
         <Pager page={current} totalPages={totalPages} total={filtered.length} shown={visible.length} onChange={setPage} label="berkas" />
       </div>
+      </>)}
     </>
   );
 }

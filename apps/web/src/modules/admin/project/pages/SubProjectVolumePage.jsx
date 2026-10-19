@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Breadcrumb, GuardedLink, Notice, ProgressBar, ProgressRing, StatusBadge } from '../components/ProjectUi.jsx';
 import FieldConditionModal from '../components/FieldConditionModal.jsx';
+import { RejectReasonForm } from '../../approvals/components/ApprovalUi.jsx';
 import { listProgressLogs, setProgressValidation } from '../services/projectService.js';
 import {
   PROGRESS_STATUS, PROJECT_STATUS, formatCurrency, formatDate, formatNumber, formatVolume,
@@ -17,7 +18,8 @@ const STATUS_TABS = [
 
 const VALIDATION_ACTIONS = {
   validated: { label: 'Validasi', tone: 'text-emerald-700 hover:bg-emerald-50', confirm: 'Validasi progress ini? Volumenya akan menjadi dasar tagihan klien.' },
-  rejected: { label: 'Tolak', tone: 'text-red-600 hover:bg-red-50', confirm: 'Tolak progress ini? Sampaikan alasannya ke Lapangan di luar sistem — alasan penolakan belum bisa disimpan.' },
+  // Tolak tidak memakai confirm: isian alasan (wajib) sudah menjadi konfirmasinya.
+  rejected: { label: 'Tolak', tone: 'text-red-600 hover:bg-red-50' },
   submitted: { label: 'Buka Kembali', tone: 'text-slate-600 hover:bg-slate-100', confirm: 'Kembalikan catatan ini ke "menunggu validasi"? Untuk baris tervalidasi, nilai tagihannya akan berkurang sampai divalidasi ulang.' },
 };
 
@@ -87,6 +89,7 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
   const [notice, setNotice] = useState({ tone: 'success', text: initialNotice || '' });
   const [busyId, setBusyId] = useState(null);
   const [conditionLog, setConditionLog] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const unit = stage.volumeUnit;
   const requestKey = `${stage.id}|${page}|${statusFilter}|${reloadKey}`;
@@ -105,21 +108,42 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
     return () => { cancelled = true; };
   }, [page, requestKey, stage.id, statusFilter]);
 
+  const applyValidation = async (log, status, notes) => {
+    const updated = await setProgressValidation(stage.id, log.id, status, notes);
+    // Backend mengirim progress tahapan terbaru — pakai langsung tanpa memuat ulang.
+    if (updated.subProjectProgress) onStageChanged({ ...stage, progress: updated.subProjectProgress });
+    setNotice({ tone: 'success', text: `Progress ${formatDate(log.progressDate)} kini "${PROGRESS_STATUS[status].label}".` });
+    setReloadKey((key) => key + 1);
+  };
+
+  // 409 = catatan sudah diputuskan user lain: tampilkan pesannya lalu muat ulang.
+  const showError = (error) => {
+    setNotice({ tone: 'error', text: error.message });
+    if (error.status === 409) setReloadKey((key) => key + 1);
+  };
+
   const handleValidation = async (log, status) => {
+    if (status === 'rejected') { setRejectingId(log.id); return; }
     if (!window.confirm(VALIDATION_ACTIONS[status].confirm)) return;
     setBusyId(log.id);
     setNotice({ tone: 'success', text: '' });
     try {
-      const updated = await setProgressValidation(stage.id, log.id, status);
-      // Backend mengirim progress tahapan terbaru — pakai langsung tanpa memuat ulang.
-      if (updated.subProjectProgress) onStageChanged({ ...stage, progress: updated.subProjectProgress });
-      setNotice({ tone: 'success', text: `Progress ${formatDate(log.progressDate)} kini "${PROGRESS_STATUS[status].label}".` });
-      setReloadKey((key) => key + 1);
+      await applyValidation(log, status);
     } catch (error) {
-      setNotice({ tone: 'error', text: error.message });
+      showError(error);
     } finally {
       setBusyId(null);
     }
+  };
+
+  const submitReject = async (log, notes) => {
+    try {
+      await applyValidation(log, 'rejected', notes);
+    } catch (error) {
+      if (error.status !== 409) throw error;
+      showError(error);
+    }
+    setRejectingId(null);
   };
 
   const changeFilter = (value) => { setStatusFilter(value); setPage(1); };
@@ -205,7 +229,8 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
                 const dailyPct = stage.dailyTargetVolume ? (log.realizedVolume / stage.dailyTargetVolume) * 100 : null;
                 const isZero = !log.realizedVolume;
                 return (
-                  <tr key={log.id}>
+                  <Fragment key={log.id}>
+                  <tr>
                     <td className="whitespace-nowrap font-medium text-slate-900">{formatDate(log.progressDate)}</td>
                     <td className="min-w-[10rem]">
                       {dailyPct === null ? (
@@ -238,7 +263,12 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
                         <p className="text-[11px] text-slate-400">oleh {log.validatedBy.fullName || log.validatedBy.username}</p>
                       )}
                     </td>
-                    <td className="text-center"><StatusBadge status={log.status} map={PROGRESS_STATUS} /></td>
+                    <td className="text-center">
+                      <StatusBadge status={log.status} map={PROGRESS_STATUS} />
+                      {log.validationNotes && log.status !== 'submitted' && (
+                        <p className={`mx-auto mt-1 max-w-40 truncate text-[11px] ${log.status === 'rejected' ? 'text-red-600' : 'text-slate-500'}`} title={log.validationNotes}>“{log.validationNotes}”</p>
+                      )}
+                    </td>
                     {showActions && (
                       <td>
                         <div className="flex justify-end gap-1">
@@ -249,7 +279,7 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
                             <button
                               key={status}
                               type="button"
-                              disabled={busyId !== null}
+                              disabled={busyId !== null || rejectingId !== null}
                               onClick={() => handleValidation(log, status)}
                               className={`btn btn-ghost px-2 py-1 text-[11px] ${VALIDATION_ACTIONS[status].tone}`}
                             >
@@ -260,6 +290,20 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
                       </td>
                     )}
                   </tr>
+                  {rejectingId === log.id && (
+                    <tr className="bg-red-50/60">
+                      <td colSpan={showActions ? 7 : 6}>
+                        <RejectReasonForm
+                          label={`Alasan menolak progress ${formatDate(log.progressDate)}`}
+                          submitLabel="Tolak Progress"
+                          placeholder="Contoh: Volume tidak sesuai foto lapangan"
+                          onSubmit={(notes) => submitReject(log, notes)}
+                          onCancel={() => setRejectingId(null)}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -267,7 +311,7 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
         </div>
 
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-600">
-          <span>Menampilkan {firstRow}–{lastRow} dari {result.total} catatan</span>
+          <span>{loading ? 'Memuat catatan...' : `Menampilkan ${firstRow}–${lastRow} dari ${result.total} catatan`}</span>
           <div className="flex items-center gap-1" aria-label="Pagination">
             <button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)} className="btn btn-secondary px-2.5 py-1 text-xs" aria-label="Halaman sebelumnya">‹</button>
             <span className="px-2 font-medium">Hal {page} / {result.totalPages}</span>

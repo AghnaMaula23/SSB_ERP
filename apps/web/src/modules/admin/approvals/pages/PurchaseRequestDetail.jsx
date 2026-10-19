@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Breadcrumb, EmptyPanel, LoadingPanel, Notice, StatusBadge } from '../../project/components/ProjectUi.jsx';
 import { actorName, formatCurrency, formatDate, formatDateTime, formatNumber } from '../../project/utils/projectFormat.js';
-import { DecisionButtons } from '../components/ApprovalUi.jsx';
+import { DecisionButtons, RejectReasonForm } from '../components/ApprovalUi.jsx';
 import { getPurchaseRequest, rejectPurchaseRequest, validatePurchaseRequest } from '../services/approvalService.js';
 import { PRIORITY, PR_CATEGORY, PR_STATUS, prPermissions, prPriority } from '../utils/approvalFormat.js';
 
@@ -19,6 +19,8 @@ export default function PurchaseRequestDetail({ recordId, onDone }) {
   const [pr, setPr] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [notice, setNotice] = useState({ tone: 'success', text: '' });
   const perms = prPermissions();
 
@@ -28,7 +30,7 @@ export default function PurchaseRequestDetail({ recordId, onDone }) {
       .then((row) => { if (!cancelled) setPr(row); })
       .catch((error) => { if (!cancelled) setLoadError(error.message); });
     return () => { cancelled = true; };
-  }, [recordId]);
+  }, [recordId, reloadKey]);
 
   if (loadError) return <EmptyPanel icon="🔎" title="Purchase request tidak ditemukan" action={<a href="#/admin/approvals/po" className="btn btn-secondary text-xs">← Kembali</a>}>{loadError}</EmptyPanel>;
   if (!pr) return <LoadingPanel>Memuat purchase request...</LoadingPanel>;
@@ -36,26 +38,41 @@ export default function PurchaseRequestDetail({ recordId, onDone }) {
   const own = pr.requestedBy?.id === perms.userId;
   const priority = PRIORITY[prPriority(pr)];
 
-  const decide = async (action) => {
-    const confirmText = action === 'validate'
-      ? `Validasi ${pr.requestCode}? Order diteruskan ke Finance.`
-      : `Tolak ${pr.requestCode}? Alasan belum bisa disimpan di sistem — sampaikan langsung ke Divisi Alat.`;
-    if (!window.confirm(confirmText)) return;
+  // 409 = order sudah diproses user lain: tampilkan pesannya dan muat ulang statusnya.
+  const showConflict = (error) => {
+    setNotice({ tone: 'error', text: error.message });
+    if (error.status === 409) setReloadKey((key) => key + 1);
+  };
+
+  const approve = async () => {
+    if (!window.confirm(`Validasi ${pr.requestCode}? Order diteruskan ke Finance.`)) return;
     setBusy(true);
     setNotice({ tone: 'success', text: '' });
     try {
-      if (action === 'validate') await validatePurchaseRequest(pr.id); else await rejectPurchaseRequest(pr.id);
-      onDone(action === 'validate' ? `${pr.requestCode} divalidasi dan diteruskan ke Finance.` : `${pr.requestCode} ditolak.`);
+      await validatePurchaseRequest(pr.id);
+      onDone(`${pr.requestCode} divalidasi dan diteruskan ke Finance.`);
     } catch (error) {
-      setNotice({ tone: 'error', text: error.message });
+      showConflict(error);
       setBusy(false);
     }
   };
 
+  const reject = async (notes) => {
+    try {
+      await rejectPurchaseRequest(pr.id, notes);
+    } catch (error) {
+      if (error.status !== 409) throw error;
+      setRejecting(false);
+      showConflict(error);
+      return;
+    }
+    onDone(`${pr.requestCode} ditolak. Alasannya terlihat oleh Divisi Alat.`);
+  };
+
   const timeline = [
     { label: 'Diajukan Divisi Alat', at: pr.createdAt, by: actorName(pr.requestedBy), done: true },
-    { label: pr.status === 'rejected_by_admin' ? 'Ditolak Admin' : 'Validasi Admin', at: pr.adminValidatedAt, by: pr.adminValidatedBy && actorName(pr.adminValidatedBy), done: Boolean(pr.adminValidatedAt), red: pr.status === 'rejected_by_admin' },
-    { label: pr.status === 'rejected_by_finance' ? 'Ditolak Finance' : 'Pencairan Finance', at: pr.financeApprovedAt, by: pr.financeApprovedBy && actorName(pr.financeApprovedBy), done: Boolean(pr.financeApprovedAt), red: pr.status === 'rejected_by_finance' },
+    { label: pr.status === 'rejected_by_admin' ? 'Ditolak Admin' : 'Validasi Admin', at: pr.adminValidatedAt, by: pr.adminValidatedBy && actorName(pr.adminValidatedBy), done: Boolean(pr.adminValidatedAt), red: pr.status === 'rejected_by_admin', notes: pr.adminNotes },
+    { label: pr.status === 'rejected_by_finance' ? 'Ditolak Finance' : 'Pencairan Finance', at: pr.financeApprovedAt, by: pr.financeApprovedBy && actorName(pr.financeApprovedBy), done: Boolean(pr.financeApprovedAt), red: pr.status === 'rejected_by_finance', notes: pr.financeNotes },
   ];
 
   return (
@@ -74,10 +91,10 @@ export default function PurchaseRequestDetail({ recordId, onDone }) {
           <div className="flex flex-col items-end gap-1">
             <DecisionButtons
               busy={busy}
-              disabled={busy || own}
+              disabled={busy || rejecting || own}
               approveLabel="Approve & Teruskan"
-              onApprove={perms.canValidate ? () => decide('validate') : null}
-              onReject={perms.canReject ? () => decide('reject') : null}
+              onApprove={perms.canValidate ? approve : null}
+              onReject={perms.canReject ? () => setRejecting(true) : null}
               approveTitle={own ? 'Tidak bisa memvalidasi order sendiri' : undefined}
             />
             {own && <span className="text-[11px] text-slate-500">Order ini Anda ajukan sendiri — harus divalidasi orang lain.</span>}
@@ -86,9 +103,20 @@ export default function PurchaseRequestDetail({ recordId, onDone }) {
       </div>
 
       <Notice tone={notice.tone} onDismiss={() => setNotice({ tone: 'success', text: '' })}>{notice.text}</Notice>
+      {rejecting && pr.status === 'submitted' && (
+        <div className="card-panel mb-5 border-red-200 bg-red-50/60 p-4">
+          <RejectReasonForm
+            label={`Alasan penolakan ${pr.requestCode}`}
+            submitLabel="Tolak Order"
+            placeholder="Contoh: Harga sparepart terlalu tinggi, minta pembanding"
+            onSubmit={reject}
+            onCancel={() => setRejecting(false)}
+          />
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <section className="card-panel overflow-hidden" aria-label="Rincian item">
+        <section className="card-panel self-start overflow-hidden" aria-label="Rincian item">
           <p className="border-b border-slate-200 bg-slate-50 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-600">Rincian Item</p>
           <div className="overflow-x-auto">
             {pr.orderCategory === 'repair' && (pr.repairItems || []).map((item) => (
@@ -154,6 +182,7 @@ export default function PurchaseRequestDetail({ recordId, onDone }) {
                   <div className="text-xs">
                     <p className={`font-semibold ${step.done ? 'text-slate-900' : 'text-slate-400'}`}>{step.label}</p>
                     {step.done && <p className="text-[11px] text-slate-500">{formatDateTime(step.at)}{step.by ? ` · ${step.by}` : ''}</p>}
+                    {step.notes && <p className={`mt-1 rounded-md px-2 py-1 text-[11px] ${step.red ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}`}>“{step.notes}”</p>}
                   </div>
                 </li>
               ))}
@@ -167,7 +196,7 @@ export default function PurchaseRequestDetail({ recordId, onDone }) {
             </div>
           )}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-500">
-            Approve = validasi Admin; order lalu menunggu pencairan Finance. Catatan/alasan belum bisa disimpan sampai Approval Center di backend tersedia.
+            Approve = validasi Admin; order lalu menunggu pencairan Finance. Menolak wajib disertai alasan — alasannya tampil ke Divisi Alat.
           </div>
         </aside>
       </div>

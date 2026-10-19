@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 // Komponen tampilan bersama Pusat Approval.
 
 export function StatTile({ label, value, hint, icon, tone = 'slate' }) {
@@ -59,6 +61,49 @@ export function FilterChips({ options, value, onChange }) {
           {option.label}{option.count !== undefined && <span className="ml-1 text-slate-400">{option.count}</span>}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Isian alasan penolakan — backend mewajibkan `notes` saat menolak (400 tanpa itu).
+ * `onSubmit(notes)` boleh melempar; pesannya ditampilkan di bawah isian.
+ */
+export function RejectReasonForm({ label, submitLabel = 'Tolak', placeholder, onSubmit, onCancel }) {
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!notes.trim()) { setError('Alasan penolakan wajib diisi.'); return; }
+    setBusy(true);
+    try {
+      await onSubmit(notes.trim());
+    } catch (requestError) {
+      setError(requestError.message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 text-left sm:flex-row sm:items-start">
+      <label className="flex-1">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-red-700">{label}</span>
+        <input
+          autoFocus
+          value={notes}
+          maxLength={500}
+          onChange={(event) => { setNotes(event.target.value); setError(''); }}
+          onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); submit(); } if (event.key === 'Escape') onCancel(); }}
+          className="input-control mt-1 text-sm"
+          placeholder={placeholder}
+        />
+        {error && <span className="mt-1 block text-[11px] font-medium text-red-600">{error}</span>}
+      </label>
+      <div className="flex gap-2 sm:pt-5">
+        <button type="button" onClick={onCancel} disabled={busy} className="btn btn-secondary text-xs">Batal</button>
+        <button type="button" onClick={submit} disabled={busy} className="btn btn-danger text-xs">{busy ? 'Menyimpan...' : submitLabel}</button>
+      </div>
     </div>
   );
 }

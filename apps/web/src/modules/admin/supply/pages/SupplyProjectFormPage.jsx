@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import FormPage, { Field, FormError, InfoCard, SectionDivider } from '../../project/components/FormPage.jsx';
 import { MockBanner } from '../../project/components/ProjectUi.jsx';
-import ProjectSourceField from '../../components/ProjectSourceField.jsx';
 import { fieldErrorsFrom } from '../../project/utils/projectFormat.js';
 
 const toForm = (project) => ({
@@ -16,12 +15,10 @@ const toForm = (project) => ({
 /**
  * "Buat Transaksi Baru" — header kontrak supply.
  *
- * Proyek dan lokasi DIPILIH dari project konstruksi yang terdaftar, supaya
- * penamaan tujuan supply seragam dengan modul Project. Backend menyimpannya
- * sebagai teks (supplyProjectName, location) — belum ada foreign key ke
- * construction_projects — jadi yang dikirim adalah nama dan lokasi project
- * terpilih. `onSubmitForm` disediakan workspace: API untuk kontrak asli,
- * penyimpanan lokal untuk kontrak contoh.
+ * Supply adalah kontrak ke client eksternal, bukan bagian project konstruksi,
+ * jadi nama proyek & lokasi diketik bebas (backlog E18). `onSubmitForm`
+ * disediakan workspace: API untuk kontrak asli, penyimpanan lokal untuk
+ * kontrak contoh.
  */
 export default function SupplyProjectFormPage({ project, onSubmitForm, onCancel, onSaved }) {
   const isEdit = Boolean(project);
@@ -29,11 +26,6 @@ export default function SupplyProjectFormPage({ project, onSubmitForm, onCancel,
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
-
-  const selectProject = ({ projectName, location }) => {
-    setForm((current) => ({ ...current, projectName, location }));
-    setErrors((current) => ({ ...current, projectName: undefined, location: undefined }));
-  };
 
   const update = (event) => {
     const { name, value } = event.target;
@@ -45,7 +37,7 @@ export default function SupplyProjectFormPage({ project, onSubmitForm, onCancel,
     event.preventDefault();
     const nextErrors = {};
     if (!form.clientName.trim()) nextErrors.clientName = 'Nama client wajib diisi.';
-    if (!form.projectName.trim()) nextErrors.projectName = 'Pilih proyek tujuan supply.';
+    if (!form.projectName.trim()) nextErrors.projectName = 'Nama pekerjaan client wajib diisi.';
     if (form.contractStartDate && form.contractEndDate && form.contractStartDate > form.contractEndDate) nextErrors.contractEndDate = 'Akhir kontrak tidak boleh sebelum mulai kontrak.';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
@@ -79,9 +71,9 @@ export default function SupplyProjectFormPage({ project, onSubmitForm, onCancel,
       footerNote={<><span className="text-red-500">*</span> wajib diisi</>}
       aside={(
         <InfoCard title="Kontrak supply">
-          <p>Proyek dipilih dari project konstruksi yang terdaftar di menu Project; lokasinya ikut terisi dari project tersebut.</p>
-          <p>Project belum ada di daftar? Tambahkan dulu lewat <a href="#/admin/projects/new" className="font-semibold text-teal-700 hover:underline">Project → Tambah Proyek</a>.</p>
-          <p>Tahun proyek diambil dari tanggal mulai kontrak.</p>
+          <p>SSB bertindak sebagai supplier. Nama pekerjaan & lokasi adalah milik client — tujuan pengiriman material, bukan project konstruksi SSB.</p>
+          <p>Kode SPL dibuat otomatis saat disimpan.</p>
+          <p>Tahun kontrak diambil dari tanggal mulai kontrak.</p>
         </InfoCard>
       )}
     >
@@ -91,21 +83,21 @@ export default function SupplyProjectFormPage({ project, onSubmitForm, onCancel,
       <Field label="Client" htmlFor="clientName" required error={errors.clientName}>
         <input id="clientName" name="clientName" value={form.clientName} onChange={update} maxLength={255} className="input-control text-sm" placeholder="Masukkan nama perusahaan..." autoFocus={!isEdit} />
       </Field>
-      <ProjectSourceField
-        projectName={form.projectName}
-        location={form.location}
-        legacyName={project?.projectName}
-        legacyLocation={project?.location}
-        error={errors.projectName}
-        onChange={selectProject}
-      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Nama Pekerjaan Client" htmlFor="projectName" required error={errors.projectName}>
+          <input id="projectName" name="projectName" value={form.projectName} onChange={update} maxLength={255} className="input-control text-sm" placeholder="Contoh: Gudang Logistik Cikarang" />
+        </Field>
+        <Field label="Lokasi Pengiriman" htmlFor="location" error={errors.location}>
+          <input id="location" name="location" value={form.location} onChange={update} maxLength={255} className="input-control text-sm" placeholder="Contoh: Cikarang, Bekasi" />
+        </Field>
+      </div>
 
       <SectionDivider>Kontrak</SectionDivider>
       <Field label="Nomor Kontrak" htmlFor="contractNo" error={errors.contractNo}>
         <input id="contractNo" name="contractNo" value={form.contractNo} onChange={update} maxLength={100} className="input-control text-sm sm:max-w-sm" placeholder="Contoh: SPK/WIKA/2026/031" />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Mulai Kontrak" htmlFor="contractStartDate" error={errors.contractStartDate} hint={form.contractStartDate ? `Tahun proyek ${form.contractStartDate.slice(0, 4)}` : 'Menentukan tahun proyek.'}>
+        <Field label="Mulai Kontrak" htmlFor="contractStartDate" error={errors.contractStartDate} hint={form.contractStartDate ? `Tahun kontrak ${form.contractStartDate.slice(0, 4)}` : 'Menentukan tahun kontrak.'}>
           <input id="contractStartDate" name="contractStartDate" type="date" value={form.contractStartDate} onChange={update} className="input-control text-sm" />
         </Field>
         <Field label="Akhir Kontrak" htmlFor="contractEndDate" error={errors.contractEndDate}>

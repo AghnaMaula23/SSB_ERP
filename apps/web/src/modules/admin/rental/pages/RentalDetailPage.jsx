@@ -83,7 +83,7 @@ export default function RentalDetailPage({ project, projects, unitsEntry, select
         <Breadcrumb items={[{ label: 'Rental', href: '#/admin/rental' }, { label: project.clientName || 'Kontrak' }, { label: 'Timesheet Detail' }]} />
         <label className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
           Kontrak
-          <select value={project.id} onChange={(event) => onNavigate(`admin/rental/${event.target.value}`)} className="input-control h-9 w-64 text-xs normal-case tracking-normal" aria-label="Ganti kontrak rental">
+          <select value={project.id} onChange={(event) => onNavigate(`admin/rental/${event.target.value}`)} className="input-control h-9 w-full max-w-sm text-xs normal-case tracking-normal sm:w-80" aria-label="Ganti kontrak rental">
             {projects.map((option) => <option key={option.id} value={option.id}>{option.clientName ? `${option.clientName} — ` : ''}{option.projectName}{option.isDemo ? ' (contoh)' : ''}</option>)}
             {!projects.some((option) => option.id === project.id) && <option value={project.id}>{project.projectName}</option>}
           </select>
@@ -145,11 +145,11 @@ export default function RentalDetailPage({ project, projects, unitsEntry, select
           <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <InfoTile label="Penyewa" value={project.clientName} sub={project.location} />
             <InfoTile
-              label="Periode"
-              value={unit.meta?.periodStart ? `${formatDate(unit.meta.periodStart)} – ${formatDate(unit.meta.periodEnd)}` : project.contractStartDate ? `${formatDate(project.contractStartDate)} – ${formatDate(project.contractEndDate)}` : '-'}
-              sub={unit.meta?.periodStart ? 'Periode unit' : 'Periode kontrak'}
+              label="Periode Kontrak"
+              value={project.contractStartDate ? `${formatDate(project.contractStartDate)} – ${formatDate(project.contractEndDate)}` : '-'}
+              sub={unit.neededDate ? `Unit dibutuhkan ${formatDate(unit.neededDate)}` : undefined}
             />
-            <InfoTile label="Alat" value={[unit.typeName, unit.meta?.brand, unit.meta?.model].filter(Boolean).join(' ')} sub={unit.meta?.packet && PACKETS[unit.meta.packet] ? `Paket: ${PACKETS[unit.meta.packet].label}` : undefined} />
+            <InfoTile label="Alat" value={unit.typeName} sub={[unit.meta?.packet && PACKETS[unit.meta.packet] ? `Paket: ${PACKETS[unit.meta.packet].label}` : null, unit.locationDetail].filter(Boolean).join(' · ') || undefined} />
             <InfoTile label="Operator" value={unit.meta?.operator} sub={unit.requestCode ? `Request ${unit.requestCode}` : undefined} />
           </div>
 

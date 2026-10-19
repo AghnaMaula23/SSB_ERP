@@ -7,7 +7,7 @@ import { emptyUnitForm, validateUnitForm } from '../utils/unitForm.js';
 
 /** "Unit Baru" — ajukan unit tambahan untuk kontrak rental (Request Alat). */
 export default function RentalUnitFormPage({ project, onSubmitForm, onCancel, onSaved }) {
-  const [form, setForm] = useState(() => emptyUnitForm({ periodStart: project.contractStartDate, periodEnd: project.contractEndDate }));
+  const [form, setForm] = useState(() => emptyUnitForm({ neededDate: project.contractStartDate, locationDetail: project.location }));
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);

@@ -34,13 +34,11 @@ export const UNIT_STATUS = {
 // request alat. Format ini dibaca balik oleh parseUnitNotes.
 // ------------------------------------------------------------
 
+// Merek/model/periode dulu ikut dititipkan; sejak backlog E18 tidak lagi —
+// baris lama itu diabaikan saat dibaca.
 const NOTE_FIELDS = [
   ['operator', 'Operator'],
   ['packet', 'Paket'],
-  ['periodStart', 'Periode mulai'],
-  ['periodEnd', 'Periode akhir'],
-  ['brand', 'Merek'],
-  ['model', 'Model'],
   ['extra', 'Catatan'],
 ];
 
@@ -152,6 +150,8 @@ export function buildUnits({ requests, pools }) {
       assetCode: poolItem.equipmentItem?.assetCode || null,
       typeName: poolItem.equipmentType?.typeName || '-',
       requestCode: link?.request.requestCode || null,
+      neededDate: link?.request.neededDate || null,
+      locationDetail: link?.request.locationDetail || null,
       status: closed ? 'closed' : poolItem.equipmentItemId ? 'active' : 'unbound',
       meta,
     });
@@ -167,6 +167,8 @@ export function buildUnits({ requests, pools }) {
       requestId: request.id,
       requestCode: request.requestCode,
       requestStatus: request.status,
+      neededDate: request.neededDate || null,
+      locationDetail: request.locationDetail || null,
       typeName: item.equipmentType?.typeName || '-',
       quantity: item.requestedQuantity,
       status: statusKey,

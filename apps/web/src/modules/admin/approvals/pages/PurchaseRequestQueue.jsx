@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Notice, StatusBadge } from '../../project/components/ProjectUi.jsx';
 import { formatCurrency, formatDate, formatDateTime } from '../../project/utils/projectFormat.js';
-import { DecisionButtons, FilterChips, Pager, StatTile } from '../components/ApprovalUi.jsx';
+import { DecisionButtons, FilterChips, Pager, RejectReasonForm, StatTile } from '../components/ApprovalUi.jsx';
 import { listPurchaseRequests, rejectPurchaseRequest, sumPurchaseRequests, validatePurchaseRequest } from '../services/approvalService.js';
 import { PRIORITY, PR_CATEGORY, PR_STATUS, prPermissions, prPriority, prSummary } from '../utils/approvalFormat.js';
 
@@ -24,6 +24,7 @@ export default function PurchaseRequestQueue({ initialNotice }) {
   const [result, setResult] = useState({ key: null, data: [], total: 0, totalPages: 1, error: '' });
   const [stats, setStats] = useState({ count: null, total: null, at: null });
   const [busyId, setBusyId] = useState(null);
+  const [rejectingId, setRejectingId] = useState(null);
   const [notice, setNotice] = useState({ tone: 'success', text: initialNotice || '' });
   const perms = prPermissions();
   const requestKey = `${status}|${category}|${search}|${page}|${reloadKey}`;
@@ -48,22 +49,39 @@ export default function PurchaseRequestQueue({ initialNotice }) {
     return () => { cancelled = true; };
   }, [reloadKey]);
 
-  const decide = async (pr, action) => {
-    const confirmText = action === 'validate'
-      ? `Validasi ${pr.requestCode} senilai ${formatCurrency(pr.totalEstimatedAmount)}? Order diteruskan ke Finance untuk pencairan.`
-      : `Tolak ${pr.requestCode}? Status final. Sampaikan alasannya ke Divisi Alat di luar sistem — alasan belum bisa disimpan.`;
-    if (!window.confirm(confirmText)) return;
+  // 409 = order sudah diproses user lain: tampilkan pesannya lalu muat ulang antrean.
+  const handleConflict = (error) => {
+    setNotice({ tone: 'error', text: error.message });
+    if (error.status === 409) setReloadKey((key) => key + 1);
+  };
+
+  const approve = async (pr) => {
+    if (!window.confirm(`Validasi ${pr.requestCode} senilai ${formatCurrency(pr.totalEstimatedAmount)}? Order diteruskan ke Finance untuk pencairan.`)) return;
     setBusyId(pr.id);
     setNotice({ tone: 'success', text: '' });
     try {
-      if (action === 'validate') await validatePurchaseRequest(pr.id); else await rejectPurchaseRequest(pr.id);
-      setNotice({ tone: 'success', text: action === 'validate' ? `${pr.requestCode} divalidasi dan diteruskan ke Finance.` : `${pr.requestCode} ditolak.` });
+      await validatePurchaseRequest(pr.id);
+      setNotice({ tone: 'success', text: `${pr.requestCode} divalidasi dan diteruskan ke Finance.` });
       setReloadKey((key) => key + 1);
     } catch (error) {
-      setNotice({ tone: 'error', text: error.message });
+      handleConflict(error);
     } finally {
       setBusyId(null);
     }
+  };
+
+  const reject = async (pr, notes) => {
+    try {
+      await rejectPurchaseRequest(pr.id, notes);
+    } catch (error) {
+      if (error.status !== 409) throw error;
+      setRejectingId(null);
+      handleConflict(error);
+      return;
+    }
+    setRejectingId(null);
+    setNotice({ tone: 'success', text: `${pr.requestCode} ditolak. Alasannya terlihat oleh Divisi Alat.` });
+    setReloadKey((key) => key + 1);
   };
 
   const changeFilter = (setter) => (value) => { setter(value); setPage(1); };
@@ -78,7 +96,7 @@ export default function PurchaseRequestQueue({ initialNotice }) {
 
       <Notice tone={notice.tone} onDismiss={() => setNotice({ tone: 'success', text: '' })}>{notice.text}</Notice>
       {!perms.canValidate && (
-        <Notice tone="warning">Akun ini tidak memegang <b>purchase-request:validate</b>, jadi tombol Approve/Reject nonaktif. Validasi PO hanya untuk role Admin — super_admin pun tidak di-bypass (keputusan 27 Sep 2026).</Notice>
+        <Notice tone="warning">Akun ini tidak memegang <b>purchase-request:validate</b>, jadi tombol Approve/Reject nonaktif. Validasi PO butuh wewenang Admin — super_admin hanya memantau.</Notice>
       )}
 
       <section className="card-panel overflow-hidden" aria-label="Antrean purchase request">
@@ -122,7 +140,8 @@ export default function PurchaseRequestQueue({ initialNotice }) {
                 const priority = PRIORITY[prPriority(pr)];
                 const own = pr.requestedBy?.id && pr.requestedBy.id === perms.userId;
                 return (
-                  <tr key={pr.id}>
+                  <Fragment key={pr.id}>
+                  <tr>
                     <td className="text-xs text-slate-500">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, '0')}</td>
                     <td className="whitespace-nowrap text-xs">{formatDate(pr.requestDate)}</td>
                     <td><a href={`#/admin/approvals/po/${pr.id}`} className="font-mono text-sm font-bold text-emerald-700 hover:underline">{pr.requestCode}</a></td>
@@ -137,15 +156,29 @@ export default function PurchaseRequestQueue({ initialNotice }) {
                       {pr.status === 'submitted' ? (
                         <DecisionButtons
                           busy={busyId === pr.id}
-                          disabled={busyId !== null || own}
-                          onApprove={perms.canValidate ? () => decide(pr, 'validate') : null}
-                          onReject={perms.canReject ? () => decide(pr, 'reject') : null}
+                          disabled={busyId !== null || rejectingId === pr.id || own}
+                          onApprove={perms.canValidate ? () => approve(pr) : null}
+                          onReject={perms.canReject ? () => setRejectingId(pr.id) : null}
                           approveTitle={own ? 'Tidak bisa memvalidasi order sendiri' : 'Validasi & teruskan ke Finance'}
                           rejectTitle={own ? 'Tidak bisa menolak order sendiri' : 'Tolak order'}
                         />
                       ) : <StatusBadge status={pr.status} map={PR_STATUS} />}
                     </td>
                   </tr>
+                  {rejectingId === pr.id && (
+                    <tr className="bg-red-50/60">
+                      <td colSpan={8}>
+                        <RejectReasonForm
+                          label={`Alasan penolakan ${pr.requestCode}`}
+                          submitLabel="Tolak Order"
+                          placeholder="Contoh: Harga sparepart terlalu tinggi, minta pembanding"
+                          onSubmit={(notes) => reject(pr, notes)}
+                          onCancel={() => setRejectingId(null)}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>

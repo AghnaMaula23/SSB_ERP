@@ -4,7 +4,6 @@ import { EmptyPanel, LoadingPanel } from '../../project/components/ProjectUi.jsx
 import SupplyProjectPickerPage from './SupplyProjectPickerPage.jsx';
 import SupplyProjectFormPage from './SupplyProjectFormPage.jsx';
 import SupplyDetailPage from './SupplyDetailPage.jsx';
-import DeliveryFormPage from './DeliveryFormPage.jsx';
 import { createSupplyProject, getSupplyProject, listSupplyProjects, updateSupplyProject } from '../services/supplyService.js';
 import { isDemoId, listDemoSupplyProjects, updateDemoSupplyProject } from '../services/demoSupplyService.js';
 import { hasPermission } from '../../../../services/permissions.js';
@@ -19,7 +18,7 @@ function BackPanel({ icon = '🔒', title, children, href = '#/admin/supply' }) 
  * awal, lalu bisa diganti dari pemilih di atas halaman detail.
  */
 export default function SupplyWorkspacePage({ route, onNavigate, onBackToModules, onSignOut }) {
-  const selection = parseSupplyRoute(route) || { projectId: null, form: null, deliveryId: null };
+  const selection = parseSupplyRoute(route) || { projectId: null, form: null };
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -106,18 +105,6 @@ export default function SupplyWorkspacePage({ route, onNavigate, onBackToModules
           onSubmitForm={(form) => (project.isDemo ? updateDemoSupplyProject(project.id, form) : updateSupplyProject(project.id, form))}
           onCancel={() => onNavigate(detail)}
           onSaved={(saved) => { upsertProject(saved); goWithNotice(detail, 'Data kontrak diperbarui.'); }}
-        />
-      );
-    }
-    if (selection.form === 'delivery-new' || selection.form === 'delivery-edit') {
-      if (isFinal) return <BackPanel title="Kontrak sudah ditutup" href={`#/${detail}`}>Ritase tidak bisa dicatat atau diubah pada kontrak berstatus "{project.status}".</BackPanel>;
-      return (
-        <DeliveryFormPage
-          key={route}
-          project={project}
-          deliveryId={selection.deliveryId}
-          onCancel={() => onNavigate(detail)}
-          onSaved={(saved) => goWithNotice(detail, `Ritase ${saved.deliveryNoteNo} (${saved.volume} m³) tersimpan.`)}
         />
       );
     }

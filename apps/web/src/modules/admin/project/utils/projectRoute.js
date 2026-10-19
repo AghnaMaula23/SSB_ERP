@@ -3,7 +3,7 @@ export const SUB_PAGES = [
   { key: 'volume', label: 'Kontrak Volume', icon: '📈' },
   { key: 'alat', label: 'Alat', icon: '🚜' },
   { key: 'timesheet', label: 'Timesheet Alat', icon: '⏱️' },
-  { key: 'inventory', label: 'Inventory', icon: '📦', mock: true },
+  { key: 'inventory', label: 'Inventory', icon: '📦' },
   { key: 'pekerja', label: 'Pekerja', icon: '👷', mock: true },
 ];
 
@@ -15,7 +15,7 @@ const SUB_FORMS = {
   'volume/:id/edit': 'progress-edit',
   'alat/new': 'allocation-new',
   'timesheet/new': 'workhour-new',
-  'inventory/new': 'inventory-new',
+  'inventory/new': 'inventory-movement',
   'inventory/:id/mutasi': 'inventory-movement',
   'pekerja/new': 'worker-new',
   'pekerja/:id/edit': 'worker-edit',
