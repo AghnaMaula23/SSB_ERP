@@ -31,18 +31,42 @@ const getClient = () => {
     region: env('STORAGE_REGION') || 'ap-southeast-1',
     credentials: { accessKeyId, secretAccessKey },
     forcePathStyle: true, // wajib untuk Supabase / MinIO
+    // Gagal cepat kalau storage tidak terjangkau. Batas durasi request dipasang per
+    // operasi (lihat deadline di bawah), bukan di sini.
+    requestHandler: { connectionTimeout: 3000 },
   });
   return client;
 };
 
+// Default SDK TANPA batas waktu: storage yang menggantung (menerima koneksi tapi tidak
+// menjawab) menahan request — dan pada penutupan tahapan, transaksi beserta kunci
+// FOR UPDATE-nya — sampai batas transaksi 30 dtk. Batas TOTAL per operasi lewat
+// abortSignal, sebanding ukuran file: batas menganggur (socketTimeout) terbukti
+// memutus unggahan yang sah, karena klien terlihat diam selama storage memproses
+// body yang sudah terkirim. Abort juga menghentikan percobaan ulang SDK, jadi ini
+// batas sebenarnya. Arsip (±50 KB) ±11 dtk; berkas 50 MB ±110 dtk.
+const BASE_DEADLINE_MS = 10_000;
+const MIN_BYTES_PER_SECOND = 512 * 1024;
+const deadline = (bytes = 0) => AbortSignal.timeout(BASE_DEADLINE_MS + Math.ceil(bytes / MIN_BYTES_PER_SECOND) * 1000);
+
 const put = async (key, buffer, contentType) => {
   const s3 = getClient();
-  await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: buffer, ContentType: contentType }));
+  try {
+    await s3.send(
+      new PutObjectCommand({ Bucket: bucket, Key: key, Body: buffer, ContentType: contentType }),
+      { abortSignal: deadline(buffer.length) }
+    );
+  } catch (err) {
+    // Storage tak terjangkau / menggantung / menolak: kesalahan sementara di sisi
+    // server, bukan kiriman pengguna. Detailnya hanya ke log.
+    console.error(`[STORAGE] gagal menyimpan ${key}: ${err.name}: ${err.message}`);
+    throw httpError('Penyimpanan file sedang tidak tersedia. Coba lagi beberapa saat.', 503);
+  }
 };
 
 const remove = async (key) => {
   const s3 = getClient();
-  await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: deadline() });
 };
 
 /**

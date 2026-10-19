@@ -113,14 +113,8 @@ const generatedFileStore = ({ prefix, userId }) => {
   return {
     save: async (tx, { buffer, originalName, mimeType, ext }) => {
       const key = buildKey(prefix, ext);
-      try {
-        await storage.put(key, buffer, mimeType);
-      } catch (err) {
-        // Storage mati/tak terjangkau: pemanggil (penutupan) dibatalkan dengan pesan yang bisa ditindaklanjuti
-        if (err.statusCode) throw err;
-        console.error(`[FILE] gagal menyimpan ${key}: ${err.message}`);
-        throw httpError('Penyimpanan file sedang tidak tersedia, jadi arsip tidak bisa dibuat. Coba lagi beberapa saat.', 503);
-      }
+      // Storage tidak tersedia → 503 dari storage.put; penutupan batal utuh
+      await storage.put(key, buffer, mimeType);
       keys.push(key);
       return tx.file.create({
         data: {

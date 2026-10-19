@@ -45,6 +45,11 @@ logika file satu tempat, integritas tetap dijaga database.
 - Database menyimpan **kunci**, bukan URL: `delivery-notes/2026/10/<uuid>.pdf`.
   Nama asli tidak pernah masuk path (aman dari path traversal & nama kembar).
 - Semua akses lewat **satu** `src/modules/file/storage.service.js`.
+- **Batas waktu** (17 Okt 2026, hasil security review): koneksi 3 dtk; tiap unggah/hapus
+  punya batas TOTAL 10 dtk + 1 dtk per 512 KB (arsip ±11 dtk, berkas 50 MB ±110 dtk) lewat
+  `abortSignal` — juga menghentikan percobaan ulang SDK. Bukan batas menganggur: terbukti
+  memutus unggahan sah saat storage memproses body yang sudah terkirim. Storage gagal /
+  menggantung / tak terjangkau → **503** dari `storage.put` (satu tempat), detail hanya di log.
 - Bucket **private**. Konfigurasi `.env`: `STORAGE_ENDPOINT`, `STORAGE_REGION`,
   `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_BUCKET`. Kalau
   kosong, hanya endpoint unggah yang gagal dengan pesan jelas — server tetap jalan.
