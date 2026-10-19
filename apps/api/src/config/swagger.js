@@ -2429,7 +2429,7 @@ const swaggerSpec = {
           { in: 'query', name: 'activeOn', schema: { type: 'string', format: 'date' } },
           { $ref: '#/components/parameters/SearchParam' },
         ],
-        responses: { 200: { description: 'Array WorkerAssignment (+ `summary`: total, aktif, upah harian aktif)' }, 400: { description: 'subProjectId / projectWorkerId wajib salah satu' } },
+        responses: { 200: { description: '`data` = `{ data: WorkerAssignment[] (dengan loggedDays kalau subProjectId diisi), summary: { total, active, activeDailyWage } }`' }, 400: { description: 'subProjectId / projectWorkerId wajib salah satu' } },
       },
       post: {
         tags: ['Pekerja'], summary: 'Tugaskan pekerja ke tahapan',
@@ -2465,7 +2465,7 @@ const swaggerSpec = {
     '/labor-logs': {
       get: {
         tags: ['Log Tenaga Kerja'], summary: 'List log per tahapan',
-        description: 'Permission: labor-log:read. Urut workDate terbaru. Tiap log memuat `summary` (total orang, kontrak/harian, lembur, total upah) tanpa items. `projectWorkerId` = log yang memuat pekerja itu. Response juga memuat `periodSummary` atas SEMUA log yang cocok filter (bukan hanya halaman ini).',
+        description: 'Permission: labor-log:read. Urut workDate terbaru. Tiap log memuat `summary` (total orang, kontrak/harian, lembur, total upah) tanpa items. `projectWorkerId` = log yang memuat pekerja itu. `meta.summary` = ringkasan atas SEMUA log yang cocok filter (bukan hanya halaman ini): `{ logs, distinctWorkers, manDays, contractManDays, dailyManDays, totalWage, totalOvertime }`.',
         parameters: [
           { in: 'query', name: 'subProjectId', required: true, schema: { type: 'integer' } },
           { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
@@ -2473,7 +2473,7 @@ const swaggerSpec = {
           { in: 'query', name: 'projectWorkerId', schema: { type: 'integer' } },
           { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
         ],
-        responses: { 200: { description: 'Paginated LaborLog (tanpa items) + periodSummary' } },
+        responses: { 200: { description: 'Paginated LaborLog (tanpa items) + meta.summary' } },
       },
       post: {
         tags: ['Log Tenaga Kerja'], summary: 'Catat log harian (header + semua pekerja sekaligus)',

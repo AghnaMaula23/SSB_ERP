@@ -228,7 +228,7 @@ data diunduh dari halaman sumbernya masing-masing (CSV di FE — lihat backlog-f
 
 | Ditutup | Arsip |
 |---|---|
-| Tahapan | `stage-progress`, `stage-equipment`, `stage-material` (`stage-labor` menyusul bersama modul Pekerja) |
+| Tahapan | `stage-progress`, `stage-equipment`, `stage-material`, `stage-labor` (sejak 19 Okt 2026, modul Pekerja) |
 | Project konstruksi | `project-summary` (rekap tahapan) |
 | Supply | `supply-deliveries` |
 | Rental | `rental-timesheet`, satu file per pool item yang pernah terikat unit |

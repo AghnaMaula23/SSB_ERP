@@ -39,6 +39,9 @@ app.use('/api/material-stock',     require('./modules/request-material/material-
 app.use('/api/files',              require('./modules/file/file.routes.js'));
 app.use('/api/project-files',      require('./modules/project-file/project-file.routes.js'));
 app.use('/api/approval-queue',       require('./modules/approval-center/approval-queue.routes.js'));
+app.use('/api/workers',            require('./modules/labor/worker.routes.js'));
+app.use('/api/worker-assignments', require('./modules/labor/worker-assignment.routes.js'));
+app.use('/api/labor-logs',         require('./modules/labor/labor-log.routes.js'));
 // Didaftarkan SEBELUM /api/equipment supaya jelas mana yang menangani
 // /purchase-requests — bukan bergantung pada fall-through router.
 app.use('/api/equipment/purchase-requests', require('./modules/divisi-alat/purchase-request.routes.js'));

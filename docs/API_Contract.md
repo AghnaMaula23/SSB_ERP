@@ -54,6 +54,10 @@ di level atas, bukan di dalam objek:
 }
 ```
 
+Beberapa list membawa `meta.summary` — ringkasan atas SELURUH baris yang cocok
+filter, bukan hanya halaman yang tampil (mis. progress harian, log tenaga kerja).
+Sebelum 19 Okt 2026 `paginated()` membuang field ini diam-diam.
+
 **Gagal** — dari global error handler:
 ```json
 { "success": false, "message": "Deskripsi error" }

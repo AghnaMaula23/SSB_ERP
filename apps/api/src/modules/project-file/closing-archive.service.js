@@ -260,10 +260,82 @@ const stageMaterialBook = async (tx, sp, ctx, subject) => {
   return wb;
 };
 
+const WORKER_TYPE_LABEL = { contract: 'Kontrak', daily: 'Harian' };
+
+/**
+ * Pekerja tahapan (docs/skema-tenaga-kerja-harian.md): log per baris (satu baris =
+ * satu orang, total = upah + lembur tanpa pengali), rekap per pekerja, penugasan.
+ * Penugasan terbuka sudah diakhiri di transaksi yang sama sebelum ini dipanggil.
+ */
+const stageLaborBook = async (tx, sp, ctx, subject) => {
+  const items = await tx.dailyLaborLogItem.findMany({
+    where: { dailyLaborLog: { subProjectId: sp.id } },
+    include: { projectWorker: true, dailyLaborLog: { include: { createdByUser: true } } },
+    orderBy: [{ dailyLaborLog: { workDate: 'asc' } }, { projectWorker: { fullName: 'asc' } }],
+  });
+  const assignments = await tx.subProjectWorkerAssignment.findMany({
+    where: { subProjectId: sp.id },
+    include: { projectWorker: true },
+    orderBy: { projectWorker: { fullName: 'asc' } },
+  });
+
+  const total = (i) => round2(toNumber(i.dailyWage) + toNumber(i.overtimeAmount));
+  const perWorker = new Map();
+  for (const i of items) {
+    const w = perWorker.get(i.projectWorkerId)
+      ?? { code: i.projectWorker.workerCode, name: i.projectWorker.fullName, days: 0, wage: 0, overtime: 0, total: 0 };
+    w.days += 1;
+    w.wage = round2(w.wage + toNumber(i.dailyWage));
+    w.overtime = round2(w.overtime + toNumber(i.overtimeAmount));
+    w.total = round2(w.total + total(i));
+    perWorker.set(i.projectWorkerId, w);
+  }
+  const grand = round2(items.reduce((s, i) => s + total(i), 0));
+  const grandOvertime = round2(items.reduce((s, i) => s + toNumber(i.overtimeAmount), 0));
+  const grandWage = round2(grand - grandOvertime);
+
+  const wb = new ExcelJS.Workbook();
+  const head = headBlock(ctx, subject);
+  addSheet(wb, 'Log Pekerja', head, [
+    { header: 'Tanggal', value: (i) => toDateOnly(i.dailyLaborLog.workDate), width: 12 },
+    { header: 'Kode', value: (i) => i.projectWorker.workerCode, width: 12 },
+    { header: 'Nama', value: (i) => i.projectWorker.fullName, width: 24 },
+    { header: 'Peran', value: (i) => i.workerRole, width: 20 },
+    { header: 'Jenis', value: (i) => WORKER_TYPE_LABEL[i.workerType], width: 10 },
+    { header: 'Upah', value: (i) => toNumber(i.dailyWage) },
+    { header: 'Lembur', value: (i) => toNumber(i.overtimeAmount) },
+    { header: 'Total', value: total },
+    { header: 'Keterangan tugas', value: (i) => i.taskNotes, width: 28 },
+    { header: 'Catatan log', value: (i) => i.dailyLaborLog.notes, width: 28 },
+    { header: 'Dicatat oleh', value: (i) => actorName(i.dailyLaborLog.createdByUser), width: 20 },
+  ], items, [['Total', '', '', '', '', grandWage, grandOvertime, grand]]);
+  addSheet(wb, 'Rekap per Pekerja', head, [
+    { header: 'Kode', value: (w) => w.code, width: 12 },
+    { header: 'Nama', value: (w) => w.name, width: 24 },
+    { header: 'Hari kerja', value: (w) => w.days, width: 12 },
+    { header: 'Upah', value: (w) => w.wage },
+    { header: 'Lembur', value: (w) => w.overtime },
+    { header: 'Total', value: (w) => w.total },
+  ], [...perWorker.values()], [['Total', '', items.length, grandWage, grandOvertime, grand]]);
+  addSheet(wb, 'Penugasan', head, [
+    { header: 'Kode', value: (a) => a.projectWorker.workerCode, width: 12 },
+    { header: 'Nama', value: (a) => a.projectWorker.fullName, width: 24 },
+    { header: 'NIK', value: (a) => a.projectWorker.idNumber, width: 18 },
+    { header: 'Jenis', value: (a) => WORKER_TYPE_LABEL[a.workerType], width: 10 },
+    { header: 'Peran', value: (a) => a.assignedRole ?? a.projectWorker.defaultRole, width: 20 },
+    { header: 'Upah sepakat', value: (a) => toNumber(a.dailyWage) },
+    { header: 'Mulai', value: (a) => toDateOnly(a.startDate), width: 12 },
+    { header: 'Selesai', value: (a) => toDateOnly(a.endDate), width: 12 },
+    { header: 'Catatan', value: (a) => a.notes, width: 28 },
+  ], assignments);
+  return wb;
+};
+
 const STAGE_ARCHIVES = [
   ['stage-progress', 'progress', stageProgressBook],
   ['stage-equipment', 'alat', stageEquipmentBook],
   ['stage-material', 'material', stageMaterialBook],
+  ['stage-labor', 'pekerja', stageLaborBook],
 ];
 
 /** Dipanggil di transaksi penutupan tahapan, setelah lockForClosing & syarat lolos. */

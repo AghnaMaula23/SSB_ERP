@@ -1,7 +1,8 @@
 # Tenaga Kerja Harian (modul Pekerja) — keputusan desain & kontrak
 
-**STATUS: KONTRAK DISETUJUI 19 Okt 2026, BELUM DIBANGUN.** Endpoint: Swagger tag
-*Pekerja* dan *Log Tenaga Kerja* (`apps/api/src/config/swagger.js`).
+**STATUS: DIBANGUN 19 Okt 2026** — `apps/api/src/modules/labor/`, migrasi
+`20261019120000_labor_workers`. Endpoint: Swagger tag *Pekerja* dan *Log Tenaga Kerja*
+(`apps/api/src/config/swagger.js`).
 
 Bagian labor dari Build Order 7 (Finance Field & Labor Payroll). Spesifikasi awal
 ditulis 1 Okt 2026 saat modul Project dibangun; versi ini menggantikannya setelah

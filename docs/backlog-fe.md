@@ -658,11 +658,11 @@ Detail: `docs/keputusan-desain-lampiran.md` L8 "Tahapan / project selesai = terk
   `GET /api/project-files/projects/:type/:projectId/system-folders/closing-archive[?subProjectId=]`,
   unduh lewat `GET /api/files/:fileId/url`. Tidak ada tombol hapus/ubah untuk arsip.
 
-## E26. Kontrak modul Pekerja disetujui — API BELUM ADA (19 Okt 2026)
+## E26. API modul Pekerja (19 Okt 2026)
 
 Detail: Swagger tag *Pekerja* & *Log Tenaga Kerja*, `docs/skema-tenaga-kerja-harian.md`
-P1–P11. Mock `fieldMockService.js` (pekerja) tetap dipakai sampai API dibangun, tapi
-bentuk layarnya sudah bisa disiapkan:
+P1–P11. API sudah dibangun dan tersedia setelah migrasi `20261019120000_labor_workers`
+di-deploy ke DB bersama — sejak itu mock pekerja di `fieldMockService.js` bisa diganti:
 
 - **Master pekerja GLOBAL** (`/workers`), bukan per tahapan. `WorkersPage` per tahapan
   menjadi daftar **penugasan** (`/worker-assignments?subProjectId=`); "+ Tambah Pekerja"
@@ -722,4 +722,7 @@ untuk request alat, manajemen akun, master material/supplier/jenis alat, kategor
 
 **Tetap mock dan wajar (E21):** income, klaim pendapatan alat, kas lapangan, pekerja
 (sampai E26 dibangun), log aktivitas.
-
+- List `GET /labor-logs` membawa ringkasan seluruh periode di `meta.summary`;
+  `GET /worker-assignments` membalas `data: { data: [...], summary }`.
+- `meta.summary` progress harian (`GET .../progress-logs`) kini benar-benar terkirim —
+  sebelumnya dibuang `paginated()`.

@@ -53,20 +53,24 @@ model User {
   equipmentRequestsEquipmentReviewed EquipmentRequest[] @relation("EqRequestEquipmentReviewedBy")
   equipmentRequestsCancelled         EquipmentRequest[] @relation("EqRequestCancelledBy")
 
-  materialPoolsCreated            MaterialPool[]          @relation("MaterialPoolCreatedBy")
-  materialRequestsCreated         MaterialRequest[]       @relation("MatRequestRequestedBy")
-  materialRequestsAdminReviewed   MaterialRequest[]       @relation("MatRequestAdminReviewedBy")
-  materialRequestsFinanceReviewed MaterialRequest[]       @relation("MatRequestFinanceReviewedBy")
-  materialRequestsCancelled       MaterialRequest[]       @relation("MatRequestCancelledBy")
-  materialDeliveriesCreated       MaterialDelivery[]      @relation("MatDeliveryCreatedBy")
-  materialDeliveriesCancelled     MaterialDelivery[]      @relation("MatDeliveryCancelledBy")
-  filesUploaded                   File[]                  @relation("FileUploadedBy")
-  filesTrashed                    File[]                  @relation("FileTrashedBy")
-  projectFoldersCreated           ProjectFileFolder[]     @relation("ProjectFolderCreatedBy")
-  materialReceiptsCreated         MaterialReceipt[]       @relation("MatReceiptCreatedBy")
-  materialReceiptsCancelled       MaterialReceipt[]       @relation("MatReceiptCancelledBy")
-  stockMovementsCreated           MaterialStockMovement[] @relation("StockMovementCreatedBy")
-  stockMovementsCancelled         MaterialStockMovement[] @relation("StockMovementCancelledBy")
+  materialPoolsCreated            MaterialPool[]               @relation("MaterialPoolCreatedBy")
+  materialRequestsCreated         MaterialRequest[]            @relation("MatRequestRequestedBy")
+  materialRequestsAdminReviewed   MaterialRequest[]            @relation("MatRequestAdminReviewedBy")
+  materialRequestsFinanceReviewed MaterialRequest[]            @relation("MatRequestFinanceReviewedBy")
+  materialRequestsCancelled       MaterialRequest[]            @relation("MatRequestCancelledBy")
+  materialDeliveriesCreated       MaterialDelivery[]           @relation("MatDeliveryCreatedBy")
+  materialDeliveriesCancelled     MaterialDelivery[]           @relation("MatDeliveryCancelledBy")
+  filesUploaded                   File[]                       @relation("FileUploadedBy")
+  filesTrashed                    File[]                       @relation("FileTrashedBy")
+  projectFoldersCreated           ProjectFileFolder[]          @relation("ProjectFolderCreatedBy")
+  materialReceiptsCreated         MaterialReceipt[]            @relation("MatReceiptCreatedBy")
+  materialReceiptsCancelled       MaterialReceipt[]            @relation("MatReceiptCancelledBy")
+  stockMovementsCreated           MaterialStockMovement[]      @relation("StockMovementCreatedBy")
+  stockMovementsCancelled         MaterialStockMovement[]      @relation("StockMovementCancelledBy")
+  workersCreated                  ProjectWorker[]              @relation("WorkerCreatedBy")
+  workerAssignmentsCreated        SubProjectWorkerAssignment[] @relation("WorkerAssignmentCreatedBy")
+  laborLogsCreated                DailyLaborLog[]              @relation("LaborLogCreatedBy")
+  laborLogsUpdated                DailyLaborLog[]              @relation("LaborLogUpdatedBy")
 
   @@map("users")
 }
@@ -1025,6 +1029,8 @@ model SubProject {
   equipmentRequests    EquipmentRequest[]
   materialRequests     MaterialRequest[]
   stockMovements       MaterialStockMovement[]
+  workerAssignments    SubProjectWorkerAssignment[]
+  laborLogs            DailyLaborLog[]
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
@@ -1832,4 +1838,112 @@ model MaterialStockMovement {
 
   @@index([subProjectId, materialTypeId])
   @@map("material_stock_movements")
+}
+
+// ============================================================
+// PEKERJA & LOG TENAGA KERJA — docs/skema-tenaga-kerja-harian.md P1–P11
+// ============================================================
+
+/// Kontrak = disewa selama tahapan berlangsung, dibayar HARIAN (P3). Harian =
+/// hadir ketika dipanggil. Karyawan bergaji bulanan bukan populasi ini.
+enum WorkerType {
+  contract
+  daily
+
+  @@map("worker_type")
+}
+
+/// Identitas pekerja — master GLOBAL, tidak terikat project/tahapan (P5).
+/// Upah TIDAK di sini: milik kesepakatan per tahapan. NIK opsional, unik kalau
+/// diisi (partial unique index + CHECK 16 digit di migrasi).
+model ProjectWorker {
+  id          Int       @id @default(autoincrement())
+  workerCode  String    @unique @map("worker_code") @db.VarChar(20)
+  fullName    String    @map("full_name") @db.VarChar(150)
+  idNumber    String?   @map("id_number") @db.VarChar(16)
+  phone       String?   @db.VarChar(30)
+  defaultRole String?   @map("default_role") @db.VarChar(100)
+  joinedAt    DateTime? @map("joined_at") @db.Date
+  notes       String?   @db.Text
+  createdBy   Int       @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  createdByUser User                         @relation("WorkerCreatedBy", fields: [createdBy], references: [id])
+  assignments   SubProjectWorkerAssignment[]
+  laborLogItems DailyLaborLogItem[]
+
+  @@index([fullName])
+  @@map("project_workers")
+}
+
+/// Kesepakatan kerja satu pekerja di satu tahapan. Tanpa kolom status (P5):
+/// bertugas = end_date kosong atau >= hari ini. Mengubah daily_wage tidak
+/// mengubah log yang sudah tercatat (upah disimpan per baris log).
+model SubProjectWorkerAssignment {
+  id              Int        @id @default(autoincrement())
+  subProjectId    Int        @map("sub_project_id")
+  projectWorkerId Int        @map("project_worker_id")
+  workerType      WorkerType @map("worker_type")
+  assignedRole    String?    @map("assigned_role") @db.VarChar(100)
+  dailyWage       Decimal    @map("daily_wage") @db.Decimal(18, 2)
+  startDate       DateTime   @map("start_date") @db.Date
+  endDate         DateTime?  @map("end_date") @db.Date
+  notes           String?    @db.Text
+  createdBy       Int        @map("created_by")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  subProject    SubProject    @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
+  projectWorker ProjectWorker @relation(fields: [projectWorkerId], references: [id], onDelete: Restrict)
+  createdByUser User          @relation("WorkerAssignmentCreatedBy", fields: [createdBy], references: [id])
+
+  @@unique([subProjectId, projectWorkerId])
+  @@index([projectWorkerId])
+  @@map("sub_project_worker_assignments")
+}
+
+/// Log tenaga kerja satu tahapan satu tanggal. Tanpa status & tanpa validasi
+/// (P1): pemeriksaan Admin -> Finance terjadi di klaim upah. Total dihitung saat
+/// dibaca (tidak ada total_workers/total_wage_amount).
+model DailyLaborLog {
+  id           Int      @id @default(autoincrement())
+  subProjectId Int      @map("sub_project_id")
+  workDate     DateTime @map("work_date") @db.Date
+  notes        String?  @db.Text
+  createdBy    Int      @map("created_by")
+  updatedBy    Int?     @map("updated_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  subProject    SubProject          @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
+  createdByUser User                @relation("LaborLogCreatedBy", fields: [createdBy], references: [id])
+  updatedByUser User?               @relation("LaborLogUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
+  items         DailyLaborLogItem[]
+
+  @@unique([subProjectId, workDate])
+  @@map("daily_labor_logs")
+}
+
+/// SATU BARIS = SATU ORANG (P6: wajib merujuk master). Peran, jenis, upah, dan
+/// lembur adalah fakta HARI ITU — boleh beda dari penugasan.
+/// total = daily_wage + overtime_amount, tanpa pengali (P2), tidak disimpan.
+model DailyLaborLogItem {
+  id              Int        @id @default(autoincrement())
+  dailyLaborLogId Int        @map("daily_labor_log_id")
+  projectWorkerId Int        @map("project_worker_id")
+  workerRole      String     @map("worker_role") @db.VarChar(100)
+  workerType      WorkerType @map("worker_type")
+  dailyWage       Decimal    @map("daily_wage") @db.Decimal(18, 2)
+  overtimeAmount  Decimal    @default(0) @map("overtime_amount") @db.Decimal(18, 2)
+  taskNotes       String?    @map("task_notes") @db.Text
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  dailyLaborLog DailyLaborLog @relation(fields: [dailyLaborLogId], references: [id], onDelete: Cascade)
+  projectWorker ProjectWorker @relation(fields: [projectWorkerId], references: [id], onDelete: Restrict)
+
+  @@unique([dailyLaborLogId, projectWorkerId])
+  @@index([projectWorkerId])
+  @@map("daily_labor_log_items")
 }

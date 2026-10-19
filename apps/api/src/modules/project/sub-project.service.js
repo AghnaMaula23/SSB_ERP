@@ -3,6 +3,7 @@ const { httpError } = require('../../utils/error.js');
 const { claimTransition } = require('../../utils/status-transition.js');
 const { CLOSED_STATUSES, lockForClosing, assertNothingOpen } = require('./context-lock.js');
 const closingArchive = require('../project-file/closing-archive.service.js');
+const workerAssignments = require('../labor/worker-assignment.service.js');
 const { toNumber, toDateOnly, coerceDates, pickWritable, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 
 // Urutan tahapan baku. Dipakai sebagai sequenceOrder default dan sebagai acuan
@@ -406,6 +407,9 @@ const changeStatus = async (projectId, id, status, userId) => {
       if (status === 'active') await assertNoOtherActiveStage(tx, row);
       if (closing) {
         await assertStageClosable(tx, row);
+        // Penugasan pekerja yang masih terbuka diakhiri SEBELUM diarsipkan, supaya
+        // arsip memuat tanggal selesai finalnya (P5, skema-tenaga-kerja-harian.md)
+        await workerAssignments.endOpenAssignments(tx, row.id);
         await closingArchive.archiveStage(tx, store, row.id, status, userId);
       }
       await claimTransition(tx.subProject, { id, status: row.status }, { status });

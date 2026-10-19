@@ -104,6 +104,17 @@ const PERMISSIONS = [
   { module: 'cash', action: 'create', label: 'Catat transaksi kas manual dan tambah kategori kas' },
   { module: 'cash', action: 'update', label: 'Ubah dan batalkan transaksi kas manual, ubah kategori kas' },
   { module: 'cash', action: 'delete', label: 'Hapus kategori kas yang belum terpakai' },
+  // Pekerja & log tenaga kerja (docs/skema-tenaga-kerja-harian.md P4). Master
+  // pekerja + penugasan satu modul permission; log tanpa validate — pemeriksaan
+  // Admin terjadi di klaim upah (P1).
+  { module: 'worker',    action: 'read',   label: 'Lihat master pekerja dan penugasan per tahapan' },
+  { module: 'worker',    action: 'create', label: 'Daftarkan pekerja dan tugaskan ke tahapan' },
+  { module: 'worker',    action: 'update', label: 'Ubah identitas pekerja dan penugasan (termasuk mengeluarkan)' },
+  { module: 'worker',    action: 'delete', label: 'Hapus pekerja/penugasan salah input yang belum tercatat di log' },
+  { module: 'labor-log', action: 'read',   label: 'Lihat log tenaga kerja harian' },
+  { module: 'labor-log', action: 'create', label: 'Catat log tenaga kerja harian' },
+  { module: 'labor-log', action: 'update', label: 'Ubah log tenaga kerja harian' },
+  { module: 'labor-log', action: 'delete', label: 'Hapus log tenaga kerja harian' },
 ];
 
 // Kategori kas Divisi Alat. Data master, bukan data demo — sistem tidak bisa
@@ -165,6 +176,9 @@ const ROLE_PERMISSIONS = {
     'material-stock:read',
     // Pemilik halaman Files (L8) — dokumen project dikelola Admin kantor
     'project-file:read', 'project-file:create', 'project-file:update', 'project-file:delete',
+    // Admin mengelola pekerja & penugasan, tapi TIDAK menulis log — dia yang akan
+    // memeriksanya di klaim upah (P4)
+    'worker:read', 'worker:create', 'worker:update', 'worker:delete', 'labor-log:read',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
@@ -178,7 +192,9 @@ const ROLE_PERMISSIONS = {
     // Finance memutuskan paket dana request material (RM-3) — super_admin TIDAK
     'material-request:approve',
     // Pemakaian material = biaya proyek yang akan dibaca GL
-    'material-stock:read'],
+    'material-stock:read',
+    // Upah pekerja = biaya proyek yang akan Finance setujui di klaim upah
+    'worker:read', 'labor-log:read'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
@@ -222,7 +238,11 @@ const ROLE_PERMISSIONS = {
     // request (RM-4, G3). Admin cukup melihat lewat material-request:read.
     'material-delivery:create',
     // Lapangan yang menerima material dan memakainya di lokasi (RM-5)
-    'material-receipt:create', 'material-stock:read', 'material-stock:create'],
+    'material-receipt:create', 'material-stock:read', 'material-stock:create',
+    // Lapangan bertemu orangnya: mendaftarkan, menugaskan, mencatat kehadiran harian.
+    // Tanpa worker:delete — mengeluarkan pekerja cukup lewat endDate (P4/P5)
+    'worker:read', 'worker:create', 'worker:update',
+    'labor-log:read', 'labor-log:create', 'labor-log:update', 'labor-log:delete'],
 };
 
 async function main() {
