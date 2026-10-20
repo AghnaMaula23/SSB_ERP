@@ -89,11 +89,22 @@ export const QUEUE_SOURCES = {
   progress_log: { label: 'Progress Harian', icon: '📈', className: 'bg-teal-50 text-teal-700 border-teal-200' },
 };
 
-/** Rute layar review di FE untuk satu baris antrean; null = diputuskan langsung di antrean. */
+// detailPath progress: /api/projects/sub-projects/:subId/progress-logs/:logId
+export function progressIds(row) {
+  const match = /sub-projects\/(\d+)\/progress-logs\/(\d+)/.exec(row.detailPath || '');
+  return match ? { subProjectId: Number(match[1]), logId: Number(match[2]) } : null;
+}
+
+/** Rute layar review satu baris antrean — selalu di bawah Approval Center. */
 export function queueDetailRoute(row) {
-  if (row.sourceType === 'purchase_request') return `#/admin/approvals/po/${row.sourceId}`;
-  if (row.sourceType === 'equipment_request') return `#/admin/approvals/alat/${row.sourceId}`;
-  if (row.sourceType === 'material_request') return `#/admin/approvals/material/${row.sourceId}`;
+  const base = '#/admin/approvals/antrean';
+  if (row.sourceType === 'purchase_request') return `${base}/po/${row.sourceId}`;
+  if (row.sourceType === 'equipment_request') return `${base}/alat/${row.sourceId}`;
+  if (row.sourceType === 'material_request') return `${base}/material/${row.sourceId}`;
+  if (row.sourceType === 'progress_log') {
+    const ids = progressIds(row);
+    return ids ? `${base}/progress/${ids.subProjectId}/${ids.logId}` : null;
+  }
   return null;
 }
 

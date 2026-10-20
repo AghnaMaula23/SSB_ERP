@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import ResponsiveTable from '../../../../components/ResponsiveTable.jsx';
 import { MockBanner, Notice, StatusBadge } from '../../project/components/ProjectUi.jsx';
 import { formatCurrency, formatDate, formatDateTime } from '../../project/utils/projectFormat.js';
 import { DecisionButtons, FilterChips, Pager, StatTile } from '../components/ApprovalUi.jsx';
@@ -100,74 +101,63 @@ export default function FieldCashQueue({ initialNotice }) {
           />
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="table-modern">
-            <thead>
-              <tr>
-                <th className="w-12">No</th>
-                <th>Tanggal</th>
-                <th>Proyek</th>
-                <th>Keterangan</th>
-                <th className="text-right">Nominal</th>
-                <th>Nota</th>
-                <th className="text-right">{status === 'submitted' ? 'Aksi' : 'Status'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!rows ? (
-                <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-500">Memuat klaim...</td></tr>
-              ) : visible.length === 0 ? (
-                <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-500">{status === 'submitted' ? 'Tidak ada klaim yang menunggu. 🎉' : 'Tidak ada data.'}</td></tr>
-              ) : visible.map((row, index) => (
-                <Fragment key={row.id}>
-                  <tr>
-                    <td className="text-xs text-slate-500">{String((current - 1) * PAGE_SIZE + index + 1).padStart(2, '0')}</td>
-                    <td className="whitespace-nowrap text-xs">{formatDate(row.requestDate)}</td>
-                    <td>
-                      <a href={`#/admin/approvals/kas/${row.id}`} className="font-semibold text-emerald-800 hover:underline">{row.projectName}</a>
-                      <p className="text-[11px] text-slate-500">{row.subProjectLabel} · {row.requestCode}</p>
-                    </td>
-                    <td className="max-w-56">
-                      <p className="truncate text-xs text-slate-800" title={row.description}>{row.description}</p>
-                      <p className="text-[11px] text-slate-400">{row.category} · {row.requestedBy?.fullName}</p>
-                    </td>
-                    <td className="text-right font-mono font-semibold text-slate-900">{formatCurrency(row.amount)}</td>
-                    <td><a href={`#/admin/approvals/kas/${row.id}`} className="whitespace-nowrap text-xs font-semibold text-emerald-700 hover:underline">📎 View Nota ({row.attachments.length})</a></td>
-                    <td className="text-right">
-                      {row.status === 'submitted'
-                        ? <DecisionButtons onApprove={() => approve(row)} onReject={() => setRejecting({ id: row.id, notes: '', error: '' })} />
-                        : <StatusBadge status={row.status} map={KAS_STATUS} />}
-                    </td>
-                  </tr>
-                  {rejecting.id === row.id && (
-                    <tr className="bg-red-50/60">
-                      <td colSpan={7}>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                          <label className="flex-1">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-red-700">Alasan penolakan {row.requestCode}</span>
-                            <input
-                              autoFocus
-                              value={rejecting.notes}
-                              onChange={(event) => setRejecting((value) => ({ ...value, notes: event.target.value, error: '' }))}
-                              onKeyDown={(event) => { if (event.key === 'Enter') submitReject(row); if (event.key === 'Escape') setRejecting({ id: null, notes: '', error: '' }); }}
-                              className="input-control mt-1 text-sm"
-                              placeholder="Contoh: Nota tidak terbaca, mohon unggah ulang"
-                            />
-                            {rejecting.error && <span className="mt-1 block text-[11px] font-medium text-red-600">{rejecting.error}</span>}
-                          </label>
-                          <div className="flex gap-2 sm:pt-5">
-                            <button type="button" onClick={() => setRejecting({ id: null, notes: '', error: '' })} className="btn btn-secondary text-xs">Batal</button>
-                            <button type="button" onClick={() => submitReject(row)} className="btn btn-danger text-xs">Tolak Klaim</button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveTable
+          columns={[
+            {
+              key: 'project',
+              label: 'Proyek',
+              primary: true,
+              render: (row) => <a href={`#/admin/approvals/kas/${row.id}`} className="font-semibold text-emerald-800 hover:underline">{row.projectName}</a>,
+              sub: (row) => `${row.subProjectLabel} · ${row.requestCode}`,
+            },
+            { key: 'date', label: 'Tanggal', render: (row) => <span className="whitespace-nowrap text-xs">{formatDate(row.requestDate)}</span> },
+            {
+              key: 'description',
+              label: 'Keterangan',
+              render: (row) => (
+                <span className="block max-w-56 truncate text-xs text-slate-800" title={row.description}>
+                  <span className="block truncate">{row.description}</span>
+                  <span className="block text-[11px] text-slate-400">{row.category} · {row.requestedBy?.fullName}</span>
+                </span>
+              ),
+            },
+            { key: 'amount', label: 'Nominal', align: 'right', render: (row) => <span className="font-mono font-semibold text-slate-900">{formatCurrency(row.amount)}</span> },
+            { key: 'nota', label: 'Nota', render: (row) => <a href={`#/admin/approvals/kas/${row.id}`} className="whitespace-nowrap text-xs font-semibold text-emerald-700 hover:underline">📎 View Nota ({row.attachments.length})</a> },
+            {
+              key: 'action',
+              label: 'Aksi',
+              align: 'right',
+              render: (row) => (row.status === 'submitted'
+                ? <DecisionButtons onApprove={() => approve(row)} onReject={() => setRejecting({ id: row.id, notes: '', error: '' })} />
+                : <StatusBadge status={row.status} map={KAS_STATUS} />),
+            },
+          ]}
+          rows={visible}
+          rowKey={(row) => row.id}
+          loading={!rows}
+          loadingText="Memuat klaim..."
+          empty={status === 'submitted' ? 'Tidak ada klaim yang menunggu. 🎉' : 'Tidak ada data.'}
+          expandedRow={(row) => (rejecting.id === row.id ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+              <label className="flex-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-red-700">Alasan penolakan {row.requestCode}</span>
+                <input
+                  autoFocus
+                  value={rejecting.notes}
+                  onChange={(event) => setRejecting((value) => ({ ...value, notes: event.target.value, error: '' }))}
+                  onKeyDown={(event) => { if (event.key === 'Enter') submitReject(row); if (event.key === 'Escape') setRejecting({ id: null, notes: '', error: '' }); }}
+                  className="input-control mt-1 text-sm"
+                  placeholder="Contoh: Nota tidak terbaca, mohon unggah ulang"
+                />
+                {rejecting.error && <span className="mt-1 block text-[11px] font-medium text-red-600">{rejecting.error}</span>}
+              </label>
+              <div className="flex gap-2 sm:pt-5">
+                <button type="button" onClick={() => setRejecting({ id: null, notes: '', error: '' })} className="btn btn-secondary text-xs">Batal</button>
+                <button type="button" onClick={() => submitReject(row)} className="btn btn-danger text-xs">Tolak Klaim</button>
+              </div>
+            </div>
+          ) : null)}
+        />
         <Pager page={current} totalPages={totalPages} total={filtered.length} shown={visible.length} onChange={setPage} label="klaim" />
       </section>
     </>

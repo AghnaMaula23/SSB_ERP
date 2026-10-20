@@ -205,7 +205,7 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
           {loadError && <Notice tone="error">{loadError}</Notice>}
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="table-scroll-mobile overflow-x-auto">
           <table className="table-modern">
             <thead>
               <tr>

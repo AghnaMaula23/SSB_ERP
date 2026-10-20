@@ -90,7 +90,7 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
         {state.error && !loading && <Notice tone="error">{state.error}</Notice>}
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="table-scroll-mobile overflow-x-auto">
         <table className="w-full min-w-[60rem] border-collapse text-xs">
           <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
             <tr>

@@ -151,7 +151,7 @@ export default function MaterialRequestReview({ recordId, onDone }) {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Approval', href: '#/admin/approvals/antrean' }, { label: 'Request Material' }, { label: request.requestCode }]} />
+      <Breadcrumb items={[{ label: 'Approval Center', href: '#/admin/approvals/antrean' }, { label: 'Request Material' }, { label: request.requestCode }]} />
       <div className="mb-5 mt-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="font-mono text-2xl font-bold text-emerald-800">{request.requestCode}</h1>
@@ -173,7 +173,7 @@ export default function MaterialRequestReview({ recordId, onDone }) {
 
       <section className="card-panel mb-5 overflow-hidden" aria-label="Kuantitas & harga material">
         <p className="border-b border-slate-200 bg-slate-50 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-600">Material & Harga</p>
-        <div className="overflow-x-auto">
+        <div className="table-scroll-mobile overflow-x-auto">
           <table className="table-modern">
             <thead>
               <tr>

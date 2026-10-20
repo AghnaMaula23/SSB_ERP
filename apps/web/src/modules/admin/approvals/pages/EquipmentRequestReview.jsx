@@ -67,7 +67,7 @@ export default function EquipmentRequestReview({ recordId, onDone }) {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Approval', href: '#/admin/approvals/antrean' }, { label: 'Request Alat' }, { label: request.requestCode }]} />
+      <Breadcrumb items={[{ label: 'Approval Center', href: '#/admin/approvals/antrean' }, { label: 'Request Alat' }, { label: request.requestCode }]} />
       <div className="mb-5 mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-3">
@@ -86,7 +86,7 @@ export default function EquipmentRequestReview({ recordId, onDone }) {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section className="card-panel self-start overflow-hidden" aria-label="Item request">
           <p className="border-b border-slate-200 bg-slate-50 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-600">Alat yang Diminta</p>
-          <div className="overflow-x-auto">
+          <div className="table-scroll-mobile overflow-x-auto">
             <table className="table-modern">
               <thead><tr><th>Jenis Alat</th><th className="text-right">Jumlah</th><th className="text-right">Estimasi Jam</th><th>Catatan</th></tr></thead>
               <tbody>

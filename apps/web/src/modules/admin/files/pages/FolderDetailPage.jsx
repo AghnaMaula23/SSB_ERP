@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import ResponsiveTable from '../../../../components/ResponsiveTable.jsx';
 import { Breadcrumb, EmptyPanel, LoadingPanel, MetricCard, Notice, StatusBadge } from '../../project/components/ProjectUi.jsx';
 import { formatDate, formatDateTime, initials, todayIso } from '../../project/utils/projectFormat.js';
 import { Pager } from '../../approvals/components/ApprovalUi.jsx';
@@ -172,57 +173,55 @@ export default function FolderDetailPage({ folderId, initialNotice }) {
       </section>
 
       <div className="card-panel overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="table-modern">
-            <thead>
-              <tr>
-                <th className="w-12">No</th>
-                <th>Nama Dokumen / Berkas</th>
-                <th>Kategori</th>
-                <th className="text-right">Ukuran</th>
-                <th>Tanggal Diunggah</th>
-                <th>Pengunggah</th>
-                <th className="text-right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.length === 0 ? (
-                <tr><td colSpan={7} className="py-14 text-center text-sm text-slate-500">
-                  {rows.length ? 'Tidak ada berkas yang cocok dengan filter.' : 'Folder ini masih kosong. Unggah berkas pertama.'}
-                </td></tr>
-              ) : visible.map((file, index) => {
-                const kind = fileKind(file);
-                const uploader = file.uploadedBy?.fullName || '-';
-                return (
-                  <tr key={file.id}>
-                    <td className="text-xs text-slate-500">{String((current - 1) * PAGE_SIZE + index + 1).padStart(2, '0')}</td>
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg ${kind.tone}`} aria-hidden="true">{kind.icon}</span>
-                        <div className="min-w-0">
-                          <a href={`#/admin/files/${folder.id}/file/${file.id}`} className="block truncate font-semibold text-slate-900 hover:text-teal-700">{file.name}</a>
-                          <p className="truncate font-mono text-[11px] text-slate-400">{file.fileName}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">{file.category}</span></td>
-                    <td className="whitespace-nowrap text-right text-xs text-slate-600">{formatBytes(file.size)}</td>
-                    <td className="whitespace-nowrap text-xs text-slate-600">{formatDateTime(file.uploadedAt)}</td>
-                    <td>
-                      <span className="flex items-center gap-2 text-xs text-slate-700">
-                        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white ${toneFor(uploader)}`}>{initials(uploader)}</span>
-                        {uploader}
+        <div className="p-4">
+          <ResponsiveTable
+            columns={[
+              {
+                key: 'file',
+                label: 'Nama Dokumen / Berkas',
+                primary: true,
+                render: (file) => {
+                  const kind = fileKind(file);
+                  return (
+                    <span className="flex items-center gap-3">
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg ${kind.tone}`} aria-hidden="true">{kind.icon}</span>
+                      <span className="min-w-0">
+                        <a href={`#/admin/files/${folder.id}/file/${file.id}`} className="block truncate font-semibold text-slate-900 hover:text-teal-700">{file.name}</a>
+                        <span className="block truncate font-mono text-[11px] text-slate-400">{file.fileName}</span>
                       </span>
-                    </td>
-                    <td className="text-right">
-                      <a href={`#/admin/files/${folder.id}/file/${file.id}`} className="rounded-md border border-slate-300 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-800 hover:border-teal-600 hover:text-teal-700">Open</a>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </span>
+                  );
+                },
+                badge: (file) => <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">{file.category}</span>,
+              },
+              { key: 'size', label: 'Ukuran', align: 'right', render: (file) => <span className="whitespace-nowrap text-xs text-slate-600">{formatBytes(file.size)}</span> },
+              { key: 'uploaded', label: 'Tanggal Diunggah', render: (file) => <span className="whitespace-nowrap text-xs text-slate-600">{formatDateTime(file.uploadedAt)}</span> },
+              {
+                key: 'uploader',
+                label: 'Pengunggah',
+                render: (file) => {
+                  const uploader = file.uploadedBy?.fullName || '-';
+                  return (
+                    <span className="flex items-center gap-2 text-xs text-slate-700">
+                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white ${toneFor(uploader)}`}>{initials(uploader)}</span>
+                      <span className="truncate">{uploader}</span>
+                    </span>
+                  );
+                },
+              },
+              {
+                key: 'action',
+                label: 'Aksi',
+                align: 'right',
+                render: (file) => <a href={`#/admin/files/${folder.id}/file/${file.id}`} className="rounded-md border border-slate-300 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-800 hover:border-teal-600 hover:text-teal-700">Open</a>,
+              },
+            ]}
+            rows={visible}
+            rowKey={(file) => file.id}
+            empty={rows.length ? 'Tidak ada berkas yang cocok dengan filter.' : 'Folder ini masih kosong. Unggah berkas pertama.'}
+          />
         </div>
+        <Pager page={current} totalPages={totalPages} total={filtered.length} shown={visible.length} onChange={setPage} label="berkas" />
         <Pager page={current} totalPages={totalPages} total={filtered.length} shown={visible.length} onChange={setPage} label="berkas" />
       </div>
       </>)}

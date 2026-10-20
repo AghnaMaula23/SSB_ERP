@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import ResponsiveTable from '../../../../components/ResponsiveTable.jsx';
 import { Breadcrumb, MetricCard, MockBanner, Notice, PageHeader, StatusBadge } from '../../project/components/ProjectUi.jsx';
 import { formatCurrency, formatDate } from '../../project/utils/projectFormat.js';
 import { INCOME_STATUS, SOURCES, slugOf } from '../utils/incomeFormat.js';
@@ -72,40 +73,36 @@ export default function IncomeListPage({ initialNotice }) {
       </section>
 
       <div className="table-container">
-        <table className="table-modern">
-          <thead>
-            <tr>
-              <th>Reference</th>
-              <th>Sumber</th>
-              <th>Klien &amp; Proyek</th>
-              <th>Periode</th>
-              <th className="text-right">Total</th>
-              <th className="text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!records ? (
-              <tr><td colSpan={6} className="py-12 text-center text-sm text-slate-500">Memuat pendapatan...</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className="py-12 text-center text-sm text-slate-500">Belum ada pengajuan yang cocok.</td></tr>
-            ) : filtered.map((row) => (
-              <tr key={row.id}>
-                <td>
-                  <a href={`#/admin/income/${row.id}`} className="font-mono text-xs font-bold text-teal-700 hover:underline">#{row.referenceCode}</a>
-                  <p className="text-[11px] text-slate-400">{formatDate(row.createdAt)}</p>
-                </td>
-                <td className="whitespace-nowrap text-xs"><span aria-hidden="true">{SOURCES[row.projectSourceType].icon}</span> {SOURCES[row.projectSourceType].label}</td>
-                <td>
-                  <p className="font-semibold text-slate-900">{row.partyName || '-'}</p>
-                  <p className="text-[11px] text-slate-500">{row.projectName}{row.subProjectLabel ? ` · ${row.subProjectLabel}` : ''}</p>
-                </td>
-                <td className="whitespace-nowrap text-xs text-slate-600">{formatDate(row.billingPeriodStart)} – {formatDate(row.billingPeriodEnd)}</td>
-                <td className="text-right font-mono font-bold text-slate-900">{formatCurrency(row.totalAmount)}</td>
-                <td className="text-center"><StatusBadge status={row.status} map={INCOME_STATUS} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ResponsiveTable
+          columns={[
+            {
+              key: 'reference',
+              label: 'Reference',
+              primary: true,
+              render: (row) => <a href={`#/admin/income/${row.id}`} className="font-mono text-xs font-bold text-teal-700 hover:underline">#{row.referenceCode}</a>,
+              sub: (row) => formatDate(row.createdAt),
+              badge: (row) => <span className="whitespace-nowrap text-xs"><span aria-hidden="true">{SOURCES[row.projectSourceType].icon}</span> {SOURCES[row.projectSourceType].label}</span>,
+            },
+            {
+              key: 'party',
+              label: 'Klien & Proyek',
+              render: (row) => (
+                <span className="block">
+                  <span className="block font-semibold text-slate-900">{row.partyName || '-'}</span>
+                  <span className="block text-[11px] text-slate-500">{row.projectName}{row.subProjectLabel ? ` · ${row.subProjectLabel}` : ''}</span>
+                </span>
+              ),
+            },
+            { key: 'period', label: 'Periode', render: (row) => <span className="whitespace-nowrap text-xs text-slate-600">{formatDate(row.billingPeriodStart)} – {formatDate(row.billingPeriodEnd)}</span> },
+            { key: 'total', label: 'Total', align: 'right', render: (row) => <span className="font-mono font-bold text-slate-900">{formatCurrency(row.totalAmount)}</span> },
+            { key: 'status', label: 'Status', align: 'center', render: (row) => <StatusBadge status={row.status} map={INCOME_STATUS} /> },
+          ]}
+          rows={filtered}
+          rowKey={(row) => row.id}
+          loading={!records}
+          loadingText="Memuat pendapatan..."
+          empty="Belum ada pengajuan yang cocok."
+        />
       </div>
     </>
   );

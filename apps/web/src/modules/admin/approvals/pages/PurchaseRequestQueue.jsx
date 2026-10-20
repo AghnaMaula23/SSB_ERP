@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import ResponsiveTable from '../../../../components/ResponsiveTable.jsx';
 import { Notice, StatusBadge } from '../../project/components/ProjectUi.jsx';
 import { formatCurrency, formatDate, formatDateTime } from '../../project/utils/projectFormat.js';
 import { DecisionButtons, FilterChips, Pager, RejectReasonForm, StatTile } from '../components/ApprovalUi.jsx';
@@ -27,6 +28,9 @@ export default function PurchaseRequestQueue({ initialNotice }) {
   const [rejectingId, setRejectingId] = useState(null);
   const [notice, setNotice] = useState({ tone: 'success', text: initialNotice || '' });
   const perms = prPermissions();
+  const isOwnRequest = (pr) => Boolean(pr.requestedBy?.id && pr.requestedBy.id === perms.userId);
+  const priorityClass = (pr) => PRIORITY[prPriority(pr)].className;
+  const priorityLabel = (pr) => PRIORITY[prPriority(pr)].label;
   const requestKey = `${status}|${category}|${search}|${page}|${reloadKey}`;
   const loading = result.key !== requestKey;
 
@@ -114,76 +118,62 @@ export default function PurchaseRequestQueue({ initialNotice }) {
           <FilterChips options={STATUS_TABS} value={status} onChange={changeFilter(setStatus)} />
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="table-modern">
-            <thead>
-              <tr>
-                <th className="w-12">No</th>
-                <th>Tanggal</th>
-                <th>Order Code</th>
-                <th>Kategori</th>
-                <th>Unit Alat</th>
-                <th>Deskripsi Item</th>
-                <th className="text-right">Nominal Estimasi</th>
-                <th className="text-right">{status === 'submitted' ? 'Aksi' : 'Status'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={8} className="py-12 text-center text-sm text-slate-500">Memuat antrean PO...</td></tr>
-              ) : result.error ? (
-                <tr><td colSpan={8} className="py-12 text-center text-sm text-red-600">{result.error}</td></tr>
-              ) : result.data.length === 0 ? (
-                <tr><td colSpan={8} className="py-12 text-center text-sm text-slate-500">{status === 'submitted' ? 'Tidak ada PO yang menunggu validasi. 🎉' : 'Tidak ada data.'}</td></tr>
-              ) : result.data.map((pr, index) => {
+        <ResponsiveTable
+          columns={[
+            {
+              key: 'orderCode',
+              label: 'Order Code',
+              primary: true,
+              render: (pr) => <a href={`#/admin/approvals/po/${pr.id}`} className="font-mono text-sm font-bold text-emerald-700 hover:underline">{pr.requestCode}</a>,
+              sub: (pr) => `${formatDate(pr.requestDate)} · ${PR_CATEGORY[pr.orderCategory]}`,
+              badge: (pr) => <span className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${priorityClass(pr)}`}>{priorityLabel(pr)}</span>,
+            },
+            { key: 'unit', label: 'Unit Alat', render: (pr) => <span className="text-xs text-slate-700">{prSummary(pr).units.join(', ') || '-'}</span> },
+            {
+              key: 'items',
+              label: 'Deskripsi Item',
+              render: (pr) => {
                 const summary = prSummary(pr);
-                const priority = PRIORITY[prPriority(pr)];
-                const own = pr.requestedBy?.id && pr.requestedBy.id === perms.userId;
                 return (
-                  <Fragment key={pr.id}>
-                  <tr>
-                    <td className="text-xs text-slate-500">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, '0')}</td>
-                    <td className="whitespace-nowrap text-xs">{formatDate(pr.requestDate)}</td>
-                    <td><a href={`#/admin/approvals/po/${pr.id}`} className="font-mono text-sm font-bold text-emerald-700 hover:underline">{pr.requestCode}</a></td>
-                    <td className="text-xs">{PR_CATEGORY[pr.orderCategory]}</td>
-                    <td className="text-xs text-slate-700">{summary.units.join(', ') || '-'}</td>
-                    <td className="max-w-56">
-                      <span className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${priority.className}`}>{priority.label}</span>
-                      <p className="mt-0.5 truncate text-xs text-slate-700" title={summary.lines.join(', ')}>{summary.lines[0] || '-'}{summary.lines.length > 1 ? ` +${summary.lines.length - 1}` : ''}</p>
-                    </td>
-                    <td className="text-right font-mono font-semibold text-slate-900">{formatCurrency(pr.totalEstimatedAmount)}</td>
-                    <td className="text-right">
-                      {pr.status === 'submitted' ? (
-                        <DecisionButtons
-                          busy={busyId === pr.id}
-                          disabled={busyId !== null || rejectingId === pr.id || own}
-                          onApprove={perms.canValidate ? () => approve(pr) : null}
-                          onReject={perms.canReject ? () => setRejectingId(pr.id) : null}
-                          approveTitle={own ? 'Tidak bisa memvalidasi order sendiri' : 'Validasi & teruskan ke Finance'}
-                          rejectTitle={own ? 'Tidak bisa menolak order sendiri' : 'Tolak order'}
-                        />
-                      ) : <StatusBadge status={pr.status} map={PR_STATUS} />}
-                    </td>
-                  </tr>
-                  {rejectingId === pr.id && (
-                    <tr className="bg-red-50/60">
-                      <td colSpan={8}>
-                        <RejectReasonForm
-                          label={`Alasan penolakan ${pr.requestCode}`}
-                          submitLabel="Tolak Order"
-                          placeholder="Contoh: Harga sparepart terlalu tinggi, minta pembanding"
-                          onSubmit={(notes) => reject(pr, notes)}
-                          onCancel={() => setRejectingId(null)}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                  </Fragment>
+                  <span className="block max-w-56 truncate text-xs text-slate-700" title={summary.lines.join(', ')}>
+                    {summary.lines[0] || '-'}{summary.lines.length > 1 ? ` +${summary.lines.length - 1}` : ''}
+                  </span>
                 );
-              })}
-            </tbody>
-          </table>
-        </div>
+              },
+            },
+            { key: 'total', label: 'Nominal Estimasi', align: 'right', render: (pr) => <span className="font-mono font-semibold text-slate-900">{formatCurrency(pr.totalEstimatedAmount)}</span> },
+            {
+              key: 'action',
+              label: 'Aksi',
+              align: 'right',
+              render: (pr) => (pr.status === 'submitted' ? (
+                <DecisionButtons
+                  busy={busyId === pr.id}
+                  disabled={busyId !== null || rejectingId === pr.id || isOwnRequest(pr)}
+                  onApprove={perms.canValidate ? () => approve(pr) : null}
+                  onReject={perms.canReject ? () => setRejectingId(pr.id) : null}
+                  approveTitle={isOwnRequest(pr) ? 'Tidak bisa memvalidasi order sendiri' : 'Validasi & teruskan ke Finance'}
+                  rejectTitle={isOwnRequest(pr) ? 'Tidak bisa menolak order sendiri' : 'Tolak order'}
+                />
+              ) : <StatusBadge status={pr.status} map={PR_STATUS} />),
+            },
+          ]}
+          rows={result.data}
+          rowKey={(pr) => pr.id}
+          loading={loading}
+          loadingText="Memuat antrean PO..."
+          error={result.error}
+          empty={status === 'submitted' ? 'Tidak ada PO yang menunggu validasi. 🎉' : 'Tidak ada data.'}
+          expandedRow={(pr) => (rejectingId === pr.id ? (
+            <RejectReasonForm
+              label={`Alasan penolakan ${pr.requestCode}`}
+              submitLabel="Tolak Order"
+              placeholder="Contoh: Harga sparepart terlalu tinggi, minta pembanding"
+              onSubmit={(notes) => reject(pr, notes)}
+              onCancel={() => setRejectingId(null)}
+            />
+          ) : null)}
+        />
         <Pager page={page} totalPages={result.totalPages} total={result.total} shown={result.data.length} onChange={setPage} label="purchase request" />
       </section>
     </>

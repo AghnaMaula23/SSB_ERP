@@ -16,11 +16,11 @@ export function StatTile({ label, value, hint, icon, tone = 'slate' }) {
 
 export function DecisionButtons({ onApprove, onReject, disabled, approveTitle, rejectTitle, approveLabel = 'Approve', busy }) {
   return (
-    <div className="flex justify-end gap-1.5">
-      <button type="button" onClick={onApprove} disabled={disabled || !onApprove} title={approveTitle} className="rounded-md bg-emerald-700 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-xs transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40">
+    <div className="flex flex-wrap justify-end gap-1.5">
+      <button type="button" onClick={onApprove} disabled={disabled || !onApprove} title={approveTitle} className="min-h-9 rounded-md bg-emerald-700 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-white shadow-xs transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0 sm:py-1.5">
         {busy ? '...' : approveLabel}
       </button>
-      <button type="button" onClick={onReject} disabled={disabled || !onReject} title={rejectTitle} className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40">
+      <button type="button" onClick={onReject} disabled={disabled || !onReject} title={rejectTitle} className="min-h-9 rounded-md border border-red-300 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0 sm:py-1.5">
         Reject
       </button>
     </div>
@@ -32,15 +32,15 @@ export function Pager({ page, totalPages, total, shown, onChange, label = 'data'
   return (
     <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 px-5 py-3 text-xs text-slate-600">
       <span>Menampilkan {shown} dari {total} {label}</span>
-      <div className="flex items-center gap-1">
-        <button type="button" disabled={page <= 1} onClick={() => onChange(page - 1)} className="btn btn-secondary h-8 w-8 p-0" aria-label="Sebelumnya">‹</button>
+      <div className="flex flex-wrap items-center gap-1">
+        <button type="button" disabled={page <= 1} onClick={() => onChange(page - 1)} className="btn btn-secondary h-10 w-10 p-0 sm:h-8 sm:w-8" aria-label="Sebelumnya">‹</button>
         {pages.map((n, index) => (
           <span key={n} className="flex items-center gap-1">
             {index > 0 && n - pages[index - 1] > 1 && <span className="px-1 text-slate-400">…</span>}
-            <button type="button" onClick={() => onChange(n)} aria-current={n === page ? 'page' : undefined} className={`h-8 min-w-8 rounded-md border px-2 text-xs font-semibold ${n === page ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}>{n}</button>
+            <button type="button" onClick={() => onChange(n)} aria-current={n === page ? 'page' : undefined} className={`h-10 min-w-10 rounded-md border px-2 text-xs font-semibold sm:h-8 sm:min-w-8 ${n === page ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}>{n}</button>
           </span>
         ))}
-        <button type="button" disabled={page >= totalPages} onClick={() => onChange(page + 1)} className="btn btn-secondary h-8 w-8 p-0" aria-label="Berikutnya">›</button>
+        <button type="button" disabled={page >= totalPages} onClick={() => onChange(page + 1)} className="btn btn-secondary h-10 w-10 p-0 sm:h-8 sm:w-8" aria-label="Berikutnya">›</button>
       </div>
     </footer>
   );
@@ -56,7 +56,7 @@ export function FilterChips({ options, value, onChange }) {
           role="tab"
           aria-selected={value === option.value}
           onClick={() => onChange(option.value)}
-          className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${value === option.value ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+          className={`rounded-full border px-3 py-2 text-[11px] font-semibold transition sm:py-1 ${value === option.value ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
         >
           {option.label}{option.count !== undefined && <span className="ml-1 text-slate-400">{option.count}</span>}
         </button>

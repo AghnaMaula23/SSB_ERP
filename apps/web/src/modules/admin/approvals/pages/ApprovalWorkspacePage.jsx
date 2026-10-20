@@ -4,6 +4,7 @@ import { Breadcrumb, PageHeader } from '../../project/components/ProjectUi.jsx';
 import ApprovalQueue from './ApprovalQueue.jsx';
 import EquipmentRequestReview from './EquipmentRequestReview.jsx';
 import MaterialRequestReview from './MaterialRequestReview.jsx';
+import ProgressLogReview from './ProgressLogReview.jsx';
 import PurchaseRequestQueue from './PurchaseRequestQueue.jsx';
 import PurchaseRequestDetail from './PurchaseRequestDetail.jsx';
 import FieldCashQueue from './FieldCashQueue.jsx';
@@ -11,40 +12,58 @@ import FieldCashDetail from './FieldCashDetail.jsx';
 import { parseApprovalRoute } from '../utils/approvalRoute.js';
 
 const TABS = [
-  { key: 'antrean', label: 'Antrean Approval', hint: 'Semua sumber' },
+  { key: 'antrean', label: 'Approval Center', hint: 'Semua sumber' },
   { key: 'po', label: 'PO Suku Cadang & Servis Rutin', hint: 'Riwayat PO' },
   { key: 'kas', label: 'Verifikasi Kas Lapangan', hint: 'Data contoh' },
 ];
 
-/** Pusat Approval Pengeluaran Divisi Admin. */
+/**
+ * Pusat Approval Divisi Admin. Tab utamanya Approval Center Admin
+ * (docs/keputusan-desain-approval-center.md); detail yang dibuka dari sana
+ * kembali ke sana setelah diputuskan.
+ */
 export default function ApprovalWorkspacePage({ route, onNavigate, onBackToModules, onSignOut }) {
-  const selection = parseApprovalRoute(route) || { tab: 'antrean', recordId: null };
+  const selection = parseApprovalRoute(route) || { tab: 'antrean', detail: null, recordId: null, subProjectId: null };
   const [flash, setFlash] = useState({ route: '', text: '' });
-  // Review Request Alat/Material selalu dibuka dari antrean, jadi kembali ke sana.
-  const listRoute = `admin/approvals/${['alat', 'material'].includes(selection.tab) ? 'antrean' : selection.tab}`;
+  const listRoute = `admin/approvals/${selection.tab}`;
   const flashFor = (target) => (flash.route === target ? flash.text : '');
   const backWithNotice = (text) => { setFlash({ route: listRoute, text }); onNavigate(listRoute); };
+  const fromQueue = selection.tab === 'antrean';
 
   let content;
-  if (selection.tab === 'antrean') {
-    content = <ApprovalQueue key={route} initialNotice={flashFor(listRoute)} />;
-  } else if (selection.tab === 'alat') {
-    content = <EquipmentRequestReview key={route} recordId={selection.recordId} onDone={backWithNotice} />;
-  } else if (selection.tab === 'material') {
-    content = <MaterialRequestReview key={route} recordId={selection.recordId} onDone={backWithNotice} />;
-  } else if (selection.tab === 'po') {
-    content = selection.recordId
-      ? <PurchaseRequestDetail key={route} recordId={selection.recordId} onDone={backWithNotice} />
-      : <PurchaseRequestQueue key={route} initialNotice={flashFor(listRoute)} />;
-  } else {
-    content = selection.recordId
-      ? <FieldCashDetail key={route} recordId={selection.recordId} onDone={backWithNotice} />
-      : <FieldCashQueue key={route} initialNotice={flashFor(listRoute)} />;
+  switch (selection.detail) {
+    case 'po':
+      content = (
+        <PurchaseRequestDetail
+          key={route}
+          recordId={selection.recordId}
+          onDone={backWithNotice}
+          listHref={`#/${listRoute}`}
+          listLabel={fromQueue ? 'Approval Center' : 'PO Suku Cadang & Servis'}
+        />
+      );
+      break;
+    case 'alat':
+      content = <EquipmentRequestReview key={route} recordId={selection.recordId} onDone={backWithNotice} />;
+      break;
+    case 'material':
+      content = <MaterialRequestReview key={route} recordId={selection.recordId} onDone={backWithNotice} />;
+      break;
+    case 'progress':
+      content = <ProgressLogReview key={route} subProjectId={selection.subProjectId} recordId={selection.recordId} onDone={backWithNotice} />;
+      break;
+    case 'kas':
+      content = <FieldCashDetail key={route} recordId={selection.recordId} onDone={backWithNotice} />;
+      break;
+    default:
+      if (selection.tab === 'po') content = <PurchaseRequestQueue key={route} initialNotice={flashFor(listRoute)} />;
+      else if (selection.tab === 'kas') content = <FieldCashQueue key={route} initialNotice={flashFor(listRoute)} />;
+      else content = <ApprovalQueue key={route} initialNotice={flashFor(listRoute)} />;
   }
 
   return (
     <AdminLayout active="approvals" onNavigate={onNavigate} onBackToModules={onBackToModules} onSignOut={onSignOut}>
-      {!selection.recordId && (
+      {!selection.detail && (
         <>
           <Breadcrumb items={[{ label: 'Divisi Admin' }, { label: 'Approvals' }]} />
           <PageHeader title="Pusat Approval Pengeluaran" subtitle="Gatekeeper otoritas pengeluaran konstruksi & logistik operasional" />

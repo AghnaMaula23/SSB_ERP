@@ -229,7 +229,7 @@ export default function ProjectOverview({ project, stagesEntry, permissions, onP
               <p className="mt-1 max-w-sm text-xs text-slate-500">Tambahkan tahapan (Galian, Timbunan, Line Clearing, Aspal) beserta target volume & nilai kontraknya.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="table-scroll-mobile overflow-x-auto">
               <table className="table-modern">
                 <thead>
                   <tr>

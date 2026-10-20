@@ -131,7 +131,7 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
             <h2 className="text-sm font-bold text-slate-900">Rekapitulasi Timesheet</h2>
             <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{formatDate(`${month}-01`, { month: 'long', year: 'numeric' })}</span>
           </div>
-          <div className="overflow-x-auto">
+          <div className="table-scroll-mobile overflow-x-auto">
             <table className="table-modern">
               <thead>
                 <tr>

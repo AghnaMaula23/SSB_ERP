@@ -140,20 +140,20 @@ export default function PurchaseOrderPage({ onBackToModules, onSignOut, onViewDe
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Purchase Orders</h1>
               <p className="mt-1 text-xs text-slate-500">Pengajuan pembelian Divisi Alat · divalidasi Admin dan disetujui Finance.</p>
             </div>
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={handleExport} className="btn btn-secondary text-xs">↓ Export</button>
-              <button type="button" onClick={() => navigate('alat/purchase-orders/create')} className="btn btn-primary text-xs">+ Buat Pengajuan Baru</button>
+            <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
+              <button type="button" onClick={handleExport} className="btn btn-secondary w-full text-xs sm:w-auto">↓ Export</button>
+              <button type="button" onClick={() => navigate('alat/purchase-orders/create')} className="btn btn-primary w-full text-xs sm:w-auto">+ Buat Pengajuan Baru</button>
             </div>
           </div>
 
-          <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-4">
+          <div className="mb-6 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3 sm:gap-4">
             <StatCard label="Total Purchase Orders" value={rows.length} tone="blue" />
             <StatCard label="Menunggu Proses" value={pendingCount} tone="amber" hint="Diajukan + menunggu Finance" />
             <StatCard label="Disetujui" value={approvedCount} tone="green" hint="Dana sudah dicairkan ke Kas Alat" />
           </div>
 
-          {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{notice}</div>}
-          {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
+          {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700" role="status">{notice}</div>}
+          {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">{error}</div>}
 
           <section className="card-panel mb-6 p-4" aria-label="Purchase Order Filters">
             <div className="grid grid-cols-2 items-end gap-3 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1 md:grid-cols-[minmax(0,1.5fr)_minmax(130px,0.5fr)_minmax(130px,0.5fr)_minmax(130px,0.5fr)_auto]">

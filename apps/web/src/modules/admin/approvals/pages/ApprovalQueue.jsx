@@ -1,22 +1,17 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import ResponsiveTable from '../../../../components/ResponsiveTable.jsx';
 import { Notice } from '../../project/components/ProjectUi.jsx';
 import { formatCurrency, formatDateTime } from '../../project/utils/projectFormat.js';
 import { setProgressValidation } from '../../project/services/projectService.js';
 import { timeAgo } from '../../files/utils/filesFormat.js';
 import { DecisionButtons, FilterChips, Pager, RejectReasonForm, StatTile } from '../components/ApprovalUi.jsx';
 import { getApprovalSummary, listApprovalQueue } from '../services/approvalService.js';
-import { QUEUE_SOURCES, queueDetailRoute } from '../utils/approvalFormat.js';
+import { QUEUE_SOURCES, progressIds, queueDetailRoute } from '../utils/approvalFormat.js';
 
 const PAGE_SIZE = 15;
 
-// detailPath progress: /api/projects/sub-projects/:subId/progress-logs/:logId
-const progressIds = (row) => {
-  const match = /sub-projects\/(\d+)\/progress-logs\/(\d+)/.exec(row.detailPath || '');
-  return match ? { subProjectId: Number(match[1]), logId: Number(match[2]) } : null;
-};
-
 /**
- * Antrean Approval Center tahap Admin (GET /api/approval-queue). Tab sumber
+ * Approval Center Admin — antrean tahap Admin (GET /api/approval-queue). Tab sumber
  * ditentukan dari summary — antrean yang boleh diproses tetap tampil walau 0.
  * Dokumen milik sendiri sudah disaring backend.
  */
@@ -111,7 +106,10 @@ export default function ApprovalQueue({ initialNotice }) {
 
       <section className="card-panel overflow-hidden" aria-label="Antrean approval">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
-          <h2 className="text-lg font-bold text-slate-900">Antrean Approval Admin</h2>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Approval Center Admin</h2>
+            <p className="text-xs text-slate-500">Semua dokumen yang menunggu keputusan Admin, lintas modul — terlama di atas.</p>
+          </div>
           <div className="flex flex-wrap gap-2">
             <input value={search} onChange={(event) => changeFilter(setSearch)(event.target.value)} className="input-control h-9 w-56 text-xs" placeholder="Cari kode atau project..." aria-label="Cari antrean" />
             <select value={sort} onChange={(event) => changeFilter(setSort)(event.target.value)} className="input-control h-9 w-36 text-xs" aria-label="Urutan">
@@ -126,82 +124,96 @@ export default function ApprovalQueue({ initialNotice }) {
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="table-modern">
-            <thead>
-              <tr>
-                <th>Masuk</th>
-                <th>Sumber</th>
-                <th>Referensi</th>
-                <th>Konteks</th>
-                <th className="text-right">Nominal</th>
-                <th>Diajukan</th>
-                <th className="text-right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-500">Memuat antrean...</td></tr>
-              ) : result.error ? (
-                <tr><td colSpan={7} className="py-12 text-center text-sm text-red-600">{result.error}</td></tr>
-              ) : result.data.length === 0 ? (
-                <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-500">{search ? 'Tidak ada yang cocok dengan pencarian.' : 'Tidak ada yang menunggu keputusan Admin. 🎉'}</td></tr>
-              ) : result.data.map((row) => {
-                const source = QUEUE_SOURCES[row.sourceType] || { label: row.sourceType, icon: '•', className: '' };
-                const href = queueDetailRoute(row);
-                const key = rowKey(row);
-                return (
-                  <Fragment key={key}>
-                    <tr>
-                      <td className="whitespace-nowrap text-xs">
-                        <p className="font-semibold text-slate-800">{timeAgo(row.submittedAt)}</p>
-                        <p className="text-[11px] text-slate-400">{formatDateTime(row.submittedAt)}</p>
-                      </td>
-                      <td><span className={`inline-flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${source.className}`}><span aria-hidden="true">{source.icon}</span>{source.label}</span></td>
-                      <td>
-                        {row.referenceCode
-                          ? (href ? <a href={href} className="font-mono text-sm font-bold text-emerald-700 hover:underline">{row.referenceCode}</a> : <span className="font-mono text-sm font-bold">{row.referenceCode}</span>)
-                          : <span className="text-xs text-slate-400">-</span>}
-                      </td>
-                      <td className="max-w-72">
-                        <p className="truncate text-xs font-medium text-slate-800" title={row.context}>{row.context}</p>
-                        <p className="truncate text-[11px] text-slate-500" title={row.summary}>{row.summary}</p>
-                      </td>
-                      <td className="whitespace-nowrap text-right font-mono text-sm font-semibold text-slate-900">{row.amount === null ? <span className="text-slate-400">-</span> : formatCurrency(row.amount)}</td>
-                      <td className="text-xs text-slate-700">{row.requestedBy?.fullName || '-'}</td>
-                      <td className="text-right">
-                        {row.sourceType === 'progress_log' ? (
-                          <DecisionButtons
-                            busy={busyKey === key}
-                            disabled={busyKey !== null || rejectingKey !== null}
-                            approveLabel="Validasi"
-                            onApprove={() => validateProgress(row)}
-                            onReject={() => setRejectingKey(key)}
-                          />
-                        ) : href ? (
-                          <a href={href} className="inline-block rounded-md border border-slate-300 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-800 hover:border-teal-600 hover:text-teal-700">Periksa →</a>
-                        ) : null}
-                      </td>
-                    </tr>
-                    {rejectingKey === key && (
-                      <tr className="bg-red-50/60">
-                        <td colSpan={7}>
-                          <RejectReasonForm
-                            label={`Alasan menolak progress ${row.summary}`}
-                            submitLabel="Tolak Progress"
-                            placeholder="Contoh: Volume tidak sesuai foto lapangan"
-                            onSubmit={(notes) => rejectProgress(row, notes)}
-                            onCancel={() => setRejectingKey(null)}
-                          />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveTable
+            columns={[
+              {
+                key: 'reference',
+                label: 'Referensi',
+                primary: true,
+                render: (row) => (row.referenceCode
+                  ? (queueDetailRoute(row) ? <a href={queueDetailRoute(row)} className="font-mono text-sm font-bold text-emerald-700 hover:underline">{row.referenceCode}</a> : <span className="font-mono text-sm font-bold">{row.referenceCode}</span>)
+                  : <span className="text-xs text-slate-400">-</span>),
+                sub: (row) => row.summary || '',
+                badge: (row) => {
+                  const source = QUEUE_SOURCES[row.sourceType] || { label: row.sourceType, icon: '•', className: '' };
+                  return <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${source.className}`}><span aria-hidden="true">{source.icon}</span>{source.label}</span>;
+                },
+              },
+              {
+                key: 'submitted',
+                label: 'Masuk',
+                render: (row) => (
+                  <span className="whitespace-nowrap text-xs">
+                    <span className="block font-semibold text-slate-800">{timeAgo(row.submittedAt)}</span>
+                    <span className="block text-[11px] text-slate-400">{formatDateTime(row.submittedAt)}</span>
+                  </span>
+                ),
+              },
+              {
+                key: 'context',
+                label: 'Konteks',
+                render: (row) => (
+                  <span className="block max-w-72 truncate text-xs font-medium text-slate-800" title={row.context}>
+                    <span className="block truncate">{row.context}</span>
+                    <span className="block truncate text-[11px] text-slate-500">{row.summary}</span>
+                  </span>
+                ),
+              },
+              {
+                key: 'amount',
+                label: 'Nominal',
+                align: 'right',
+                render: (row) => <span className="whitespace-nowrap font-mono text-sm font-semibold text-slate-900">{row.amount === null ? <span className="text-slate-400">-</span> : formatCurrency(row.amount)}</span>,
+              },
+              {
+                key: 'requestedBy',
+                label: 'Diajukan',
+                render: (row) => <span className="text-xs text-slate-700">{row.requestedBy?.fullName || '-'}</span>,
+              },
+              {
+                key: 'action',
+                label: 'Aksi',
+                align: 'right',
+                render: (row) => {
+                  const href = queueDetailRoute(row);
+                  const key = rowKey(row);
+                  if (row.sourceType === 'progress_log') {
+                    return (
+                      <div className="flex items-center justify-end gap-2">
+                        {href && <a href={href} className="text-[11px] font-semibold text-teal-700 hover:underline" title="Lihat kondisi lapangan & dampak ke progress tahapan">Detail</a>}
+                        <DecisionButtons
+                          busy={busyKey === key}
+                          disabled={busyKey !== null || rejectingKey !== null}
+                          approveLabel="Validasi"
+                          onApprove={() => validateProgress(row)}
+                          onReject={() => setRejectingKey(key)}
+                        />
+                      </div>
+                    );
+                  }
+                  if (href) {
+                    return <a href={href} className="inline-block rounded-md border border-slate-300 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-800 hover:border-teal-600 hover:text-teal-700">Periksa →</a>;
+                  }
+                  return null;
+                },
+              },
+            ]}
+            rows={result.data}
+            rowKey={rowKey}
+            loading={loading}
+            loadingText="Memuat antrean..."
+            error={result.error}
+            empty={search ? 'Tidak ada yang cocok dengan pencarian.' : 'Tidak ada yang menunggu keputusan Admin. 🎉'}
+            expandedRow={(row) => (rejectingKey === rowKey(row) ? (
+              <RejectReasonForm
+                label={`Alasan menolak progress ${row.summary}`}
+                submitLabel="Tolak Progress"
+                placeholder="Contoh: Volume tidak sesuai foto lapangan"
+                onSubmit={(notes) => rejectProgress(row, notes)}
+                onCancel={() => setRejectingKey(null)}
+              />
+            ) : null)}
+          />
         <Pager page={page} totalPages={result.totalPages} total={result.total} shown={result.data.length} onChange={setPage} label="dokumen" />
       </section>
     </>

@@ -101,20 +101,20 @@ export default function ItemsPage({ onBackToModules, onSignOut, onViewDetails })
               </nav>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Equipment Inventory</h1>
             </div>
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={() => setIsFilterModalOpen(true)} className="btn btn-secondary text-xs">⚙️ Filter Options</button>
-              <button type="button" onClick={() => navigate('alat/items/register')} disabled={!canCreate} title={canCreate ? 'Register new equipment' : 'Anda tidak memiliki izin membuat equipment'} className="btn btn-primary text-xs">+ Register New Item</button>
+            <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
+              <button type="button" onClick={() => setIsFilterModalOpen(true)} className="btn btn-secondary w-full text-xs sm:w-auto">⚙️ Filter Options</button>
+              <button type="button" onClick={() => navigate('alat/items/register')} disabled={!canCreate} title={canCreate ? 'Register new equipment' : 'Anda tidak memiliki izin membuat equipment'} className="btn btn-primary w-full text-xs sm:w-auto">+ Register New Item</button>
             </div>
           </div>
 
-          <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-4">
+          <div className="mb-6 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3 sm:gap-4">
             <StatCard label="Total Equipment Units" value={items.length} tone="blue" />
             <StatCard label="Maintenance Due" value={items.filter((item) => item.status === 'maintenance').length} tone="amber" />
             <StatCard label="Available for Dispatch" value={items.filter((item) => item.status === 'operational').length} tone="green" />
           </div>
 
-          {successMessage && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{successMessage}</div>}
-          {loadError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{loadError}</div>}
+          {successMessage && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700" role="status">{successMessage}</div>}
+          {loadError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">{loadError}</div>}
 
           <section className="card-panel mb-6 p-4" aria-label="Inventory Filters">
             <div className="grid grid-cols-2 items-end gap-3 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1 [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1 md:grid-cols-[minmax(0,1.5fr)_minmax(140px,0.6fr)_minmax(140px,0.6fr)_auto]">

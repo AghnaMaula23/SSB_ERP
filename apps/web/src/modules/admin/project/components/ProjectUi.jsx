@@ -149,12 +149,12 @@ export function MockBanner({ children }) {
 
 export function PageHeader({ title, subtitle, actions }) {
   return (
-    <div className="mb-6 mt-2 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-6 mt-2 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-3">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
-        {subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
+        {subtitle && <p className="mt-1 text-xs leading-relaxed text-slate-500">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap gap-2 [&>*]:min-h-10 [&>*]:flex-1 sm:[&>*]:min-h-0 sm:[&>*]:flex-none">{actions}</div>}
     </div>
   );
 }

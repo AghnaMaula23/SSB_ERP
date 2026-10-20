@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { initials } from '../project/utils/projectFormat.js';
+import AppHeader from '../../../components/AppHeader.jsx';
+import AppSidebar from '../../../components/AppSidebar.jsx';
 
 // Menu utama Divisi Admin. Item tanpa `route` ditampilkan nonaktif ("Soon")
 // supaya peta modulnya terlihat tanpa menjanjikan fitur.
@@ -12,6 +13,20 @@ const RAIL_ITEMS = [
   { key: 'files', label: 'Files', icon: '📁', route: 'admin/files' },
 ];
 
+const BRAND = { mark: '▦', title: 'Divisi Admin', subtitle: 'Admin Workspace' };
+
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [query]);
+  return matches;
+}
+
 function readUser() {
   try {
     return JSON.parse(localStorage.getItem('user') || '{}');
@@ -20,142 +35,76 @@ function readUser() {
   }
 }
 
-function RailNav({ active, onNavigate, onBackToModules, onSignOut, compact }) {
-  const itemClass = (isActive, isEnabled) => `flex w-full items-center gap-3 rounded-lg text-xs font-semibold transition ${
-    compact ? 'flex-col gap-1 px-1 py-2.5 text-[11px]' : 'px-3 py-2.5'
-  } ${
-    isActive
-      ? 'bg-teal-50 text-teal-800'
-      : isEnabled
-        ? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-        : 'cursor-not-allowed text-slate-400'
-  }`;
-
-  return (
-    <div className="flex h-full flex-col">
-      <nav className={`min-h-0 flex-1 overflow-y-auto ${compact ? 'px-2 py-3' : 'px-3 py-3'}`} aria-label="Menu Divisi Admin">
-        <ul className="space-y-1">
-          {RAIL_ITEMS.map((item) => {
-            const isEnabled = Boolean(item.route);
-            const isActive = item.key === active;
-            return (
-              <li key={item.key}>
-                <button
-                  type="button"
-                  disabled={!isEnabled}
-                  onClick={() => isEnabled && onNavigate(item.route)}
-                  className={itemClass(isActive, isEnabled)}
-                  aria-current={isActive ? 'page' : undefined}
-                  title={isEnabled ? item.label : `${item.label} — segera hadir`}
-                >
-                  <span className="text-lg leading-none" aria-hidden="true">{item.icon}</span>
-                  <span>{item.label}</span>
-                  {!isEnabled && !compact && <span className="ml-auto rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-slate-400">Soon</span>}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-      <div className={`space-y-1 border-t border-slate-200 ${compact ? 'px-2 py-3' : 'p-3'}`}>
-        <button type="button" onClick={onBackToModules} className={itemClass(false, true)} title="Kembali ke pilihan divisi">
-          <span className="text-lg leading-none" aria-hidden="true">▦</span>
-          <span>Modules</span>
-        </button>
-        <button type="button" onClick={onSignOut} className={itemClass(false, true)} title="Sign Out">
-          <span className="text-lg leading-none" aria-hidden="true">↪</span>
-          <span>Sign Out</span>
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /**
- * Kerangka Divisi Admin: header penuh di atas, rail ikon di kiri, lalu panel
- * sekunder (mis. pohon project) di sebelahnya. Di layar kecil rail + panel
- * digabung menjadi satu drawer.
+ * Kerangka Divisi Admin: header bersama, sidebar yang sama persis dengan
+ * Divisi Alat, lalu panel sekunder (mis. pohon project) di sebelahnya.
+ * Di layar kecil sidebar + panel digabung jadi satu drawer.
  */
 export default function AdminLayout({ active = 'project', panel, panelTitle, onNavigate, onBackToModules, onSignOut, children }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('admin-sidebar-collapsed') === 'true');
   const user = readUser();
   const displayName = user.fullName || user.username || 'ERP User';
   const role = user.roles?.[0] || 'Authorized Personnel';
 
-  useEffect(() => {
-    if (!drawerOpen) return undefined;
-    const handleKey = (event) => { if (event.key === 'Escape') setDrawerOpen(false); };
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [drawerOpen]);
+  // Di layar lg (1024–1279px) sidebar lebar + panel project (w-72) hanya
+  // menyisakan ±480px untuk konten. Jadi bila ada panel, sidebar otomatis
+  // jadi rail di bawah xl; preferensi user tetap dipakai mulai xl.
+  const isXl = useMediaQuery('(min-width: 1280px)');
+  const railCollapsed = collapsed || (Boolean(panel) && !isXl);
 
   // Navigasi dari dalam drawer selalu menutup drawer.
   const navigate = (route) => { setDrawerOpen(false); onNavigate(route); };
 
+  const toggleCollapsed = () => setCollapsed((value) => {
+    const next = !value;
+    localStorage.setItem('admin-sidebar-collapsed', String(next));
+    return next;
+  });
+
+  const activeKey = RAIL_ITEMS.find((item) => item.key === active)?.key || 'project';
+
   return (
     <div className="page-enter min-h-screen bg-slate-50 text-slate-800">
-      <header className="fixed inset-x-0 top-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 shadow-xs backdrop-blur">
-        <button
-          type="button"
-          onClick={() => setDrawerOpen(true)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
-          aria-label="Buka navigasi"
-        >
-          ☰
-        </button>
-        <button type="button" onClick={onBackToModules} className="flex items-center gap-3 text-left" title="Kembali ke pilihan divisi">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-700 text-base font-bold text-white shadow-xs">▦</span>
-          <span className="hidden sm:block">
-            <span className="block text-lg font-bold leading-none tracking-tight text-slate-900">ConstructERP</span>
-            <span className="mt-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">Divisi Admin</span>
-          </span>
-        </button>
+      <AppHeader
+        collapsed={railCollapsed}
+        onToggleMenu={() => setDrawerOpen(true)}
+        onBackToModules={onBackToModules}
+        user={{ ...user, fullName: displayName, roles: user.roles?.length ? user.roles : [role] }}
+      />
 
-        <div className="ml-auto flex items-center gap-3">
-          <div className="hidden border-l border-slate-200 pl-3 text-right md:block">
-            <p className="text-xs font-bold text-slate-900">{displayName}</p>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{role}</p>
-          </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-700 text-sm font-semibold text-white shadow-xs">
-            {initials(displayName) || 'EU'}
-          </div>
-        </div>
-      </header>
+      <AppSidebar
+        brand={BRAND}
+        items={RAIL_ITEMS}
+        activeKey={activeKey}
+        collapsed={railCollapsed}
+        onToggleCollapse={panel && !isXl ? undefined : toggleCollapsed}
+        onNavigate={navigate}
+        onBackToModules={onBackToModules}
+        onSignOut={onSignOut}
+        mobileOpen={drawerOpen}
+        onCloseMobile={() => setDrawerOpen(false)}
+        extraTitle={panelTitle}
+        extraContent={drawerOpen ? panel : null}
+      />
 
-      {/* Desktop: rail ikon + panel sekunder, keduanya tetap di tempat. */}
-      <aside className="fixed bottom-0 left-0 top-16 z-20 hidden w-20 border-r border-slate-200 bg-white lg:block">
-        <RailNav compact active={active} onNavigate={navigate} onBackToModules={onBackToModules} onSignOut={onSignOut} />
-      </aside>
+      {/* Panel sekunder (pohon project) tetap di samping sidebar pada desktop. */}
       {panel && (
-        <aside className="fixed bottom-0 left-20 top-16 z-20 hidden w-72 flex-col border-r border-slate-200 bg-white lg:flex" aria-label={panelTitle}>
+        <aside
+          className={`fixed bottom-0 top-16 z-20 hidden w-72 flex-col overflow-y-auto overflow-x-hidden border-r border-slate-200 bg-white transition-[left] duration-300 lg:flex ${railCollapsed ? 'left-20' : 'left-64'}`}
+          aria-label={panelTitle}
+        >
           {panel}
         </aside>
       )}
 
-      {/* Mobile: satu drawer berisi menu dan panel. */}
-      {drawerOpen && (
-        <>
-          <button type="button" className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden" onClick={() => setDrawerOpen(false)} aria-label="Tutup navigasi" />
-          <aside className="fixed inset-y-0 left-0 z-50 flex w-80 max-w-[90vw] flex-col bg-white shadow-xl lg:hidden">
-            <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 px-4">
-              <p className="text-sm font-bold text-slate-900">Divisi Admin</p>
-              <button type="button" onClick={() => setDrawerOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Tutup navigasi">✕</button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {panel && <div className="flex max-h-[60vh] flex-col border-b border-slate-200" onClickCapture={(event) => { if (event.target.closest('a[href]')) setDrawerOpen(false); }}>{panel}</div>}
-              <RailNav active={active} onNavigate={navigate} onBackToModules={onBackToModules} onSignOut={onSignOut} />
-            </div>
-          </aside>
-        </>
-      )}
-
-      <main className={`min-h-screen pt-16 ${panel ? 'lg:pl-[23rem]' : 'lg:pl-20'}`}>
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+      {/* Padding kiri = lebar sidebar (+ lebar panel w-72 bila ada). */}
+      <main className={`min-h-screen pt-16 transition-[padding] duration-300 ${
+        panel
+          ? (railCollapsed ? 'lg:pl-92' : 'lg:pl-136')
+          : (railCollapsed ? 'lg:pl-20' : 'lg:pl-64')
+      }`}>
+        <div className="mx-auto w-full max-w-7xl px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-6 sm:px-6 lg:px-8">{children}</div>
       </main>
     </div>
   );

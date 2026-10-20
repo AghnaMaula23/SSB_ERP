@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import ResponsiveTable from '../../../../components/ResponsiveTable.jsx';
 import { Breadcrumb, MetricCard, MockBanner, Notice, PageHeader, StatusBadge } from '../components/ProjectUi.jsx';
 import { WORKER_STATUS, WORKER_TYPES, listWorkers, removeWorker } from '../services/fieldMockService.js';
 import { formatCurrency, formatDate, initials, stageCrumbs } from '../utils/projectFormat.js';
@@ -76,58 +77,61 @@ export default function WorkersPage({ project, stage, initialNotice }) {
       </section>
 
       <div className="table-container">
-        <table className="table-modern">
-          <thead>
-            <tr>
-              <th>Pekerja</th>
-              <th>NIK</th>
-              <th>Peran &amp; Jenis</th>
-              <th>Periode</th>
-              <th className="whitespace-nowrap text-right">Upah / Hari</th>
-              <th className="text-center">Status</th>
-              <th className="text-right">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!rows ? (
-              <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-500">Memuat pekerja...</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-500">Tidak ada pekerja yang cocok.</td></tr>
-            ) : filtered.map((row) => (
-              <tr key={row.id}>
-                <td>
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-bold text-teal-700">{initials(row.worker?.fullName)}</span>
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-slate-900">{row.worker?.fullName || '-'}</p>
-                      <p className="text-[11px] text-slate-400">
-                        <span className="font-mono">{row.worker?.workerCode}</span>
-                        {tenure(row.worker?.joinedAt) && ` · ${tenure(row.worker.joinedAt)}`}
-                        {row.worker?.phone && ` · ${row.worker.phone}`}
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="font-mono text-xs text-slate-600">{row.worker?.idNumber || <span className="font-sans text-slate-400">Tidak ada</span>}</td>
-                <td>
-                  <p className="font-medium text-slate-900">{row.assignedRole}</p>
-                  <p className={`text-[10px] font-bold uppercase tracking-wide ${row.workerType === 'contract' ? 'text-indigo-700' : 'text-teal-700'}`}>{WORKER_TYPES[row.workerType]?.label}</p>
-                </td>
-                <td className="whitespace-nowrap text-xs text-slate-600">{row.startDate ? `${formatDate(row.startDate)}${row.endDate ? ` – ${formatDate(row.endDate)}` : ' – sekarang'}` : '-'}</td>
-                <td className="text-right font-mono text-xs">{formatCurrency(row.dailyWage)}</td>
-                <td className="text-center"><StatusBadge status={row.status} map={WORKER_STATUS} /></td>
-                <td>
-                  <div className="flex justify-end gap-1">
-                    {row.worker?.phone && <a href={`tel:${row.worker.phone}`} className="btn btn-ghost px-2 py-1 text-[11px] text-teal-700" title={`Telepon ${row.worker.phone}`}>📞</a>}
-                    <a href={`${base}/${row.id}/edit`} className="btn btn-ghost px-2 py-1 text-[11px]">✎ Ubah</a>
-                    <button type="button" onClick={() => handleRemove(row)} className="btn btn-ghost px-2 py-1 text-[11px] text-red-600 hover:bg-red-50">Lepas</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ResponsiveTable
+          columns={[
+            {
+              key: 'worker',
+              label: 'Pekerja',
+              primary: true,
+              render: (row) => (
+                <span className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-bold text-teal-700">{initials(row.worker?.fullName)}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-slate-900">{row.worker?.fullName || '-'}</span>
+                    <span className="block truncate text-[11px] text-slate-400">
+                      <span className="font-mono">{row.worker?.workerCode}</span>
+                      {tenure(row.worker?.joinedAt) && ` · ${tenure(row.worker.joinedAt)}`}
+                      {row.worker?.phone && ` · ${row.worker.phone}`}
+                    </span>
+                  </span>
+                </span>
+              ),
+            },
+            { key: 'nik', label: 'NIK', render: (row) => <span className="font-mono text-xs text-slate-600">{row.worker?.idNumber || <span className="font-sans text-slate-400">Tidak ada</span>}</span> },
+            {
+              key: 'role',
+              label: 'Peran & Jenis',
+              render: (row) => (
+                <span className="block">
+                  <span className="block font-medium text-slate-900">{row.assignedRole}</span>
+                  <span className={`block text-[10px] font-bold uppercase tracking-wide ${row.workerType === 'contract' ? 'text-indigo-700' : 'text-teal-700'}`}>{WORKER_TYPES[row.workerType]?.label}</span>
+                </span>
+              ),
+            },
+            { key: 'period', label: 'Periode', render: (row) => <span className="whitespace-nowrap text-xs text-slate-600">{row.startDate ? `${formatDate(row.startDate)}${row.endDate ? ` – ${formatDate(row.endDate)}` : ' – sekarang'}` : '-'}</span> },
+            { key: 'wage', label: 'Upah / Hari', align: 'right', render: (row) => <span className="font-mono text-xs">{formatCurrency(row.dailyWage)}</span> },
+            { key: 'status', label: 'Status', align: 'center', render: (row) => <StatusBadge status={row.status} map={WORKER_STATUS} /> },
+            {
+              key: 'action',
+              label: 'Aksi',
+              align: 'right',
+              render: (row) => (
+                <div className="flex justify-end gap-1">
+                  {row.worker?.phone && <a href={`tel:${row.worker.phone}`} className="btn btn-ghost px-2 py-1 text-[11px] text-teal-700" title={`Telepon ${row.worker.phone}`}>📞</a>}
+                  <a href={`${base}/${row.id}/edit`} className="btn btn-ghost px-2 py-1 text-[11px]">✎ Ubah</a>
+                  <button type="button" onClick={() => handleRemove(row)} className="btn btn-ghost px-2 py-1 text-[11px] text-red-600 hover:bg-red-50">Lepas</button>
+                </div>
+              ),
+            },
+          ]}
+          rows={filtered}
+          rowKey={(row) => row.id}
+          loading={!rows}
+          loadingText="Memuat pekerja..."
+          empty="Tidak ada pekerja yang cocok."
+        />
       </div>
+
     </>
   );
 }

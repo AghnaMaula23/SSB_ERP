@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import ResponsiveTable from '../../../../components/ResponsiveTable.jsx';
 import { Breadcrumb, GuardedLink, MetricCard, Notice, PageHeader } from '../components/ProjectUi.jsx';
 import { RejectReasonForm } from '../../approvals/components/ApprovalUi.jsx';
 import { cancelStockMovement, getStageStock, listStageMovements, listStageReceipts } from '../services/materialStockService.js';
@@ -132,47 +133,49 @@ export default function InventoryPage({ project, stage, canRecord, initialNotice
       </section>
 
       <div className="table-container mb-6">
-        <table className="table-modern">
-          <thead>
-            <tr>
-              <th>Material</th>
-              <th className="text-right">Diterima</th>
-              <th className="text-right">Koreksi +</th>
-              <th className="text-right">Dipakai</th>
-              <th className="text-right">Koreksi −</th>
-              <th className="bg-amber-100! text-right">Saldo</th>
-              {canRecord && <th className="text-right">Aksi</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-500">Memuat stok...</td></tr>
-            ) : stock.length === 0 ? (
-              <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-500">
-                {result.stock.length ? 'Tidak ada material yang cocok.' : 'Belum ada stok. Material muncul di sini begitu ada penerimaan atau koreksi masuk.'}
-              </td></tr>
-            ) : stock.map((row) => (
-              <tr key={row.materialType.id}>
-                <td>
-                  <p className="font-semibold text-slate-900">{row.materialType.materialName}</p>
-                  <p className="font-mono text-[11px] text-slate-400">{row.materialType.materialCode}</p>
-                </td>
-                {['received', 'adjustmentIn', 'used', 'adjustmentOut'].map((key) => (
-                  <td key={key} className="text-right font-mono text-xs text-slate-600">{row[key] ? formatNumber(row[key]) : '-'}</td>
-                ))}
-                <td className="whitespace-nowrap text-right">
+        <ResponsiveTable
+          columns={[
+            {
+              key: 'material',
+              label: 'Material',
+              primary: true,
+              render: (row) => (
+                <span className="block">
+                  <span className="block font-semibold text-slate-900">{row.materialType.materialName}</span>
+                  <span className="block font-mono text-[11px] text-slate-400">{row.materialType.materialCode}</span>
+                </span>
+              ),
+            },
+            ...['received', 'adjustmentIn', 'used', 'adjustmentOut'].map((key) => ({
+              key,
+              label: { received: 'Diterima', adjustmentIn: 'Koreksi +', used: 'Dipakai', adjustmentOut: 'Koreksi −' }[key],
+              align: 'right',
+              render: (row) => <span className="font-mono text-xs text-slate-600">{row[key] ? formatNumber(row[key]) : '-'}</span>,
+            })),
+            {
+              key: 'balance',
+              label: 'Saldo',
+              align: 'right',
+              render: (row) => (
+                <span className="whitespace-nowrap">
                   <span className={`font-mono font-bold ${row.balance <= 0 ? 'text-red-600' : 'text-slate-900'}`}>{formatNumber(row.balance)}</span>
                   <span className="ml-1 text-[11px] text-slate-500">{row.unit}</span>
-                </td>
-                {canRecord && (
-                  <td className="text-right">
-                    <a href={`${base}/${row.materialType.id}/mutasi`} className="text-xs font-semibold text-teal-700 hover:underline">Catat Mutasi</a>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </span>
+              ),
+            },
+            ...(canRecord ? [{
+              key: 'action',
+              label: 'Aksi',
+              align: 'right',
+              render: (row) => <a href={`${base}/${row.materialType.id}/mutasi`} className="text-xs font-semibold text-teal-700 hover:underline">Catat Mutasi</a>,
+            }] : []),
+          ]}
+          rows={stock}
+          rowKey={(row) => row.materialType.id}
+          loading={loading}
+          loadingText="Memuat stok..."
+          empty={result.stock.length ? 'Tidak ada material yang cocok.' : 'Belum ada stok. Material muncul di sini begitu ada penerimaan atau koreksi masuk.'}
+        />
       </div>
 
       <section className="card-panel overflow-hidden" aria-label="Riwayat stok">
@@ -193,7 +196,7 @@ export default function InventoryPage({ project, stage, canRecord, initialNotice
             ))}
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="table-scroll-mobile overflow-x-auto">
           <table className="table-modern">
             <thead>
               <tr>

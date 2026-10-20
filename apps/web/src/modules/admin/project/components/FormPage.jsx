@@ -10,20 +10,22 @@ export default function FormPage({ breadcrumb, icon, title, subtitle, busy = fal
       <Breadcrumb items={breadcrumb} />
       <div className="mb-6 mt-2 flex items-center gap-3">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-xl text-teal-700" aria-hidden="true">{icon}</span>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
-          {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
+          {subtitle && <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{subtitle}</p>}
         </div>
       </div>
 
-      <div className={`grid gap-5 ${aside ? 'xl:grid-cols-[minmax(0,1fr)_18rem]' : ''}`}>
-        <form onSubmit={onSubmit} noValidate className="card-panel max-w-3xl overflow-hidden">
-          <div className="space-y-5 px-5 py-6 sm:px-6">{children}</div>
-          <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
-            <p className="text-[11px] text-slate-500">{footerNote}</p>
-            <div className="ml-auto flex gap-2">
-              <button type="button" onClick={onCancel} disabled={busy} className="btn btn-secondary text-xs">Batal</button>
-              <button type="submit" disabled={busy} className="btn btn-primary text-xs">{busy ? 'Menyimpan...' : submitLabel}</button>
+      {/* Batas lebar ada di grid, bukan di form — supaya kartu samping menempel
+          ke form di layar lebar, tidak terlempar ke tepi kanan. */}
+      <div className={`grid items-start gap-5 ${aside ? 'max-w-6xl xl:grid-cols-[minmax(0,1fr)_18rem]' : 'max-w-3xl'}`}>
+        <form onSubmit={onSubmit} noValidate className="card-panel min-w-0 overflow-hidden">
+          <div className="space-y-5 px-4 py-5 sm:px-6 sm:py-6">{children}</div>
+          <footer className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
+            {footerNote && <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-slate-500">{footerNote}</p>}
+            <div className="ml-auto flex w-full gap-2 sm:w-auto">
+              <button type="button" onClick={onCancel} disabled={busy} className="btn btn-secondary min-h-11 flex-1 text-xs sm:min-h-0 sm:flex-none">Batal</button>
+              <button type="submit" disabled={busy} className="btn btn-primary min-h-11 flex-1 text-xs sm:min-h-0 sm:flex-none">{busy ? 'Menyimpan...' : submitLabel}</button>
             </div>
           </footer>
         </form>

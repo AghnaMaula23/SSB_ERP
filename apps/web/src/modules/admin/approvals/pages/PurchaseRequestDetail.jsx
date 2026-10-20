@@ -14,8 +14,11 @@ function ItemTable({ head, rows }) {
   );
 }
 
-/** Detail satu purchase request untuk diperiksa sebelum divalidasi. */
-export default function PurchaseRequestDetail({ recordId, onDone }) {
+/**
+ * Detail satu purchase request untuk diperiksa sebelum divalidasi. Dibuka dari
+ * Approval Center atau tab PO — `listHref`/`listLabel` menunjuk asalnya.
+ */
+export default function PurchaseRequestDetail({ recordId, onDone, listHref = '#/admin/approvals/po', listLabel = 'PO Suku Cadang & Servis' }) {
   const [pr, setPr] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,7 +35,7 @@ export default function PurchaseRequestDetail({ recordId, onDone }) {
     return () => { cancelled = true; };
   }, [recordId, reloadKey]);
 
-  if (loadError) return <EmptyPanel icon="🔎" title="Purchase request tidak ditemukan" action={<a href="#/admin/approvals/po" className="btn btn-secondary text-xs">← Kembali</a>}>{loadError}</EmptyPanel>;
+  if (loadError) return <EmptyPanel icon="🔎" title="Purchase request tidak ditemukan" action={<a href={listHref} className="btn btn-secondary text-xs">← Kembali</a>}>{loadError}</EmptyPanel>;
   if (!pr) return <LoadingPanel>Memuat purchase request...</LoadingPanel>;
 
   const own = pr.requestedBy?.id === perms.userId;
@@ -77,7 +80,7 @@ export default function PurchaseRequestDetail({ recordId, onDone }) {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Approval', href: '#/admin/approvals/po' }, { label: 'PO Suku Cadang & Servis' }, { label: pr.requestCode }]} />
+      <Breadcrumb items={[{ label: 'Approvals' }, { label: listLabel, href: listHref }, { label: pr.requestCode }]} />
       <div className="mb-5 mt-2 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
@@ -118,7 +121,7 @@ export default function PurchaseRequestDetail({ recordId, onDone }) {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <section className="card-panel self-start overflow-hidden" aria-label="Rincian item">
           <p className="border-b border-slate-200 bg-slate-50 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-600">Rincian Item</p>
-          <div className="overflow-x-auto">
+          <div className="table-scroll-mobile overflow-x-auto">
             {pr.orderCategory === 'repair' && (pr.repairItems || []).map((item) => (
               <div key={item.id} className="border-b border-slate-200 last:border-b-0">
                 <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4">

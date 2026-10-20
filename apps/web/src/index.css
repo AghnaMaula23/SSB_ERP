@@ -303,6 +303,19 @@ button, a, input, select {
   }
 }
 
+/* Tabel admin yang tidak bisa jadi kartu (terlalu lebar / detail) tetap
+   boleh digeser di layar kecil, dengan lebar minimum supaya kolomnya tidak
+   saling tumpuk. */
+@media (max-width: 767px) {
+  .table-scroll-mobile {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-scroll-mobile > .table-modern {
+    min-width: 32rem;
+  }
+}
+
 /* Fade only. A lingering `transform` on the page root would become the
    containing block of the fixed sidebar & header, making them scroll with
    the page — so the animation must never leave a transform behind. */

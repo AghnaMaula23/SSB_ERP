@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import ResponsiveTable from '../../../../components/ResponsiveTable.jsx';
 import { Breadcrumb, EmptyPanel, LoadingPanel, MetricCard, Notice, PageHeader, StatusBadge } from '../components/ProjectUi.jsx';
 import { bindPoolItemUnit, changePoolStatus, closePoolItem, createPool, listProjectPoolsWithItems } from '../services/projectService.js';
 import { POOL_ITEM_STATUS, POOL_STATUS, actorName, formatDate } from '../utils/projectFormat.js';
@@ -138,57 +139,58 @@ export default function EquipmentPoolPage({ project, permissions, initialNotice 
                   )}
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="table-modern">
-                    <thead>
-                      <tr>
-                        <th>Tipe Alat</th>
-                        <th>Unit</th>
-                        <th>Asal</th>
-                        <th className="text-center">Status</th>
-                        {permissions.updatePool && live && <th className="text-right">Aksi</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(pool.items || []).length === 0 ? (
-                        <tr><td colSpan={5} className="py-8 text-center text-xs text-slate-500">Pool ini belum berisi alat.</td></tr>
-                      ) : pool.items.map((item) => (
-                        <tr key={item.id}>
-                          <td>
-                            <p className="font-semibold text-slate-900">{item.equipmentType?.typeName}</p>
-                            <p className="font-mono text-[11px] text-slate-400">{item.equipmentType?.typeCode}</p>
-                          </td>
-                          <td>
-                            {item.equipmentItem
-                              ? <span className="font-mono text-sm font-bold text-teal-700">{item.equipmentItem.assetCode}</span>
-                              : <span className="text-[11px] font-semibold text-amber-700">Belum terikat unit</span>}
-                          </td>
-                          <td className="text-xs text-slate-600">{item.equipmentRequestItemId ? 'Request Alat' : 'Ditambah manual'}</td>
-                          <td className="text-center"><StatusBadge status={item.status} map={POOL_ITEM_STATUS} /></td>
-                          {permissions.updatePool && live && (
-                            <td>
-                              <div className="flex flex-wrap justify-end gap-1">
-                                {item.status === 'available' && !item.equipmentItemId && (
-                                  <BindUnitControl
-                                    item={item}
-                                    disabled={busy}
-                                    onBind={(target, unitId) => run(() => bindPoolItemUnit(pool.id, target.id, unitId), 'Unit berhasil diikat ke pool item.')}
-                                  />
-                                )}
-                                {item.status === 'available' && (
-                                  <>
-                                    <button type="button" disabled={busy} onClick={() => run(() => closePoolItem(pool.id, item.id, 'completed'), 'Pool item ditandai selesai.', 'Tandai item ini selesai? Unit dilepas dari pool.')} className="btn btn-ghost px-2 py-1 text-[11px] text-teal-700 hover:bg-teal-50">Selesai</button>
-                                    <button type="button" disabled={busy} onClick={() => run(() => closePoolItem(pool.id, item.id, 'cancelled'), 'Pool item dibatalkan.', 'Batalkan item ini?')} className="btn btn-ghost px-2 py-1 text-[11px] text-red-600 hover:bg-red-50">Batalkan</button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div>
+                  <ResponsiveTable
+                    columns={[
+                      {
+                        key: 'type',
+                        label: 'Tipe Alat',
+                        primary: true,
+                        render: (item) => (
+                          <span className="block">
+                            <span className="block font-semibold text-slate-900">{item.equipmentType?.typeName}</span>
+                            <span className="block font-mono text-[11px] text-slate-400">{item.equipmentType?.typeCode}</span>
+                          </span>
+                        ),
+                      },
+                      {
+                        key: 'unit',
+                        label: 'Unit',
+                        render: (item) => (item.equipmentItem
+                          ? <span className="font-mono text-sm font-bold text-teal-700">{item.equipmentItem.assetCode}</span>
+                          : <span className="text-[11px] font-semibold text-amber-700">Belum terikat unit</span>),
+                      },
+                      { key: 'source', label: 'Asal', render: (item) => <span className="text-xs text-slate-600">{item.equipmentRequestItemId ? 'Request Alat' : 'Ditambah manual'}</span> },
+                      { key: 'status', label: 'Status', align: 'center', render: (item) => <StatusBadge status={item.status} map={POOL_ITEM_STATUS} /> },
+                      ...(permissions.updatePool && live ? [{
+                        key: 'action',
+                        label: 'Aksi',
+                        align: 'right',
+                        render: (item) => (
+                          <div className="flex flex-wrap justify-end gap-1">
+                            {item.status === 'available' && !item.equipmentItemId && (
+                              <BindUnitControl
+                                item={item}
+                                disabled={busy}
+                                onBind={(target, unitId) => run(() => bindPoolItemUnit(pool.id, target.id, unitId), 'Unit berhasil diikat ke pool item.')}
+                              />
+                            )}
+                            {item.status === 'available' && (
+                              <>
+                                <button type="button" disabled={busy} onClick={() => run(() => closePoolItem(pool.id, item.id, 'completed'), 'Pool item ditandai selesai.', 'Tandai item ini selesai? Unit dilepas dari pool.')} className="btn btn-ghost px-2 py-1 text-[11px] text-teal-700 hover:bg-teal-50">Selesai</button>
+                                <button type="button" disabled={busy} onClick={() => run(() => closePoolItem(pool.id, item.id, 'cancelled'), 'Pool item dibatalkan.', 'Batalkan item ini? Status final.')} className="btn btn-ghost px-2 py-1 text-[11px] text-red-600 hover:bg-red-50">Batalkan</button>
+                              </>
+                            )}
+                          </div>
+                        ),
+                      }] : []),
+                    ]}
+                    rows={pool.items || []}
+                    rowKey={(item) => item.id}
+                    empty="Pool ini belum berisi alat."
+                  />
                 </div>
+
               </section>
             );
           })}

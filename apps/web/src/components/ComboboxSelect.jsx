@@ -22,6 +22,7 @@ export default function ComboboxSelect({
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -49,12 +50,35 @@ export default function ComboboxSelect({
     onChange(String(option.value));
     setQuery('');
     setOpen(false);
+    setActiveIndex(-1);
     inputRef.current?.focus();
   };
 
   const handleKeyDown = (event) => {
-    if (event.key === 'Escape') { setOpen(false); return; }
-    if (event.key === 'Enter' && open && suggestions.length > 0) { event.preventDefault(); handleSelect(suggestions[0]); }
+    if (event.key === 'Escape') { setOpen(false); setActiveIndex(-1); return; }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!open) {
+        setOpen(true);
+        return;
+      }
+      if (suggestions.length > 0) {
+        setActiveIndex((current) => event.key === 'ArrowDown'
+          ? (current + 1) % suggestions.length
+          : (current - 1 + suggestions.length) % suggestions.length);
+      }
+      return;
+    }
+    if (event.key === 'Home' || event.key === 'End') {
+      if (!open || suggestions.length === 0) return;
+      event.preventDefault();
+      setActiveIndex(event.key === 'Home' ? 0 : suggestions.length - 1);
+      return;
+    }
+    if (event.key === 'Enter' && open && suggestions.length > 0) {
+      event.preventDefault();
+      handleSelect(suggestions[activeIndex >= 0 ? activeIndex : 0]);
+    }
   };
 
   return (
@@ -76,8 +100,9 @@ export default function ComboboxSelect({
           value={!open && selected ? selected.label : query}
           placeholder={placeholder}
           disabled={disabled}
-          onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
-          onFocus={() => { setQuery(''); setOpen(true); }}
+          onChange={(event) => { setQuery(event.target.value); setActiveIndex(-1); setOpen(true); }}
+          onFocus={() => { setQuery(''); setActiveIndex(-1); setOpen(true); }}
+          aria-activedescendant={activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
           onKeyDown={handleKeyDown}
           className={`input-control pl-8 pr-9 text-sm ${disabled ? 'cursor-not-allowed bg-slate-100 text-slate-500' : ''} ${invalid ? 'border-red-300' : ''}`}
         />
@@ -85,13 +110,13 @@ export default function ComboboxSelect({
       </div>
       {open && !disabled && (
         <ul id={`${id}-listbox`} role="listbox" className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-          {suggestions.length > 0 ? suggestions.map((option) => (
-            <li key={option.value} role="option" aria-selected="false">
+          {suggestions.length > 0 ? suggestions.map((option, index) => (
+            <li key={option.value} id={`${id}-option-${index}`} role="option" aria-selected={index === activeIndex}>
               <button
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => handleSelect(option)}
-                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-teal-50"
+                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-teal-50 ${index === activeIndex ? 'bg-teal-50' : ''}`}
               >
                 <span className="truncate font-semibold text-slate-900">{option.label}</span>
                 {option.meta && <span className="shrink-0 truncate text-[11px] text-slate-500">{option.meta}</span>}
