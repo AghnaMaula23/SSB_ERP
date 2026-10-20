@@ -30,7 +30,7 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
   const [notes, setNotes] = useState('');
   const [rejecting, setRejecting] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState({ tone: 'error', text: '' });
   const canValidate = hasPermission('progress:validate');
 
   useEffect(() => {
@@ -41,7 +41,7 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
     return () => { cancelled = true; };
   }, [recordId, reloadKey, subProjectId]);
 
-  if (loadError) return <EmptyPanel icon="🔎" title="Progress harian tidak ditemukan" action={<a href="#/admin/approvals/antrean" className="btn btn-secondary text-xs">← Kembali</a>}>{loadError}</EmptyPanel>;
+  if (loadError) return <EmptyPanel icon="🔎" title="Progress harian tidak ditemukan" action={<a href="#/admin/approvals/progress" className="btn btn-secondary text-xs">← Kembali</a>}>{loadError}</EmptyPanel>;
   if (!data) return <LoadingPanel>Memuat progress harian...</LoadingPanel>;
 
   const { stage, log } = data;
@@ -58,14 +58,14 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
   const stageHref = `#/admin/projects/${stage.constructionProjectId}/sub/${stage.id}/volume`;
 
   const showError = (error) => {
-    setNotice(error.message);
+    setNotice({ tone: 'error', text: error.message });
     if (error.status === 409) setReloadKey((key) => key + 1);
   };
 
   const validate = async () => {
     if (!window.confirm(`Validasi progress ${formatDate(log.progressDate)} sebesar ${formatVolume(log.realizedVolume, unit)}? Volumenya menjadi dasar tagihan klien.`)) return;
     setBusy(true);
-    setNotice('');
+    setNotice({ tone: 'error', text: '' });
     try {
       await setProgressValidation(stage.id, log.id, 'validated', notes);
       onDone(`Progress ${subProjectTypeLabel(stage.subProjectType)} ${formatDate(log.progressDate)} divalidasi.`);
@@ -87,9 +87,27 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
     onDone(`Progress ${formatDate(log.progressDate)} ditolak. Alasannya terlihat oleh Lapangan.`);
   };
 
+  // Cabut validasi: validated → submitted. Volumenya keluar dari dasar tagihan
+  // dan log kembali menunggu keputusan, jadi admin tetap di halaman ini.
+  const revoke = async () => {
+    if (!window.confirm(`Cabut validasi progress ${formatDate(log.progressDate)}? Volume ${formatVolume(log.realizedVolume, unit)} keluar dari dasar tagihan dan progress kembali menunggu validasi.`)) return;
+    setBusy(true);
+    setNotice({ tone: 'error', text: '' });
+    try {
+      await setProgressValidation(stage.id, log.id, 'submitted', notes);
+      setNotes('');
+      setNotice({ tone: 'success', text: 'Validasi dicabut. Progress kembali menunggu validasi — Lapangan kini bisa memperbaikinya.' });
+      setReloadKey((key) => key + 1);
+    } catch (error) {
+      showError(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <>
-      <Breadcrumb items={[{ label: 'Approval Center', href: '#/admin/approvals/antrean' }, { label: 'Progress Harian' }, { label: formatDate(log.progressDate) }]} />
+      <Breadcrumb items={[{ label: 'Pusat Approval', href: '#/admin/approvals/progress' }, { label: 'Progress Harian' }, { label: formatDate(log.progressDate) }]} />
       <div className="mb-5 mt-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Progress {subProjectTypeLabel(stage.subProjectType)} · {formatDate(log.progressDate)}</h1>
@@ -101,8 +119,8 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
         </p>
       </div>
 
-      {notice && <Notice tone="error" onDismiss={() => setNotice('')}>{notice}</Notice>}
-      {locked && <Notice tone="warning">Tahapan atau project ini sudah ditutup, jadi datanya terkunci — progress tidak bisa divalidasi atau ditolak lagi.</Notice>}
+      <Notice tone={notice.tone} onDismiss={() => setNotice({ tone: 'error', text: '' })}>{notice.text}</Notice>
+      {locked && <Notice tone="warning">Tahapan atau project ini sudah ditutup, jadi datanya terkunci — progress tidak bisa divalidasi, ditolak, atau dicabut validasinya lagi.</Notice>}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-5">
@@ -170,6 +188,19 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
               )}
             </div>
           )}
+          {log.status === 'validated' && canValidate && !locked && (
+            <div className="card-panel space-y-3 p-4">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Cabut Validasi</p>
+              <p className="text-xs leading-relaxed text-slate-600">
+                Pakai bila volume yang sudah divalidasi ternyata keliru. Progress kembali berstatus menunggu validasi dan volumenya keluar dari dasar tagihan.
+              </p>
+              <label className="block">
+                <span className="text-[11px] font-semibold text-slate-600">Alasan (opsional)</span>
+                <textarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={500} className="input-control mt-1 h-auto resize-y text-sm" placeholder="Contoh: Volume dobel dengan laporan kemarin" />
+              </label>
+              <button type="button" disabled={busy} onClick={revoke} className="btn btn-secondary w-full text-xs text-amber-800">{busy ? 'Menyimpan...' : '↺ Cabut Validasi'}</button>
+            </div>
+          )}
           {pending && !canValidate && <Notice tone="warning">Akun ini tidak memegang progress:validate.</Notice>}
           <div className="card-panel p-4 text-xs">
             <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Riwayat</p>
@@ -185,7 +216,7 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
             </ul>
           </div>
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-500">
-            Progress tervalidasi menjadi dasar tagihan klien. Menolak wajib disertai alasan; Lapangan memperbaiki lalu mengajukan ulang.
+            Progress tervalidasi menjadi dasar tagihan klien. Menolak wajib disertai alasan; Lapangan memperbaiki lalu mengajukan ulang. Validasi yang keliru bisa dicabut selama tahapan belum ditutup.
           </div>
         </aside>
       </div>

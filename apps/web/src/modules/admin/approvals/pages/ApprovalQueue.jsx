@@ -4,19 +4,41 @@ import { Notice } from '../../project/components/ProjectUi.jsx';
 import { formatCurrency, formatDateTime } from '../../project/utils/projectFormat.js';
 import { setProgressValidation } from '../../project/services/projectService.js';
 import { timeAgo } from '../../files/utils/filesFormat.js';
-import { DecisionButtons, FilterChips, Pager, RejectReasonForm, StatTile } from '../components/ApprovalUi.jsx';
+import { DecisionButtons, Pager, RejectReasonForm, StatTile } from '../components/ApprovalUi.jsx';
 import { getApprovalSummary, listApprovalQueue } from '../services/approvalService.js';
 import { QUEUE_SOURCES, progressIds, queueDetailRoute } from '../utils/approvalFormat.js';
 
 const PAGE_SIZE = 15;
 
+// Teks per antrean. Kunci = sourceType dari /api/approval-queue.
+const COPY = {
+  material_request: {
+    title: 'Request Material',
+    description: 'Sesuaikan kuantitas (hanya boleh turun), susun rincian biaya, lalu teruskan ke Finance — atau tolak.',
+    empty: 'Tidak ada request material yang menunggu Admin.',
+    permission: 'material-request:validate',
+  },
+  equipment_request: {
+    title: 'Request Alat (Internal)',
+    description: 'Teruskan ke Divisi Alat untuk dipenuhi, atau tolak dengan alasan.',
+    empty: 'Tidak ada request alat yang menunggu Admin.',
+    permission: 'equipment-request:review',
+  },
+  progress_log: {
+    title: 'Validasi Progress Harian',
+    description: 'Progress tervalidasi menjadi dasar tagihan klien. Validasi atau tolak di sini; cabut validasi dari layar detail progress.',
+    empty: 'Tidak ada progress harian yang menunggu validasi.',
+    permission: 'progress:validate',
+  },
+};
+
 /**
- * Approval Center Admin — antrean tahap Admin (GET /api/approval-queue). Tab sumber
- * ditentukan dari summary — antrean yang boleh diproses tetap tampil walau 0.
- * Dokumen milik sendiri sudah disaring backend.
+ * Antrean tahap Admin untuk SATU sumber (GET /api/approval-queue?sourceType=…).
+ * Dokumen milik sendiri sudah disaring backend; aksinya tetap di endpoint
+ * modul sumber (lewat layar detail, atau langsung di baris untuk progress).
  */
-export default function ApprovalQueue({ initialNotice }) {
-  const [sourceType, setSourceType] = useState('');
+export default function ApprovalQueue({ sourceType, initialNotice }) {
+  const copy = COPY[sourceType] || { title: QUEUE_SOURCES[sourceType]?.label || sourceType, description: '', empty: 'Antrean kosong.' };
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('oldest');
   const [page, setPage] = useState(1);
@@ -85,44 +107,37 @@ export default function ApprovalQueue({ initialNotice }) {
   };
 
   const changeFilter = (setter) => (value) => { setter(value); setPage(1); };
-  const countFor = (type) => summary.items.filter((item) => item.sourceType === type).reduce((sum, item) => sum + item.count, 0);
-  const tabs = [{ value: '', label: 'Semua', count: summary.items.reduce((sum, item) => sum + item.count, 0) },
-    ...summary.items.map((item) => ({ value: item.sourceType, label: QUEUE_SOURCES[item.sourceType]?.label || item.sourceType, count: countFor(item.sourceType) }))];
-  const oldest = summary.items.map((item) => item.oldestSubmittedAt).filter(Boolean).sort()[0];
+  const mine = summary.items.find((item) => item.sourceType === sourceType);
   const summaryLoaded = summary.key === reloadKey;
-  const noQueues = summaryLoaded && !summary.error && summary.items.length === 0;
+  // Summary hanya memuat antrean yang boleh diproses user ini.
+  const noAccess = summaryLoaded && !summary.error && !mine;
+  const oldest = mine?.oldestSubmittedAt;
 
   return (
     <>
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <StatTile label="Menunggu Keputusan Admin" value={summaryLoaded ? tabs[0].count : '…'} hint={`${summary.items.length} jenis antrean`} icon="📥" tone="amber" />
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4">
+        <StatTile label="Menunggu Keputusan Admin" value={summaryLoaded ? (mine?.count ?? 0) : '…'} hint={copy.title} icon={QUEUE_SOURCES[sourceType]?.icon || '📥'} tone="amber" />
         <StatTile label="Paling Lama Menunggu" value={oldest ? timeAgo(oldest) : '-'} hint={oldest ? `Masuk ${formatDateTime(oldest)}` : 'Antrean kosong'} icon="⏳" />
-        <StatTile label="Progress Harian" value={summaryLoaded ? countFor('progress_log') : '…'} hint="Dasar tagihan klien" icon="📈" tone="teal" />
       </div>
 
       <Notice tone={notice.tone} onDismiss={() => setNotice({ tone: 'success', text: '' })}>{notice.text}</Notice>
       {summary.error && <Notice tone="error">Ringkasan antrean gagal dimuat: {summary.error}</Notice>}
-      {noQueues && <Notice tone="warning">Akun ini tidak memegang wewenang approval Admin mana pun, jadi antreannya kosong.</Notice>}
+      {noAccess && <Notice tone="warning">Akun ini tidak memegang wewenang {copy.permission ? <code>{copy.permission}</code> : 'untuk antrean ini'}, jadi antreannya kosong.</Notice>}
 
-      <section className="card-panel overflow-hidden" aria-label="Antrean approval">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Approval Center Admin</h2>
-            <p className="text-xs text-slate-500">Semua dokumen yang menunggu keputusan Admin, lintas modul — terlama di atas.</p>
+      <section className="card-panel overflow-hidden" aria-label={`Antrean ${copy.title}`}>
+        <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-4 sm:px-5 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-slate-900">{copy.title}</h2>
+            <p className="text-xs leading-relaxed text-slate-500">{copy.description}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <input value={search} onChange={(event) => changeFilter(setSearch)(event.target.value)} className="input-control h-9 w-56 text-xs" placeholder="Cari kode atau project..." aria-label="Cari antrean" />
-            <select value={sort} onChange={(event) => changeFilter(setSort)(event.target.value)} className="input-control h-9 w-36 text-xs" aria-label="Urutan">
+          <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto md:shrink-0">
+            <input value={search} onChange={(event) => changeFilter(setSearch)(event.target.value)} className="input-control h-9 text-xs sm:w-56" placeholder="Cari kode atau project..." aria-label="Cari antrean" />
+            <select value={sort} onChange={(event) => changeFilter(setSort)(event.target.value)} className="input-control h-9 text-xs sm:w-36" aria-label="Urutan">
               <option value="oldest">Terlama dulu</option>
               <option value="newest">Terbaru dulu</option>
             </select>
           </div>
         </div>
-        {summary.items.length > 0 && (
-          <div className="border-b border-slate-200 px-5 py-3">
-            <FilterChips options={tabs} value={sourceType} onChange={changeFilter(setSourceType)} />
-          </div>
-        )}
 
         <ResponsiveTable
             columns={[
@@ -134,10 +149,6 @@ export default function ApprovalQueue({ initialNotice }) {
                   ? (queueDetailRoute(row) ? <a href={queueDetailRoute(row)} className="font-mono text-sm font-bold text-emerald-700 hover:underline">{row.referenceCode}</a> : <span className="font-mono text-sm font-bold">{row.referenceCode}</span>)
                   : <span className="text-xs text-slate-400">-</span>),
                 sub: (row) => row.summary || '',
-                badge: (row) => {
-                  const source = QUEUE_SOURCES[row.sourceType] || { label: row.sourceType, icon: '•', className: '' };
-                  return <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${source.className}`}><span aria-hidden="true">{source.icon}</span>{source.label}</span>;
-                },
               },
               {
                 key: 'submitted',
@@ -203,7 +214,7 @@ export default function ApprovalQueue({ initialNotice }) {
             loading={loading}
             loadingText="Memuat antrean..."
             error={result.error}
-            empty={search ? 'Tidak ada yang cocok dengan pencarian.' : 'Tidak ada yang menunggu keputusan Admin. 🎉'}
+            empty={search ? 'Tidak ada yang cocok dengan pencarian.' : `${copy.empty} 🎉`}
             expandedRow={(row) => (rejectingKey === rowKey(row) ? (
               <RejectReasonForm
                 label={`Alasan menolak progress ${row.summary}`}

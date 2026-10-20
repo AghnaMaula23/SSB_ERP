@@ -5,9 +5,9 @@ import { useState } from 'react';
 export function StatTile({ label, value, hint, icon, tone = 'slate' }) {
   const valueTone = { slate: 'text-slate-900', amber: 'text-amber-700', teal: 'text-teal-800' };
   return (
-    <article className="card-panel relative overflow-hidden p-5">
-      <span className="absolute right-4 top-4 text-4xl opacity-15" aria-hidden="true">{icon}</span>
-      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+    <article className="card-panel relative overflow-hidden p-4 sm:p-5">
+      <span className="absolute right-3 top-3 text-3xl opacity-15 sm:right-4 sm:top-4 sm:text-4xl" aria-hidden="true">{icon}</span>
+      <p className="pr-8 text-[11px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <p className={`mt-2 font-mono text-2xl font-bold tracking-tight sm:text-3xl ${valueTone[tone]}`}>{value}</p>
       {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
     </article>

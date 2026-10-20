@@ -42,7 +42,7 @@ export default function FieldCashDetail({ recordId, onDone }) {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Approval', href: '#/admin/approvals/kas' }, { label: 'Verifikasi Kas Lapangan' }, { label: row.requestCode }]} />
+      <Breadcrumb items={[{ label: 'Pusat Approval', href: '#/admin/approvals/kas' }, { label: 'Verifikasi Kas Lapangan' }, { label: row.requestCode }]} />
       <div className="mb-5 mt-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold text-slate-900">{row.description}</h1>

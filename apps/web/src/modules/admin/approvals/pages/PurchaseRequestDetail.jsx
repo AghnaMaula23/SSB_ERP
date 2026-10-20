@@ -16,9 +16,9 @@ function ItemTable({ head, rows }) {
 
 /**
  * Detail satu purchase request untuk diperiksa sebelum divalidasi. Dibuka dari
- * Approval Center atau tab PO — `listHref`/`listLabel` menunjuk asalnya.
+ * tab PR Divisi Alat di Pusat Approval.
  */
-export default function PurchaseRequestDetail({ recordId, onDone, listHref = '#/admin/approvals/po', listLabel = 'PO Suku Cadang & Servis' }) {
+export default function PurchaseRequestDetail({ recordId, onDone, listHref = '#/admin/approvals/pr', listLabel = 'PR Divisi Alat' }) {
   const [pr, setPr] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -80,7 +80,7 @@ export default function PurchaseRequestDetail({ recordId, onDone, listHref = '#/
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Approvals' }, { label: listLabel, href: listHref }, { label: pr.requestCode }]} />
+      <Breadcrumb items={[{ label: 'Pusat Approval', href: listHref }, { label: listLabel, href: listHref }, { label: pr.requestCode }]} />
       <div className="mb-5 mt-2 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">

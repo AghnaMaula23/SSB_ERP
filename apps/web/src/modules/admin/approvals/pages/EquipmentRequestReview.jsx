@@ -28,7 +28,7 @@ export default function EquipmentRequestReview({ recordId, onDone }) {
     return () => { cancelled = true; };
   }, [recordId, reloadKey]);
 
-  if (loadError) return <EmptyPanel icon="🔎" title="Request alat tidak ditemukan" action={<a href="#/admin/approvals/antrean" className="btn btn-secondary text-xs">← Kembali</a>}>{loadError}</EmptyPanel>;
+  if (loadError) return <EmptyPanel icon="🔎" title="Request alat tidak ditemukan" action={<a href="#/admin/approvals/alat" className="btn btn-secondary text-xs">← Kembali</a>}>{loadError}</EmptyPanel>;
   if (!request) return <LoadingPanel>Memuat request alat...</LoadingPanel>;
 
   const own = request.requestedBy?.id === currentUserId();
@@ -67,7 +67,7 @@ export default function EquipmentRequestReview({ recordId, onDone }) {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Approval Center', href: '#/admin/approvals/antrean' }, { label: 'Request Alat' }, { label: request.requestCode }]} />
+      <Breadcrumb items={[{ label: 'Pusat Approval', href: '#/admin/approvals/alat' }, { label: 'Request Alat' }, { label: request.requestCode }]} />
       <div className="mb-5 mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-3">

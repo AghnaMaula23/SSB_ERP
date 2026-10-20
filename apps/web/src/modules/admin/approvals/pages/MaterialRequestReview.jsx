@@ -52,7 +52,7 @@ export default function MaterialRequestReview({ recordId, onDone }) {
     return () => { cancelled = true; };
   }, [recordId, reloadKey]);
 
-  if (loadError) return <EmptyPanel icon="🔎" title="Request material tidak ditemukan" action={<a href="#/admin/approvals/antrean" className="btn btn-secondary text-xs">← Kembali</a>}>{loadError}</EmptyPanel>;
+  if (loadError) return <EmptyPanel icon="🔎" title="Request material tidak ditemukan" action={<a href="#/admin/approvals/material" className="btn btn-secondary text-xs">← Kembali</a>}>{loadError}</EmptyPanel>;
   if (!request || !draft) return <LoadingPanel>Memuat request material...</LoadingPanel>;
 
   const own = request.requestedBy?.id === currentUserId();
@@ -151,7 +151,7 @@ export default function MaterialRequestReview({ recordId, onDone }) {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Approval Center', href: '#/admin/approvals/antrean' }, { label: 'Request Material' }, { label: request.requestCode }]} />
+      <Breadcrumb items={[{ label: 'Pusat Approval', href: '#/admin/approvals/material' }, { label: 'Request Material' }, { label: request.requestCode }]} />
       <div className="mb-5 mt-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="font-mono text-2xl font-bold text-emerald-800">{request.requestCode}</h1>

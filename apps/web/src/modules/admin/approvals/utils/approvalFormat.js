@@ -83,7 +83,7 @@ export function prPermissions() {
 
 // Sumber antrean Approval Center (sourceType dari /api/approval-queue).
 export const QUEUE_SOURCES = {
-  purchase_request: { label: 'PO Divisi Alat', icon: '🔧', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  purchase_request: { label: 'PR Divisi Alat', icon: '🔧', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   material_request: { label: 'Request Material', icon: '🧱', className: 'bg-amber-50 text-amber-800 border-amber-200' },
   equipment_request: { label: 'Request Alat', icon: '🚜', className: 'bg-sky-50 text-sky-700 border-sky-200' },
   progress_log: { label: 'Progress Harian', icon: '📈', className: 'bg-teal-50 text-teal-700 border-teal-200' },
@@ -95,10 +95,10 @@ export function progressIds(row) {
   return match ? { subProjectId: Number(match[1]), logId: Number(match[2]) } : null;
 }
 
-/** Rute layar review satu baris antrean — selalu di bawah Approval Center. */
+/** Rute layar review satu baris antrean — di bawah tab antreannya sendiri. */
 export function queueDetailRoute(row) {
-  const base = '#/admin/approvals/antrean';
-  if (row.sourceType === 'purchase_request') return `${base}/po/${row.sourceId}`;
+  const base = '#/admin/approvals';
+  if (row.sourceType === 'purchase_request') return `${base}/pr/${row.sourceId}`;
   if (row.sourceType === 'equipment_request') return `${base}/alat/${row.sourceId}`;
   if (row.sourceType === 'material_request') return `${base}/material/${row.sourceId}`;
   if (row.sourceType === 'progress_log') {

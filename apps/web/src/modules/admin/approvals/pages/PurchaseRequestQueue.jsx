@@ -93,19 +93,22 @@ export default function PurchaseRequestQueue({ initialNotice }) {
   return (
     <>
       <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <StatTile label="Total Antrean PO Pending" value={stats.count ?? '…'} hint="Membutuhkan validasi Admin" icon="📋" tone="amber" />
+        <StatTile label="PR Menunggu Admin" value={stats.count ?? '…'} hint="Membutuhkan validasi Admin" icon="📋" tone="amber" />
         <StatTile label="Nilai Estimasi Antrean" value={stats.total === null ? '…' : formatCurrency(stats.total)} hint="Akumulasi order menunggu Admin" icon="💰" />
         <StatTile label="Update Terakhir" value={stats.at ? formatDateTime(stats.at) : '…'} hint="Data langsung dari Divisi Alat" icon="🕘" />
       </div>
 
       <Notice tone={notice.tone} onDismiss={() => setNotice({ tone: 'success', text: '' })}>{notice.text}</Notice>
       {!perms.canValidate && (
-        <Notice tone="warning">Akun ini tidak memegang <b>purchase-request:validate</b>, jadi tombol Approve/Reject nonaktif. Validasi PO butuh wewenang Admin — super_admin hanya memantau.</Notice>
+        <Notice tone="warning">Akun ini tidak memegang <b>purchase-request:validate</b>, jadi tombol Approve/Reject nonaktif. Validasi PR butuh wewenang Admin — super_admin hanya memantau.</Notice>
       )}
 
       <section className="card-panel overflow-hidden" aria-label="Antrean purchase request">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
-          <h2 className="text-lg font-bold text-slate-900">Data Antrean PO</h2>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-slate-900">PR Divisi Alat</h2>
+            <p className="text-xs leading-relaxed text-slate-500">Validasi untuk diteruskan ke Finance, atau tolak dengan alasan.</p>
+          </div>
           <div className="flex flex-wrap gap-2">
             <input value={search} onChange={(event) => changeFilter(setSearch)(event.target.value)} className="input-control h-9 w-48 text-xs" placeholder="Cari order code..." aria-label="Cari order code" />
             <select value={category} onChange={(event) => changeFilter(setCategory)(event.target.value)} className="input-control h-9 w-40 text-xs" aria-label="Filter kategori">
@@ -124,7 +127,7 @@ export default function PurchaseRequestQueue({ initialNotice }) {
               key: 'orderCode',
               label: 'Order Code',
               primary: true,
-              render: (pr) => <a href={`#/admin/approvals/po/${pr.id}`} className="font-mono text-sm font-bold text-emerald-700 hover:underline">{pr.requestCode}</a>,
+              render: (pr) => <a href={`#/admin/approvals/pr/${pr.id}`} className="font-mono text-sm font-bold text-emerald-700 hover:underline">{pr.requestCode}</a>,
               sub: (pr) => `${formatDate(pr.requestDate)} · ${PR_CATEGORY[pr.orderCategory]}`,
               badge: (pr) => <span className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${priorityClass(pr)}`}>{priorityLabel(pr)}</span>,
             },
@@ -161,9 +164,9 @@ export default function PurchaseRequestQueue({ initialNotice }) {
           rows={result.data}
           rowKey={(pr) => pr.id}
           loading={loading}
-          loadingText="Memuat antrean PO..."
+          loadingText="Memuat antrean PR..."
           error={result.error}
-          empty={status === 'submitted' ? 'Tidak ada PO yang menunggu validasi. 🎉' : 'Tidak ada data.'}
+          empty={status === 'submitted' ? 'Tidak ada PR yang menunggu validasi. 🎉' : 'Tidak ada data.'}
           expandedRow={(pr) => (rejectingId === pr.id ? (
             <RejectReasonForm
               label={`Alasan penolakan ${pr.requestCode}`}
