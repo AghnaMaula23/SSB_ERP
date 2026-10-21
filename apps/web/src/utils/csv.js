@@ -1,5 +1,14 @@
+// Teks isian user yang diawali karakter ini dijalankan Excel sebagai rumus
+// (mis. `=HYPERLINK(...)`). Awalan `'` membuatnya terbaca sebagai teks. Hanya
+// untuk string; pengisi kosong "-" dan angka seperti "-1.5" dibiarkan.
+const FORMULA_START = /^[=+\-@\t\r]/;
+const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
+
+const looksLikeFormula = (text) => FORMULA_START.test(text) && text !== '-' && !PLAIN_NUMBER.test(text);
+
 function escapeCsv(value) {
-  const text = value === null || value === undefined ? '' : String(value);
+  let text = value === null || value === undefined ? '' : String(value);
+  if (typeof value === 'string' && looksLikeFormula(text)) text = `'${text}`;
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
