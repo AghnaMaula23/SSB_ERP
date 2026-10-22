@@ -4,6 +4,7 @@ const prisma = new PrismaClient();
 const { seedDivisiAlatDemo } = require('./divisi-alat.seed.js');
 const { seedProjectDemo } = require('./project.seed.js');
 const { seedMaterialDemo } = require('./material.seed.js');
+const { seedWorkflowDemo } = require('./workflow.seed.js');
 // divisi-alat.seed.js jalan lewat service module, yang memakai singleton
 // Prisma di src/config/database.js — koneksi terpisah dari `prisma` di atas,
 // jadi ikut ditutup manual saat proses seed selesai (lihat main().finally di bawah).
@@ -359,6 +360,8 @@ async function main() {
   // dan mencatat jam kerjanya, jadi butuh master alat sudah ada.
   await seedProjectDemo(admin.id);
   await seedMaterialDemo(admin.id);
+  // Terakhir: butuh project, alat, material, dan user demo per role di atas.
+  await seedWorkflowDemo();
 
   console.log('Seed complete.');
 }
