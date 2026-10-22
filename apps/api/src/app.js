@@ -1,4 +1,5 @@
 require('dotenv').config();
+require('./config/security.js').assertSecurityConfig();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -25,11 +26,27 @@ app.get('/api/health', (req, res) => {
 
 // Module Routes — uncomment as you build each module
 app.use('/api/auth',               require('./modules/auth/auth.routes.js'));
-// app.use('/api/projects',           require('./modules/project/project.routes.js'));
-// app.use('/api/request-alat',       require('./modules/request-alat/request-alat.routes.js'));
-// app.use('/api/request-material',   require('./modules/request-material/request-material.routes.js'));
-// app.use('/api/approvals',          require('./modules/approval-center/approval.routes.js'));
-// app.use('/api/equipment',          require('./modules/divisi-alat/divisi-alat.routes.js'));
+app.use('/api/users',              require('./modules/user/user.routes.js'));
+app.use('/api/roles',              require('./modules/role/role.routes.js'));
+app.use('/api/permissions',        require('./modules/permission/permission.routes.js'));
+app.use('/api/projects',           require('./modules/project/project.routes.js'));
+app.use('/api/materials',          require('./modules/material/material.routes.js'));
+app.use('/api/request-alat',       require('./modules/request-alat/request-alat.routes.js'));
+app.use('/api/request-material',   require('./modules/request-material/request-material.routes.js'));
+app.use('/api/material-deliveries', require('./modules/request-material/material-delivery.routes.js'));
+app.use('/api/material-receipts',  require('./modules/request-material/material-receipt.routes.js'));
+app.use('/api/material-stock',     require('./modules/request-material/material-stock.routes.js'));
+app.use('/api/files',              require('./modules/file/file.routes.js'));
+app.use('/api/project-files',      require('./modules/project-file/project-file.routes.js'));
+app.use('/api/approval-queue',       require('./modules/approval-center/approval-queue.routes.js'));
+app.use('/api/workers',            require('./modules/labor/worker.routes.js'));
+app.use('/api/worker-assignments', require('./modules/labor/worker-assignment.routes.js'));
+app.use('/api/labor-logs',         require('./modules/labor/labor-log.routes.js'));
+// Didaftarkan SEBELUM /api/equipment supaya jelas mana yang menangani
+// /purchase-requests — bukan bergantung pada fall-through router.
+app.use('/api/equipment/purchase-requests', require('./modules/divisi-alat/purchase-request.routes.js'));
+app.use('/api/equipment/cash',      require('./modules/divisi-alat/cash.routes.js'));
+app.use('/api/equipment',          require('./modules/divisi-alat/divisi-alat.routes.js'));
 // app.use('/api/income',             require('./modules/income/income.routes.js'));
 // app.use('/api/finance-field',      require('./modules/finance-field/finance-field.routes.js'));
 // app.use('/api/finance-accounting', require('./modules/finance-accounting/finance-accounting.routes.js'));

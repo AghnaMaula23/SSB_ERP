@@ -1,0 +1,426 @@
+# Keputusan Desain — Modul Divisi Alat
+
+Dokumen ini mencatat keputusan desain yang **berbeda dari ERD** beserta alasannya,
+supaya selisih dengan dokumen ERD bisa dijelaskan dan tidak dikira kelalaian
+membaca dokumen. Semua keputusan di bawah diambil sadar setelah review bersama.
+
+Terakhir diperbarui: 15 September 2026
+
+---
+
+## Prinsip yang dipakai
+
+**Satu fakta hidup di satu tempat.** Kalau sebuah informasi sudah bisa dijawab
+oleh kolom atau tabel lain, jangan menyimpannya lagi di kolom baru. Duplikasi
+status adalah sumber bug paling mahal di ERP: dua sumber bisa bertentangan dan
+tidak ada yang tahu mana yang benar. Prinsip ini yang memutuskan hampir semua
+perampingan di bawah.
+
+**Kolom yang dikelola sistem tidak boleh diisi klien.** `total_workhour`,
+`current_status`, `current_value_since_reset`, `asset_code`, dan
+`maintenance_code` ditolak di validator kalau dikirim di request body.
+
+**Nomor dokumen dibuat sistem dengan counter atomik**, tidak pernah dari
+`MAX(...) + 1`, supaya dua input bersamaan tidak menghasilkan nomor kembar.
+
+---
+
+## Enum yang diubah dari ERD
+
+### equipment_item_status — 8 nilai menjadi 4
+
+| | |
+|---|---|
+| ERD | available, assigned, delivered_to_location, received_at_site, in_use, maintenance, damaged, retired |
+| Dipakai | **available, assigned_to_location, maintenance, retired** |
+
+Empat nilai siklus penugasan (`assigned`, `delivered_to_location`,
+`received_at_site`, `in_use`) diciutkan jadi satu. Siklus detailnya adalah milik
+`sub_project_equipment_allocations.status` di modul Project, dan menyimpannya
+juga di sini berarti dua tempat yang bisa bertentangan — alat bisa tercatat
+`in_use` padahal alokasinya sudah `returned`.
+
+`damaged` digabung ke `maintenance` karena penyebab alat masuk bengkel sudah
+terbedakan di `equipment_status_logs.source_type`: `damage_log` untuk kerusakan,
+`maintenance_record` untuk perawatan terjadwal. Laporan "berapa lama alat mati
+karena kerusakan vs perawatan" tetap bisa dijawab dari log.
+
+`assigned_to_location` tetap berupa **cermin** dari alokasi proyek, bukan sumber
+kebenaran. Gunanya supaya pertanyaan "alat mana yang bebas?" tidak perlu join
+ke modul Project.
+
+### damage_level — dihapus seluruhnya
+
+ERD punya `low, medium, high, critical`. Dihapus karena **tidak ada kriteria
+objektif untuk menentukannya** — dua orang menilai kerusakan yang sama secara
+berbeda, dan hasilnya laporan yang terlihat terukur padahal hasil menebak.
+
+Bagian dari "keparahan" yang benar-benar objektif dan mengubah tindakan adalah
+*"alat masih bisa jalan atau tidak"*, dan itu sudah terekam: kerusakan yang
+menghentikan alat memicu perubahan status ke `maintenance` dengan
+`source_type = damage_log`, kerusakan yang tidak menghentikan alat tidak memicu
+apa-apa. Triase antrean cukup memakai itu ditambah tanggal laporan.
+
+### damage_status — `reviewed` dihapus
+
+| | |
+|---|---|
+| ERD | reported, reviewed, in_repair, resolved, cancelled |
+| Dipakai | **reported, in_repair, resolved, cancelled** |
+
+Fakta "sudah diperiksa Divisi Alat" sudah tersimpan di kolom `reviewed_by` dan
+`reviewed_at`, jadi tidak perlu jadi status tersendiri. Pertanyaan yang paling
+sering ditanyakan — "laporan mana yang belum dilihat siapa pun?" — dijawab
+`reviewed_at IS NULL`.
+
+Alur: `reported` → `in_repair` → `resolved`. Dua jalan pintas yang sah:
+`reported` → `resolved` (diperiksa, ternyata tidak perlu tindakan) dan
+`reported` → `cancelled` (laporan salah atau duplikat).
+
+### maintenance_aspect_unit — dihapus seluruhnya
+
+ERD punya `hour, day, km, manual`. Semua threshold maintenance berbasis **jam
+kerja alat**. `km` tidak punya sumber data — tidak ada pembacaan odometer di
+seluruh ERD. `day` bertumpuk dengan `hour` untuk alat yang bekerja rutin.
+
+Ambang peringatan memakai `warning_lead_value` per aspek (default 50 jam),
+dihitung dari **sisa jam menuju jatuh tempo**, bukan jam terpakai:
+
+| Sisa jam (threshold 250, lead 50) | Status |
+|---|---|
+| 250 sampai 51 | normal |
+| 50 sampai 1 | warning |
+| 0 sampai -50 | due |
+| kurang dari -50 | overdue |
+
+### maintenance_record_status
+
+ERD hanya menulis `varchar(30) default 'completed'` tanpa merinci nilainya.
+Dipakai: **completed, cancelled**. Tidak ada status "sedang dikerjakan" karena
+maintenance record adalah histori pasca-pekerjaan, dan "alat sedang ditangani"
+sudah terjawab `equipment_items.current_status = maintenance` serta
+`damage_logs.status = in_repair`.
+
+### purchase_request_status — `in_progress` dan `completed` dihapus
+
+| | |
+|---|---|
+| ERD | submitted, admin_validated, rejected_by_admin, waiting_finance_approval, rejected_by_finance, approved, in_progress, completed, cancelled |
+| Dipakai | **submitted, rejected_by_admin, waiting_finance_approval, rejected_by_finance, approved, cancelled** (`admin_validated` juga dibuang 27 Sep 2026 — lihat catatan di bawah) |
+
+Approved dianggap selesai. **Konsekuensi yang wajib dipatuhi saat implementasi:
+ketika menyetujui, Finance mengisi nominal yang BENAR-BENAR dicairkan, bukan
+menyalin `estimated_total_price`.** Kalau ini dilanggar, saldo Kas Alat berisi
+estimasi, bukan angka riil.
+
+Pembatalan setelah approved berarti uang sudah keluar, jadi perlu transaksi
+`adjustment` masuk untuk mengembalikannya.
+
+### purchase_item_type — DIHAPUS SELURUHNYA (revisi 27 September 2026)
+
+Keputusan sebelumnya mempertahankan **sparepart, consumable, service, other**,
+dengan alasan `consumable` perlu dipisah demi hitungan biaya operasi per jam.
+**Keputusan itu dibatalkan.**
+
+Sebabnya struktur tabel berubah (lihat `purchase-request-schema.md`): kategori
+order kini punya tabel item masing-masing, dan pada kategori repair sparepart
+sudah punya tabel sendiri yang terpisah dari kolom harga jasa. Struktur tabel
+sudah membedakan "apa yang dibeli", jadi kolom `item_type` tidak punya pekerjaan
+lagi di tabel mana pun.
+
+**Konsekuensi yang diterima sadar:**
+
+- Belanja stok gudang tidak bisa dipilah sparepart vs consumable — semua barang
+  gudang masuk satu tabel tanpa penanda jenis.
+- Biaya perawatan terjadwal disimpan satu harga per aspek, jadi biaya oli/filter
+  tidak terpisah dari jasa bengkel.
+- Akibatnya **biaya operasi per jam memakai total biaya perawatan per unit**,
+  bukan rincian consumable seperti rencana awal. Kalau nanti rincian itu
+  dibutuhkan, jalannya adalah menambah kolom jenis barang pada tabel stok dan
+  memecah item perawatan — bukan menghidupkan kembali enum ini.
+
+---
+
+## Telusur alasan pembelian
+
+Sebelumnya "kenapa dibeli" dijawab FK mana yang terisi pada satu tabel item
+bersama, dengan aturan `maintenance_setting_id` dan `damage_log_id` tidak boleh
+terisi bersamaan. **Aturan itu tidak diperlukan lagi**, karena satu tabel item
+bersama sudah tidak ada.
+
+Sekarang alasan pembelian dijawab oleh **kategori order di header**, dan tabel
+item mana yang dipakai:
+
+| Kategori order | Tabel item | Terikat ke | Alasan pembelian |
+|---|---|---|---|
+| `repair` | `equipment_purchase_repair_items` (+ spareparts) | `damage_logs` | Menangani kerusakan |
+| `maintenance` | `equipment_purchase_maintenance_items` | `equipment_maintenance_settings` | Perawatan terjadwal |
+| `stock` | `equipment_purchase_stock_items` | — | Mengisi stok gudang |
+
+Rantai telusurnya:
+
+```
+damage_log          ─► repair_item      ─┐
+maintenance_setting ─► maintenance_item ─┼─► purchase_request ─► maintenance_record ─► equipment_item
+(stok, tanpa ikatan)─► stock_item       ─┘
+```
+
+Kombinasi FK yang bertentangan menjadi **mustahil secara struktural** — bukan
+dicegah CHECK, melainkan karena tabelnya berbeda. Composite FK
+`(purchase_request_id, order_category)` memastikan baris item tidak bisa
+menempel ke header berkategori lain.
+
+`maintenance_records` menunjuk **header** PR lewat `purchase_request_id`
+(menggantikan `purchase_request_item_id`); baris item spesifiknya ditelusuri
+lewat `damage_log_id` / `maintenance_setting_id` yang sama.
+
+---
+
+## Aturan turunan yang wajib dijaga
+
+- **`isActive` bukan status operasional.** Alat rusak dan alat pensiun tetap
+  `isActive = true`. `isActive = false` hanya untuk penghapusan administratif
+  (salah input, unit duplikat). Yang mengunci alat dari penugasan adalah
+  `current_status`. Kalau alat rusak di-set `isActive = false`, alat itu **tidak
+  bisa dikembalikan** ke `available` setelah diperbaiki.
+- **Input workhour ditolak** kalau status alat `maintenance` atau `retired`.
+  Alat di bengkel tidak menghasilkan jam operasi, dan kalau tetap dicatat,
+  counter maintenance ikut jalan sehingga alat yang baru selesai servis langsung
+  terlihat mendekati jatuh tempo lagi.
+- **Status alat hanya bisa diubah lewat `PUT /equipment/items/{id}/status`**,
+  tidak lewat update biasa, supaya setiap perubahan pasti tercatat di
+  `equipment_status_logs`.
+- **Alat rusak ditarik ke gudang**, sehingga setelah damage `resolved` status
+  kembali ke `available`, bukan dipulihkan ke penugasan sebelumnya.
+  *Menunggu konfirmasi PM.*
+
+---
+
+## Tambahan schema di luar ERD
+
+- `equipment_items.serial_number` ditambahkan, dan `year` dinamai
+  `manufacture_year` (mengikuti kontrak swagger).
+- `asset_code` dibuat sistem dengan format `SSB-{typeCode}-{NNN}`, counter atomik
+  per jenis alat di `equipment_types.last_sequence`. Nomor tidak pernah didaur
+  ulang. ~~Hanya super_admin yang boleh mengisi manual~~ — override dibuang 15 Okt 2026
+  (super_admin read-only); alat warisan dimigrasikan lewat skrip impor.
+- `maintenance_records.equipment_item_id` ditambahkan dan wajib, supaya riwayat
+  per alat tetap utuh untuk record yang lahir dari damage log.
+- `document_sequences`: tabel counter nomor dokumen. Dipakai `MTN-NNNNNN`,
+  disiapkan untuk purchase request dan equipment income claim.
+- **Lampiran foto kerusakan ditunda.** Swagger versi awal menjanjikan
+  `attachments` multipart pada damage log, ERD tidak punya tabelnya. Diputuskan
+  dirancang sekali untuk semua modul (damage, purchase request, project files),
+  bukan ditambal per modul.
+
+---
+
+## Sudah dikonfirmasi PM (17 September 2026)
+
+1. **Alat rusak TIDAK ditarik ke bengkel.** Mekanik yang didatangkan ke alat,
+   baik di gudang maupun di lokasi proyek. Konsekuensinya: alat yang diperbaiki
+   tetap terikat alokasi proyeknya, dan `equipment_items.current_status` cukup
+   memuat kondisi saja — penugasan sepenuhnya milik
+   `sub_project_equipment_allocations`.
+2. **Tidak ada mekanisme "penggantian unit".** Kalau perbaikan diperkirakan lama,
+   proyek mengajukan alat tambahan lewat **alur normal Request Alat** (lapangan
+   mengajukan, admin review, Divisi Alat assign). Bukan menukar unit di pool.
+   Artinya `equipment_pool_items.equipment_item_id` tidak pernah diubah ke unit
+   lain, dan `total_used_hours` per pool item tidak akan pernah bercampur antar
+   unit. Ambiguitas yang sempat dikhawatirkan tidak ada.
+
+## Utang desain modul Project — SELURUHNYA TERTUTUP (5 Oktober 2026)
+
+Tiga butir di bawah dulu ditandai "wajib dibereskan di awal modul Project".
+Semuanya sudah selesai di branch `module/project` Batch P4. Dicatat sebagai
+riwayat, bukan sebagai pekerjaan tertunda.
+
+1. **Kolom konteks `equipment_workhour_logs` — SELESAI.** `project_id` dan
+   `sub_project_id` sudah di-DROP lewat migrasi
+   `20261004160000_contract_workhour_context`. Penggantinya
+   `sub_project_equipment_allocation_id` (internal) dan `equipment_pool_item_id`
+   (external rental), dengan dua CHECK constraint per `source_type` yang sudah
+   terpasang di database dan terbukti menolak pelanggaran lewat SQL mentah.
+
+   Alasannya — selain menghapus FK yang redundant — adalah risiko inkonsisten
+   yang dicatat di `AIsession/1-session.md`: alokasi bisa menunjuk Excavator
+   EXC-001 sementara `equipment_item_id` menunjuk Dump Truck DT-001. Ditutup
+   dengan menjadikan `equipment_item_id` kolom terkelola sistem yang dibaca
+   DARI alokasi, bukan dari request body.
+
+2. **`paused_duration_minutes` — SELESAI.** Ditambahkan di migrasi expand
+   `20261001004500_add_project_batch1` dan disambungkan ke service di P4.
+   Ditambah satu guard di luar ERD: jeda tidak boleh melebihi rentang
+   `startedAt`–`stoppedAt`, karena tanpa itu jam kerja bersih bisa negatif.
+
+3. **Batas `equipment_items.current_status` vs alokasi — SELESAI, dan
+   pemisahannya kini terlihat di API.** `current_status` murni KONDISI alat;
+   penugasan dijawab field turunan `assignment` pada `GET /equipment/items`,
+   dibaca dari `sub_project_equipment_allocations`. Alat yang sedang bertugas
+   juga tidak bisa diarsipkan lagi.
+
+Rinciannya ada di `keputusan-desain-project.md`; status backlog-nya di
+`claude_knowledge/backlog-divisi-alat.md` bagian C.
+
+## Race condition pada transisi status — DIPERBAIKI (13 Oktober 2026)
+
+Ditemukan saat audit `feature/be-div-alat`, dibuktikan langsung di database dev.
+
+**Polanya:** service membaca status → mengecek → `update({ where: { id } })`.
+Dua permintaan bersamaan sama-sama lolos pengecekan, lalu sama-sama menulis.
+
+| Tempat | Akibat yang terbukti / terbaca |
+|---|---|
+| Approve purchase request | **3 approval bersamaan → 3 cash-out Kas Alat untuk 1 order** (terbukti) |
+| Approve + cancel PR | Keduanya menjawab 200; pengaju diberi tahu batal padahal dana keluar (terbukti) |
+| Resolve damage log | Resolve ganda → 2 maintenance record untuk 1 kerusakan (terbukti 3→1 setelah perbaikan) |
+| Edit PR saat divalidasi | Yang divalidasi Admin bisa berbeda dari yang dilihatnya |
+| Void / edit kas, cancel maintenance record | Ringan — tapi pola yang sama |
+
+**Perbaikan:** `utils/status-transition.js` → `claimTransition(delegate, where, data)`.
+`updateMany` dengan syarat keadaan di WHERE, di dalam transaksi, dijalankan
+**sebagai langkah pertama** sebelum efek samping apa pun (cash-out, maintenance
+record). Database menjamin hanya satu yang menang; sisanya `count 0` → 409.
+Pengecekan di luar transaksi tetap ada untuk pesan error yang jelas. Request
+Alat sudah memakai pola ini sejak awal; salinannya dipindah ke helper ini.
+
+Damage log ikut menyertakan `stopsOperation` lama di syarat klaim, karena
+keputusan menggerakkan status alat dibuat dari nilai itu.
+
+**Lapis kedua:** `@@unique([source_type, source_id])` pada
+`equipment_cash_transaction` (migrasi `20261013090000_unique_cash_source`). Baris
+manual selalu `source_id NULL`, dan Postgres menganggap NULL saling berbeda,
+jadi catatan manual tidak terhalang.
+
+## Reset counter servis tertimpa jam kerja — DIPERBAIKI (13 Oktober 2026)
+
+`applyWorkhourToSettings` menghitung `nilai lama + jam` dari nilai yang dibaca di
+awal transaksi. Kalau reset servis (`createRecord`) commit di antara baca dan
+tulis itu, **reset-nya tertimpa**: alat yang baru diservis langsung tampil
+warning lagi. Terbukti: **8 dari 8 percobaan reset hilang** di versi lama, 0 di
+versi baru. Diganti increment atomik; status dihitung dari nilai hasil increment.
+
+Dugaan awal audit ("dua log jam kerja bersamaan kehilangan jam") **keliru** dan
+dicatat supaya tidak diulang: jalur itu sudah aman, karena `createWorkhourLog`
+meng-increment `totalWorkhour` alat lebih dulu dan kunci baris itu membuat log
+untuk unit yang sama antre. Jalur reset tidak lewat kunci itu.
+
+## Perbaikan lain di paket yang sama
+
+- **`POST /auth/register` tidak lagi publik.** Terbuka sejak boilerplate awal
+  (`753960f`) karena `auth.routes.js` tidak memasang `authenticate`. Sekarang
+  `authenticate` + `authorize('user:create')`, permission baru khusus
+  super_admin. FE tidak memakai endpoint ini.
+- **Reject PR diperiksa per permission** (`purchase-request:validate` /
+  `:approve`), bukan nama role `admin`/`finance` — dulu role lain yang diberi
+  wewenang yang sama tetap ditolak.
+- **Nama mekanik tidak dicatat** (keputusan 13 Okt): tidak ada data master
+  mekanik. Backend sudah opsional; FE menghapus inputnya (`backlog-fe.md` E9).
+  `maintenance_records.performed_by` dijadwalkan di-DROP bersama contract pool item.
+
+---
+
+## Ambang maintenance per jenis alat (16 Oktober 2026)
+
+Migrasi `20261016150000_maintenance_threshold_per_type`.
+
+**Masalah yang ditemukan:**
+- Setting maintenance per unit hanya bisa dibuat manual (`POST
+  /items/:itemId/maintenance-settings`, satu per aspek per unit), dan FE tidak
+  pernah memanggilnya. Unit yang didaftarkan lewat layar Register Item **tidak
+  punya jadwal servis sama sekali**.
+- Ambang per unit tidak pernah dipakai berbeda: ke-37 setting di DB dev memakai
+  angka yang sama persis dengan default aspeknya.
+- Layar ambang FE (per jenis × aspek) sudah memakai model yang benar, tapi
+  menyimpan ke localStorage karena endpoint per jenis belum ada (backlog E4d
+  keliru menyebut backend sudah tersedia).
+
+**Keputusan:**
+- Ambang servis diatur **per jenis alat × aspek** di tabel baru
+  `equipment_type_maintenance_thresholds`. Barisnya sekaligus menyatakan "aspek ini
+  berlaku untuk jenis ini". Tidak ada lagi ambang per unit maupun default per aspek.
+- Setting unit **dibuat otomatis** (`syncItemSettings`) saat unit didaftarkan,
+  berganti jenis, atau saat ambang ditambahkan ke jenisnya. Unit membaca ambang
+  lewat `type_threshold_id` (composite FK dengan aspek, supaya tidak bisa menunjuk
+  ambang aspek lain). Mengubah ambang jenis langsung berlaku untuk semua unitnya
+  dan status dihitung ulang; hitungan jam per unit tetap.
+- Ambang dihapus dari jenis → setting unitnya dinonaktifkan & dilepas (riwayat
+  tetap). Ditambah lagi → aktif kembali dengan hitungan mulai 0 (jam kerja tidak
+  dihitung selama nonaktif, jadi angka lamanya basi). CHECK: setting aktif wajib
+  punya ambang.
+- Per unit hanya boleh **dinonaktifkan** (unit tanpa komponen itu); pilihan ini
+  dipertahankan saat ambang jenis disimpan ulang. Tambah/hapus setting manual dan
+  `thresholdValue` per unit dibuang.
+- Diubah Divisi Alat lewat **layar ambang FE yang sudah ada**
+  (`MaintenanceThresholdPage`), disambung ke `GET /equipment/maintenance-thresholds`
+  dan `PUT|DELETE /equipment/types/:typeId/maintenance-thresholds/:aspectId`
+  (`maintenance:update`). Bentuk responsnya sengaja sama dengan data localStorage.
+- Konkurensi: semua jalur mengunci baris `equipment_types` (createItem lewat
+  increment `last_sequence`, jalur ambang lewat `FOR UPDATE`) — terbukti unit baru
+  yang didaftarkan bersamaan dengan aspek baru tetap mendapat setting-nya.
+
+**Migrasi data:** 15 pasangan jenis × aspek diisi dari setting yang ada; 37 setting
+ditautkan; 8 setting dilengkapi untuk dua unit (nonaktif) yang belum punya.
+
+**TERTUNDA (destruktif):** DROP `equipment_maintenance_settings.threshold_value`
+(sudah nullable) dan `maintenance_aspects.default_threshold_value` — keduanya sudah
+keluar dari schema & kode; ditunda karena DB dev dipakai bersama. Catatan: backend
+versi lama yang mencoba `POST /items/:itemId/maintenance-settings` akan ditolak CHECK
+(setting aktif tanpa ambang jenis).
+
+
+## Workhour — koreksi, sesi rental, operator (17 Oktober 2026)
+
+Migrasi `20261017120000_workhour_void_session_operator`. Ditemukan saat merencanakan
+ekspor timesheet rental (berkas project): layar rental menampilkan operator & overtime
+yang **tidak disediakan backend** — FE menitipkan operator sebagai teks di notes
+Request Alat dan menebak sesi dari jam mulai.
+
+**Celah yang ditutup:**
+
+| # | Celah | Perbaikan |
+|---|---|---|
+| 1 | Log tidak bisa dikoreksi; `manual_adjustment` wajib > 0 jadi tidak bisa mengurangi | `PUT /equipment/workhour-logs/:id/void` (`workhour:update`, Lapangan & Divisi Alat), wajib alasan. Log tidak diubah/dihapus — batalkan lalu catat ulang |
+| 2 | `totalWorkhour` tidak dicek terhadap jam mulai/selesai | Jam berpasangan; total = rentang − jeda (toleransi 0,01). Service + CHECK |
+| 3 | Rental: status pool item & kontrak tidak dicek | Catat/batal hanya saat kontrak rental `active` dan pool item `available`/`completed` |
+| 4 | Batas 24 jam/hari dibaca di luar transaksi | Baris `equipment_items` dikunci `FOR UPDATE` dulu, baru dijumlah. Terbukti: 3×9 jam bersamaan → 2 lolos |
+| 5 | Sheet rental = 1–3 POST terpisah, bisa gagal di tengah | `POST /equipment/workhour-logs/rental-sheet`: semua sesi satu transaksi, total dihitung sistem |
+
+**Aturan konteks baru (berlaku untuk catat & batal):** jam boleh dicatat selama
+PEKERJAANNYA berjalan, bukan selama alatnya masih di lokasi — alokasi
+`assigned`/`completed`/`returned` dengan tahapan `active`, atau pool item rental
+`available`/`completed` dengan kontrak `active`. Catatan yang terlambat atau salah
+ketik sering baru ketahuan setelah alat ditarik. Tahapan/kontrak yang ditutup =
+terkunci; ini bagian pertama dari aturan "tahapan selesai = terkunci" (berkas project).
+
+**Pembatalan & counter servis.** Pembatalan selalu mengurangi `equipment_items.total_workhour`.
+Counter servis hanya dikurangi kalau jam log itu **masih ada di counter**: setting aktif
+yang `counter_started_at` (kolom baru — kapan hitungan terakhir mulai dari 0) lebih awal
+dari waktu log dibuat. Jam sebelum servis sudah "terhapus" oleh reset, jadi tidak
+dikurangi dua kali. Syaratnya ditaruh di WHERE update supaya reset yang commit bersamaan
+tetap aman (pola increment atomik 13 Okt).
+
+Supaya satu kolom itu cukup, **setting yang diaktifkan LAGI lewat `PUT
+/maintenance-settings/:id` kini mulai dari 0** — perubahan perilaku. Sebelumnya
+hitungannya dilanjutkan, padahal jam selama nonaktif tidak dihitung (alasan yang sama
+yang sudah dipakai `syncItemSettings`). Baris lama diisi waktu migrasi: membatalkan log
+yang dibuat sebelum migrasi tidak mengurangi counter — sisi aman (servis lebih awal).
+
+**Sesi rental** (`work_session` pagi/siang/overtime) disimpan persis seperti dipilih di
+form, tidak ditebak dari jam — sesi lembur yang mulai 16:30 tetap "overtime". Hanya
+`external_rental` (CHECK); satu sesi per pool item per tanggal (unique index parsial,
+log yang dibatalkan tidak dihitung). Opsional di `POST /workhour-logs` sampai FE pindah
+ke rental-sheet (backlog-fe E23); setelah itu jadi wajib untuk rental.
+
+**Operator** = `equipment_pool_items.operator_name`, satu nama per unit per kontrak
+rental, diisi Divisi Alat lewat `PUT /projects/equipment-pools/:id/items/:itemId/operator`
+(`equipment-pool:update`). Ditaruh di pool item, bukan di Request Alat: operator ikut
+UNIT, dan unit baru ditentukan setelah request disetujui. Riwayat pergantian operator
+tidak dibuat (belum ada kebutuhan). Paket, periode, merek & model rental masih
+dititipkan FE di notes — utang yang sama, dicatat di backlog Divisi Alat bagian I.
+
+**Nomor timesheet** tidak dibuat — diputuskan bersama Income rental (tarif lembur).
+
+**Terbukti di replika** (Postgres 17 Docker, struktur DB bersama + migrasi + seed):
+40 uji HTTP lolos — termasuk void sebelum/sesudah servis, input bersamaan, sheet atomik,
+sesi ganda, kontrak ditutup, dan CHECK database menolak total yang tidak cocok.

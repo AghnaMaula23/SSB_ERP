@@ -61,17 +61,25 @@ npm install
 
 ```bash
 cp .env.example .env
+cp apps/web/.env.example apps/web/.env
 ```
 
-Edit `.env` dengan credential yang diberikan oleh tim lead (jangan commit file ini):
+Edit `.env` dengan credential yang diberikan oleh tim lead (jangan commit file ini). Untuk konfigurasi Front End, salin `apps/web/.env.example` menjadi `apps/web/.env` dan sesuaikan `VITE_API_URL` bila API tidak berjalan di `http://localhost:3000`:
 
 ```properties
 DATABASE_URL="postgresql://..."     # Dari Supabase → Connect → ORMs (port 6543)
 DIRECT_URL="postgresql://..."       # Dari Supabase → Connect → ORMs (port 5432)
-JWT_SECRET=your-secret-key          # Bebas, tapi harus sama untuk semua developer
+JWT_SECRET=<min 32 karakter acak>  # openssl rand -base64 48 — production menolak jalan kalau kurang
 JWT_EXPIRES_IN=7d
 API_PORT=3000
 WEB_PORT=5173
+```
+
+Frontend:
+
+```properties
+VITE_API_URL=http://localhost:3000
+VITE_ALAT_API_PREFIX=/api/equipment
 ```
 
 > **Catatan:** Minta credential ke tim lead via chat pribadi. JANGAN taruh credential asli di repo.
@@ -81,7 +89,7 @@ WEB_PORT=5173
 ```bash
 cd apps/api
 npx prisma generate          # Generate Prisma client
-npx prisma migrate dev       # Jalankan migration (buat tabel)
+npx prisma migrate deploy    # Terapkan migration yang sudah ada
 npm run db:seed              # Seed data awal (roles + super admin)
 cd ../..
 ```
@@ -150,10 +158,23 @@ app.use('/api/[path]', require('./modules/[nama-modul]/[nama].routes.js'));
 
 ### Backend — Mengubah database schema
 
+> **JANGAN PERNAH `prisma migrate dev`** (termasuk `--create-only`). Database dev
+> dipakai bersama lewat pooler Supabase yang tidak mengizinkan shadow database,
+> sehingga `migrate dev` menawarkan RESET seluruh database — dan terbukti tetap
+> menulis ke database meski perintahnya berakhir gagal.
+
 ```bash
 cd apps/api
-# Edit prisma/schema.prisma
-npx prisma migrate dev --name deskripsi_perubahan
+# 1. Edit prisma/schema.prisma
+# 2. Hasilkan SQL dari selisih database hidup vs schema (tanpa shadow database)
+npx prisma migrate diff --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+# 3. Baca SQL-nya, simpan manual ke prisma/migrations/<timestamp>_<nama>/migration.sql
+#    (tempel CHECK constraint kalau ada — Prisma tidak bisa menyatakannya)
+#    Tabel baru WAJIB: ALTER TABLE "<nama>" ENABLE ROW LEVEL SECURITY;
+#    (menutup REST API publik Supabase; backend tidak terdampak)
+# 4. Terapkan
+npx prisma migrate deploy
 ```
 
 ### Frontend — Development
@@ -169,7 +190,10 @@ npm run dev                  # Vite dev server dengan HMR
 | --- | --- | --- |
 | Auth | ✅ Boilerplate ready | `/api/auth` |
 | Project | 🔲 Belum | `/api/projects` |
-| Divisi Alat | 🔲 Belum | `/api/equipment` |
+| Divisi Alat | ✅ Equipment, workhour, maintenance, damage log | `/api/equipment` |
+| Purchase Order | 🟡 Demo frontend; approval/rejection oleh modul lain | `/api/equipment/purchase-requests` (belum mounted) |
+| Kas | 🟡 Demo frontend; input manual hanya Other | `/api/equipment/cash` (belum mounted) |
+| Income Claim | 🟡 Demo frontend; cash-in setelah approval | `/api/income/claims` (belum mounted) |
 | Request Alat | 🔲 Belum | `/api/request-alat` |
 | Request Material | 🔲 Belum | `/api/request-material` |
 | Approval Center | 🔲 Belum | `/api/approvals` |
@@ -185,5 +209,5 @@ npm run dev                  # Vite dev server dengan HMR
 | `super_admin` | Semua — bypass permission check |
 | `admin` | Project, request, verification, employee management |
 | `finance` | Payment, approval keuangan, payroll, jurnal, COA |
-| `divisi_alat` | Equipment master, maintenance, purchase request, income claim |
+| `divisi_alat` | Equipment master, maintenance, purchase request (submit/edit), income claim (submit); approval/rejection dilakukan modul lain |
 | `lapangan` | Daily progress, workhour, damage report, material/alat request |

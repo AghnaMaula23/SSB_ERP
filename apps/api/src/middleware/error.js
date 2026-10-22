@@ -1,16 +1,59 @@
 const notFound = (req, res, next) => {
   const error = new Error(`Not Found - ${req.originalUrl}`);
-  res.status(404);
+  error.statusCode = 404;
   next(error);
 };
 
+// Map error Prisma yang umum ke HTTP status yang wajar
+const mapPrismaError = (err) => {
+  if (err.code === 'P2002') {
+    const fields = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : 'data';
+    return { statusCode: 409, message: `Data sudah ada (duplikat pada: ${fields})` };
+  }
+  if (err.code === 'P2025') return { statusCode: 404, message: 'Data tidak ditemukan' };
+  // P2003 muncul dari dua arah yang berlawanan: saat INSERT/UPDATE berarti data
+  // acuannya tidak ada, saat DELETE berarti datanya masih dipakai. Menyamakan
+  // pesannya membuat kasus pertama terbaca menyesatkan ("masih dipakai" padahal
+  // justru tidak ada), jadi dibedakan lewat metode requestnya.
+  if (err.code === 'P2003') {
+    const field = err.meta?.field_name ? ` (${err.meta.field_name})` : '';
+    return {
+      statusCode: 409,
+      message: `Data yang diacu tidak ditemukan atau masih dipakai relasi lain${field}`,
+    };
+  }
+  return null;
+};
+
 const errorHandler = (err, req, res, next) => {
-  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-  console.error(`[ERROR] ${err.message}`);
+  const prismaError = mapPrismaError(err);
+
+  const statusCode =
+    prismaError?.statusCode ||
+    err.statusCode ||
+    err.status ||
+    (res.statusCode && res.statusCode !== 200 ? res.statusCode : 500);
+
+  // Pesan asli hanya untuk error yang MEMANG ditujukan ke pengguna: httpError
+  // (punya statusCode), error Prisma yang sudah dipetakan, dan error 4xx dari
+  // middleware (mis. JSON rusak). Selebihnya — error tak terduga — membawa detail
+  // internal: pesan Prisma memuat query dan host database Supabase. Di production
+  // klien hanya menerima pesan generik; detailnya tetap tercatat di log server.
+  // Di development pesan asli tetap dikirim supaya mudah di-debug.
+  const isIntended = Boolean(prismaError) || Boolean(err.statusCode || err.status);
+  const exposeDetail = isIntended || process.env.NODE_ENV !== 'production';
+  const message = exposeDetail
+    ? prismaError?.message || err.message || 'Terjadi kesalahan pada server'
+    : 'Terjadi kesalahan pada server';
+
+  if (statusCode >= 500) console.error(`[ERROR] ${err.stack || err.message}`);
+  else console.warn(`[WARN ${statusCode}] ${message}`);
+
   res.status(statusCode).json({
     success: false,
-    message: err.message,
-    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
+    message,
+    ...(err.errors && { errors: err.errors }),
+    ...(process.env.NODE_ENV !== 'production' && statusCode >= 500 && { stack: err.stack }),
   });
 };
 

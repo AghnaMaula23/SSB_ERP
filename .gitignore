@@ -5,3 +5,7 @@ dist/
 *.log
 .DS_Store
 coverage/
+docs/claude_knowledge/
+CLAUDE.md
+graphify-out/
+sandbox/

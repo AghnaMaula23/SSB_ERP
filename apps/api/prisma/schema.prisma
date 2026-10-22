@@ -3,23 +3,75 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl= env("DIRECT_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // Auth & Role
 model User {
-  id          Int        @id @default(autoincrement())
-  username    String     @unique @db.VarChar(50)
-  email       String     @unique @db.VarChar(150)
-  password    String     @db.VarChar(255)
-  fullName    String     @map("full_name") @db.VarChar(150)
-  isActive    Boolean    @default(true) @map("is_active")
-  employeeId  Int?       @unique @map("employee_id")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
-  userRoles   UserRole[]
+  id         Int        @id @default(autoincrement())
+  username   String     @unique @db.VarChar(50)
+  email      String     @unique @db.VarChar(150)
+  password   String     @db.VarChar(255)
+  fullName   String     @map("full_name") @db.VarChar(150)
+  isActive   Boolean    @default(true) @map("is_active")
+  employeeId Int?       @unique @map("employee_id")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+  userRoles  UserRole[]
+
+  equipmentStatusLogs   EquipmentStatusLog[]
+  equipmentWorkhourLogs EquipmentWorkhourLog[] @relation("WorkhourCreatedBy")
+  workhourLogsVoided    EquipmentWorkhourLog[] @relation("WorkhourVoidedBy")
+  maintenanceRecords    MaintenanceRecord[]
+  damageLogsReported    DamageLog[]            @relation("DamageReportedBy")
+  damageLogsReviewed    DamageLog[]            @relation("DamageReviewedBy")
+
+  purchaseRequestsCreated         EquipmentPurchaseRequest[] @relation("PrRequestedBy")
+  purchaseRequestsAdminValidated  EquipmentPurchaseRequest[] @relation("PrAdminValidatedBy")
+  purchaseRequestsFinanceApproved EquipmentPurchaseRequest[] @relation("PrFinanceApprovedBy")
+  purchaseRequestsCancelled       EquipmentPurchaseRequest[] @relation("PrCancelledBy")
+
+  cashTransactionsCreated EquipmentCashTransaction[] @relation("CashCreatedBy")
+  cashTransactionsVoided  EquipmentCashTransaction[] @relation("CashVoidedBy")
+
+  constructionProjectsCreated ConstructionProject[]   @relation("ConstructionProjectCreatedBy")
+  rentalProjectsCreated       ExternalRentalProject[] @relation("RentalProjectCreatedBy")
+  supplyProjectsCreated       ExternalSupplyProject[] @relation("SupplyProjectCreatedBy")
+  subProjectsCreated          SubProject[]            @relation("SubProjectCreatedBy")
+  progressLogsCreated         DailyProgressLog[]      @relation("ProgressCreatedBy")
+  progressLogsValidated       DailyProgressLog[]      @relation("ProgressValidatedBy")
+  fieldConditionsCreated      FieldConditionLog[]     @relation("FieldConditionCreatedBy")
+  equipmentPoolsCreated       EquipmentPool[]         @relation("EquipmentPoolCreatedBy")
+
+  allocationsAllocated SubProjectEquipmentAllocation[] @relation("AllocationAllocatedBy")
+  allocationsReceived  SubProjectEquipmentAllocation[] @relation("AllocationReceivedBy")
+
+  equipmentRequestsCreated           EquipmentRequest[] @relation("EqRequestRequestedBy")
+  equipmentRequestsAdminReviewed     EquipmentRequest[] @relation("EqRequestAdminReviewedBy")
+  equipmentRequestsEquipmentReviewed EquipmentRequest[] @relation("EqRequestEquipmentReviewedBy")
+  equipmentRequestsCancelled         EquipmentRequest[] @relation("EqRequestCancelledBy")
+
+  materialPoolsCreated            MaterialPool[]               @relation("MaterialPoolCreatedBy")
+  materialRequestsCreated         MaterialRequest[]            @relation("MatRequestRequestedBy")
+  materialRequestsAdminReviewed   MaterialRequest[]            @relation("MatRequestAdminReviewedBy")
+  materialRequestsFinanceReviewed MaterialRequest[]            @relation("MatRequestFinanceReviewedBy")
+  materialRequestsCancelled       MaterialRequest[]            @relation("MatRequestCancelledBy")
+  materialDeliveriesCreated       MaterialDelivery[]           @relation("MatDeliveryCreatedBy")
+  materialDeliveriesCancelled     MaterialDelivery[]           @relation("MatDeliveryCancelledBy")
+  filesUploaded                   File[]                       @relation("FileUploadedBy")
+  filesTrashed                    File[]                       @relation("FileTrashedBy")
+  projectFoldersCreated           ProjectFileFolder[]          @relation("ProjectFolderCreatedBy")
+  materialReceiptsCreated         MaterialReceipt[]            @relation("MatReceiptCreatedBy")
+  materialReceiptsCancelled       MaterialReceipt[]            @relation("MatReceiptCancelledBy")
+  stockMovementsCreated           MaterialStockMovement[]      @relation("StockMovementCreatedBy")
+  stockMovementsCancelled         MaterialStockMovement[]      @relation("StockMovementCancelledBy")
+  workersCreated                  ProjectWorker[]              @relation("WorkerCreatedBy")
+  workerAssignmentsCreated        SubProjectWorkerAssignment[] @relation("WorkerAssignmentCreatedBy")
+  laborLogsCreated                DailyLaborLog[]              @relation("LaborLogCreatedBy")
+  laborLogsUpdated                DailyLaborLog[]              @relation("LaborLogUpdatedBy")
+
   @@map("users")
 }
 
@@ -32,6 +84,7 @@ model Role {
   createdAt   DateTime         @default(now()) @map("created_at")
   userRoles   UserRole[]
   permissions RolePermission[]
+
   @@map("roles")
 }
 
@@ -41,6 +94,7 @@ model Permission {
   action String           @db.VarChar(50)
   label  String           @db.VarChar(150)
   roles  RolePermission[]
+
   @@unique([module, action])
   @@map("permissions")
 }
@@ -51,6 +105,7 @@ model UserRole {
   roleId Int  @map("role_id")
   user   User @relation(fields: [userId], references: [id])
   role   Role @relation(fields: [roleId], references: [id])
+
   @@unique([userId, roleId])
   @@map("user_roles")
 }
@@ -61,6 +116,1834 @@ model RolePermission {
   permissionId Int        @map("permission_id")
   role         Role       @relation(fields: [roleId], references: [id])
   permission   Permission @relation(fields: [permissionId], references: [id])
+
   @@unique([roleId, permissionId])
   @@map("role_permissions")
+}
+
+// ============================================================
+// DIVISI ALAT — Batch 1: Master Alat & Workhour
+// ============================================================
+
+/// KONDISI unit alat — bukan lokasi atau penugasannya.
+/// Mekanik datang ke alat (tidak ditarik ke bengkel), jadi alat yang diperbaiki
+/// tetap terikat alokasi proyeknya. Pertanyaan "alat ini di mana dan ditugaskan
+/// ke proyek apa" dijawab sub_project_equipment_allocations pada modul Project,
+/// dan disajikan API sebagai field turunan `assignment` — bukan kolom di sini.
+/// `maintenance` mencakup rusak, perbaikan, dan perawatan; penyebabnya dibedakan
+/// lewat equipment_status_logs.source_type (damage_log vs maintenance_record).
+enum EquipmentItemStatus {
+  operational
+  maintenance
+  retired
+
+  @@map("equipment_item_status")
+}
+
+enum WorkhourSourceType {
+  internal_project
+  external_rental
+  manual_adjustment
+
+  @@map("workhour_source_type")
+}
+
+/// Sesi kerja rental. Diisi apa adanya dari form timesheet, tidak ditebak dari jam.
+enum WorkSession {
+  pagi
+  siang
+  overtime
+
+  @@map("work_session")
+}
+
+model EquipmentType {
+  id                    Int                                 @id @default(autoincrement())
+  typeCode              String                              @unique @map("type_code") @db.VarChar(50)
+  typeName              String                              @map("type_name") @db.VarChar(150)
+  description           String?                             @db.Text
+  isActive              Boolean                             @default(true) @map("is_active")
+  // Counter asset code per jenis alat. Di-increment atomik saat unit baru
+  // didaftarkan dan tidak pernah mundur, supaya nomor tidak pernah dipakai ulang.
+  lastSequence          Int                                 @default(0) @map("last_sequence")
+  createdAt             DateTime                            @default(now()) @map("created_at")
+  updatedAt             DateTime                            @updatedAt @map("updated_at")
+  items                 EquipmentItem[]
+  poolItems             EquipmentPoolItem[]
+  requestItems          EquipmentRequestItem[]
+  maintenanceThresholds EquipmentTypeMaintenanceThreshold[]
+
+  @@map("equipment_types")
+}
+
+model EquipmentItem {
+  id                Int                 @id @default(autoincrement())
+  equipmentTypeId   Int                 @map("equipment_type_id")
+  assetCode         String              @unique @map("asset_code") @db.VarChar(50)
+  plateNumber       String?             @map("plate_number") @db.VarChar(30)
+  brand             String?             @db.VarChar(100)
+  model             String?             @db.VarChar(100)
+  serialNumber      String?             @map("serial_number") @db.VarChar(100)
+  manufactureYear   Int?                @map("manufacture_year")
+  currentStatus     EquipmentItemStatus @default(operational) @map("current_status")
+  // Akumulator jam kerja, ditambah oleh service saat workhour log dibuat
+  totalWorkhour     Decimal             @default(0) @map("total_workhour") @db.Decimal(12, 2)
+  // Default rate income alat; modul Income tetap memakai rate_snapshot sendiri
+  defaultHourlyRate Decimal?            @map("default_hourly_rate") @db.Decimal(18, 2)
+  rateNotes         String?             @map("rate_notes") @db.Text
+  rateUpdatedAt     DateTime?           @map("rate_updated_at")
+  notes             String?             @db.Text
+  isActive          Boolean             @default(true) @map("is_active")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  equipmentType       EquipmentType                   @relation(fields: [equipmentTypeId], references: [id])
+  statusLogs          EquipmentStatusLog[]
+  workhourLogs        EquipmentWorkhourLog[]
+  maintenanceSettings EquipmentMaintenanceSetting[]
+  maintenanceRecords  MaintenanceRecord[]
+  damageLogs          DamageLog[]
+  poolItems           EquipmentPoolItem[]
+  allocations         SubProjectEquipmentAllocation[]
+
+  @@index([equipmentTypeId])
+  @@index([currentStatus])
+  @@map("equipment_items")
+}
+
+model EquipmentStatusLog {
+  id              Int                  @id @default(autoincrement())
+  equipmentItemId Int                  @map("equipment_item_id")
+  oldStatus       EquipmentItemStatus? @map("old_status")
+  newStatus       EquipmentItemStatus  @map("new_status")
+  // equipment_request | workhour | maintenance_record | damage_log | manual
+  sourceType      String?              @map("source_type") @db.VarChar(80)
+  sourceId        Int?                 @map("source_id")
+  notes           String?              @db.Text
+  changedBy       Int?                 @map("changed_by")
+  changedAt       DateTime             @default(now()) @map("changed_at")
+
+  equipmentItem EquipmentItem @relation(fields: [equipmentItemId], references: [id])
+  changedByUser User?         @relation(fields: [changedBy], references: [id])
+
+  @@index([equipmentItemId, changedAt])
+  @@map("equipment_status_logs")
+}
+
+/// Konteks pekerjaan dibaca dari ALOKASI (internal project) atau POOL ITEM
+/// (external rental), mengikuti ERD Project — bukan project_id/sub_project_id
+/// seperti ERD Divisi Alat yang ditulis sebelum Request Alat jadi entitas utuh.
+/// Ini juga yang membuat penggantian unit bekerja benar: jam kerja terikat ke
+/// alokasi, jadi unit lama dan penggantinya punya angka masing-masing.
+///
+/// `equipment_item_id` TETAP ADA meski ERD Project tidak mencantumkannya:
+/// source_type `manual_adjustment` tidak lewat alokasi maupun pool sehingga tidak
+/// punya jalan lain menyebut unitnya, akumulator equipment_items.total_workhour
+/// perlu tahu unitnya di dalam transaksi, dan ERD Divisi Alat (pemilik tabel ini)
+/// punya FK-nya secara eksplisit. Untuk internal_project/external_rental kolom ini
+/// KOLOM TERKELOLA SISTEM — service membacanya dari alokasi/pool item dan menolak
+/// kiriman klien yang tidak cocok, jadi dua sumber ini tidak bisa bertentangan.
+///
+/// FASE CONTRACT SELESAI (P4, 4 Okt 2026): project_id dan sub_project_id sudah
+/// di-DROP, dan CHECK constraint per source_type terpasang di database:
+///   source_type='internal_project' => sub_project_equipment_allocation_id NOT NULL
+///   source_type='external_rental'  => equipment_pool_item_id NOT NULL
+/// Aturan yang sama ditegakkan service lebih dulu (CONTEXT_BY_SOURCE) supaya
+/// pesan errornya bisa dimengerti manusia; CHECK menjaga tidak ada jalan masuk lain.
+model EquipmentWorkhourLog {
+  id                              Int  @id @default(autoincrement())
+  equipmentItemId                 Int  @map("equipment_item_id")
+  subProjectEquipmentAllocationId Int? @map("sub_project_equipment_allocation_id")
+  equipmentPoolItemId             Int? @map("equipment_pool_item_id")
+
+  workDate              DateTime           @map("work_date") @db.Date
+  startedAt             DateTime?          @map("started_at")
+  stoppedAt             DateTime?          @map("stopped_at")
+  // Jeda yang tidak dihitung sebagai jam kerja. Ada di ERD Project, tidak ada
+  // di ERD Divisi Alat — utang C2, ditutup bersama migrasi ini.
+  pausedDurationMinutes Int                @default(0) @map("paused_duration_minutes")
+  totalWorkhour         Decimal            @map("total_workhour") @db.Decimal(10, 2)
+  sourceType            WorkhourSourceType @map("source_type")
+  // Sesi kerja rental (pagi/siang/overtime) persis seperti dipilih saat input —
+  // dasar tagihan lembur. Hanya untuk external_rental (CHECK). Satu sesi per
+  // pool item per tanggal (unique index parsial, log yang dibatalkan tidak dihitung).
+  workSession           WorkSession?       @map("work_session")
+  description           String?            @db.Text
+  createdBy             Int?               @map("created_by")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  // Log tidak pernah diubah atau dihapus: salah input dibatalkan lalu dicatat
+  // ulang. Pembatalan mengurangi jam alat dan counter servis yang memang
+  // masih memuat jam ini (lihat counter_started_at di setting maintenance).
+  isVoided   Boolean   @default(false) @map("is_voided")
+  voidReason String?   @map("void_reason") @db.Text
+  voidedBy   Int?      @map("voided_by")
+  voidedAt   DateTime? @map("voided_at")
+
+  equipmentItem EquipmentItem @relation(fields: [equipmentItemId], references: [id])
+  createdByUser User?         @relation("WorkhourCreatedBy", fields: [createdBy], references: [id])
+  voidedByUser  User?         @relation("WorkhourVoidedBy", fields: [voidedBy], references: [id])
+
+  subProjectEquipmentAllocation SubProjectEquipmentAllocation? @relation(fields: [subProjectEquipmentAllocationId], references: [id], onDelete: Restrict)
+  equipmentPoolItem             EquipmentPoolItem?             @relation(fields: [equipmentPoolItemId], references: [id], onDelete: Restrict)
+
+  @@index([equipmentItemId, workDate])
+  @@index([workDate])
+  @@index([subProjectEquipmentAllocationId, workDate])
+  @@index([equipmentPoolItemId, workDate])
+  @@index([sourceType, workDate])
+  @@map("equipment_workhour_logs")
+}
+
+// ============================================================
+// DIVISI ALAT — Batch 2: Maintenance
+// ============================================================
+
+enum MaintenanceSettingStatus {
+  normal
+  warning
+  due
+  overdue
+  inactive
+
+  @@map("maintenance_setting_status")
+}
+
+enum MaintenanceType {
+  routine
+  repair
+  replacement
+  inspection
+  adjustment
+
+  @@map("maintenance_type")
+}
+
+enum MaintenanceRecordStatus {
+  completed
+  cancelled
+
+  @@map("maintenance_record_status")
+}
+
+/// Master aspek maintenance: oli mesin, filter udara, ban, servis berkala, dst.
+model MaintenanceAspect {
+  id               Int      @id @default(autoincrement())
+  aspectCode       String   @unique @map("aspect_code") @db.VarChar(50)
+  aspectName       String   @map("aspect_name") @db.VarChar(150)
+  // Semua threshold maintenance berbasis JAM KERJA alat, digerakkan workhour log.
+  // Sisa jam saat peringatan mulai muncul. Default 50 -> warning saat sisa 50 jam.
+  warningLeadValue Decimal  @default(50) @map("warning_lead_value") @db.Decimal(12, 2)
+  description      String?  @db.Text
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  settings       EquipmentMaintenanceSetting[]
+  typeThresholds EquipmentTypeMaintenanceThreshold[]
+
+  @@map("maintenance_aspects")
+}
+
+/// Setting maintenance per unit alat per aspek, lengkap dengan counter berjalan.
+model EquipmentMaintenanceSetting {
+  id                     Int                      @id @default(autoincrement())
+  equipmentItemId        Int                      @map("equipment_item_id")
+  maintenanceAspectId    Int                      @map("maintenance_aspect_id")
+  // Ambang TIDAK disimpan per unit (16 Okt 2026): dibaca dari ambang jenis alat
+  // lewat type_threshold_id. NULL = aspek ini tidak (lagi) berlaku untuk jenisnya,
+  // dan setting wajib nonaktif (CHECK). Kolom lama threshold_value masih ada di
+  // database (nullable, tidak dipakai) — DROP ditunda karena DB dev dipakai bersama.
+  typeThresholdId        Int?                     @map("type_threshold_id")
+  // Jam terpakai sejak servis terakhir. Ditambah otomatis oleh workhour log.
+  currentValueSinceReset Decimal                  @default(0) @map("current_value_since_reset") @db.Decimal(12, 2)
+  // Kapan hitungan di atas mulai dari 0 (servis, setting baru, diaktifkan lagi).
+  // Pembatalan workhour log hanya mengurangi counter kalau log itu dibuat
+  // SESUDAH titik ini — jam sebelum servis sudah tidak ada di counter.
+  counterStartedAt       DateTime                 @default(now()) @map("counter_started_at")
+  status                 MaintenanceSettingStatus @default(normal)
+  lastMaintenanceDate    DateTime?                @map("last_maintenance_date") @db.Date
+  lastResetWorkhour      Decimal?                 @map("last_reset_workhour") @db.Decimal(12, 2)
+  isActive               Boolean                  @default(true) @map("is_active")
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+
+  equipmentItem            EquipmentItem                      @relation(fields: [equipmentItemId], references: [id])
+  maintenanceAspect        MaintenanceAspect                  @relation(fields: [maintenanceAspectId], references: [id])
+  // Composite: ambang yang ditunjuk wajib untuk aspek yang sama
+  typeThreshold            EquipmentTypeMaintenanceThreshold? @relation(fields: [typeThresholdId, maintenanceAspectId], references: [id, maintenanceAspectId])
+  maintenanceRecords       MaintenanceRecord[]
+  purchaseMaintenanceItems EquipmentPurchaseMaintenanceItem[]
+
+  @@unique([equipmentItemId, maintenanceAspectId])
+  @@index([status])
+  @@index([typeThresholdId])
+  @@map("equipment_maintenance_settings")
+}
+
+/// Ambang servis per JENIS alat × aspek (16 Okt 2026, menggantikan ambang per
+/// unit dan default per aspek). Barisnya sekaligus menyatakan "aspek ini berlaku
+/// untuk jenis ini": setiap unit jenis itu otomatis punya setting untuk aspek
+/// tersebut (dibuat saat unit didaftarkan, berganti jenis, atau saat ambang
+/// ditambahkan). Mengubah ambang langsung berlaku untuk semua unitnya.
+model EquipmentTypeMaintenanceThreshold {
+  id                  Int      @id @default(autoincrement())
+  equipmentTypeId     Int      @map("equipment_type_id")
+  maintenanceAspectId Int      @map("maintenance_aspect_id")
+  thresholdValue      Decimal  @map("threshold_value") @db.Decimal(12, 2)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  equipmentType     EquipmentType                 @relation(fields: [equipmentTypeId], references: [id])
+  maintenanceAspect MaintenanceAspect             @relation(fields: [maintenanceAspectId], references: [id])
+  settings          EquipmentMaintenanceSetting[]
+
+  @@unique([equipmentTypeId, maintenanceAspectId])
+  // Sasaran composite FK dari setting (ambang & aspek setting harus sejalan)
+  @@unique([id, maintenanceAspectId])
+  @@index([maintenanceAspectId])
+  @@map("equipment_type_maintenance_thresholds")
+}
+
+/// Histori tindakan maintenance. Dibuat setelah pekerjaan selesai.
+model MaintenanceRecord {
+  id                    Int                     @id @default(autoincrement())
+  maintenanceCode       String                  @unique @map("maintenance_code") @db.VarChar(50)
+  // Selalu terisi, supaya riwayat per alat tetap utuh walau record lahir dari
+  // damage log atau purchase request yang tidak punya maintenance setting.
+  equipmentItemId       Int                     @map("equipment_item_id")
+  maintenanceSettingId  Int?                    @map("maintenance_setting_id")
+  damageLogId           Int?                    @map("damage_log_id")
+  // Menunjuk header PR, bukan baris item. Baris spesifiknya ditelusuri lewat
+  // damageLogId / maintenanceSettingId yang sama pada tabel item PR.
+  purchaseRequestId     Int?                    @map("purchase_request_id")
+  maintenanceType       MaintenanceType         @map("maintenance_type")
+  maintenanceDate       DateTime                @map("maintenance_date") @db.Date
+  workhourAtMaintenance Decimal?                @map("workhour_at_maintenance") @db.Decimal(12, 2)
+  actionDescription     String                  @map("action_description") @db.Text
+  performedBy           String?                 @map("performed_by") @db.VarChar(150)
+  status                MaintenanceRecordStatus @default(completed)
+  createdBy             Int?                    @map("created_by")
+  createdAt             DateTime                @default(now()) @map("created_at")
+  updatedAt             DateTime                @updatedAt @map("updated_at")
+
+  equipmentItem      EquipmentItem                @relation(fields: [equipmentItemId], references: [id])
+  maintenanceSetting EquipmentMaintenanceSetting? @relation(fields: [maintenanceSettingId], references: [id])
+  damageLog          DamageLog?                   @relation(fields: [damageLogId], references: [id])
+  purchaseRequest    EquipmentPurchaseRequest?    @relation(fields: [purchaseRequestId], references: [id])
+  createdByUser      User?                        @relation(fields: [createdBy], references: [id])
+
+  @@index([equipmentItemId, maintenanceDate])
+  @@index([maintenanceSettingId, maintenanceDate])
+  @@index([maintenanceDate])
+  @@map("maintenance_records")
+}
+
+/// Counter nomor dokumen per jenis dokumen per periode.
+/// MTN memakai period 'ALL' (deret berurutan terus, tanpa reset bulanan).
+/// Kolom period disiapkan untuk dokumen lain yang nanti butuh reset periodik.
+model DocumentSequence {
+  id           Int      @id @default(autoincrement())
+  docType      String   @map("doc_type") @db.VarChar(20)
+  period       String   @db.VarChar(10)
+  lastSequence Int      @default(0) @map("last_sequence")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([docType, period])
+  @@map("document_sequences")
+}
+
+// ============================================================
+// DIVISI ALAT — Batch 3: Damage Logs
+// ============================================================
+
+/// reported = ada masalah yang belum beres. resolved = sudah selesai ditangani.
+/// Tidak ada status "sedang dikerjakan": Divisi Alat sendiri yang mencatat dan
+/// mengerjakan, jadi tahapan itu tidak mengubah keputusan siapa pun. Kalau nanti
+/// diperlukan, menambah nilai enum di PostgreSQL murah.
+enum DamageStatus {
+  reported
+  resolved
+  cancelled
+
+  @@map("damage_status")
+}
+
+/// Sparepart diambil dari stok gudang sendiri, atau harus dibeli ke supplier
+/// (yang berarti butuh Purchase Request lebih dulu).
+enum SparePartSource {
+  warehouse
+  supplier
+
+  @@map("spare_part_source")
+}
+
+/// Mekanik internal Divisi Alat, atau bengkel/teknisi luar yang dipanggil.
+/// Mekanik selalu didatangkan ke alat, alat tidak ditarik ke bengkel.
+enum MechanicTeam {
+  internal
+  external
+
+  @@map("mechanic_team")
+}
+
+/// Laporan kerusakan alat, dicatat dan dikelola sendiri oleh Divisi Alat.
+/// Tanpa kolom tingkat keparahan — lihat docs/keputusan-desain-divisi-alat.md.
+model DamageLog {
+  id              Int          @id @default(autoincrement())
+  damageCode      String       @unique @map("damage_code") @db.VarChar(50)
+  equipmentItemId Int          @map("equipment_item_id")
+  // Mewarisi utang desain yang sama dengan equipment_workhour_logs:
+  // FK menyusul saat modul Project dibangun.
+  projectId       Int?         @map("project_id")
+  subProjectId    Int?         @map("sub_project_id")
+  // Tanggal KEJADIAN, bukan tanggal input. Dibedakan karena laporan masuk lewat
+  // telepon ke Divisi Alat, sering baru diketik beberapa jam atau hari kemudian.
+  damageDate      DateTime     @map("damage_date") @db.Date
+  status          DamageStatus @default(reported)
+  description     String       @db.Text
+
+  /// Pernyataan laporan ini bahwa alat tidak bisa dioperasikan. Kalau true,
+  /// equipment_items.current_status ikut jadi `maintenance` saat laporan dibuat.
+  /// Dipakai juga untuk memastikan alat tidak dibebaskan saat satu laporan
+  /// selesai sementara laporan lain yang menghentikannya masih terbuka.
+  stopsOperation Boolean @default(false) @map("stops_operation")
+
+  // Keputusan penanganan. Nullable di database supaya saat Lapangan nanti boleh
+  // melapor sendiri (mereka tidak tahu jawabannya) cukup melonggarkan validator,
+  // tanpa migrasi struktur. Hari ini tetap WAJIB lewat validasi API.
+  sparePartSource SparePartSource? @map("spare_part_source")
+  mechanicTeam    MechanicTeam?    @map("mechanic_team")
+
+  // User Divisi Alat yang mengetik laporan. Bukan operator lapangan yang melihat
+  // kejadiannya — jejak itu baru ada saat Lapangan boleh melapor lewat sistem.
+  reportedBy Int? @map("reported_by")
+
+  // Belum dipakai UI mana pun. Disiapkan untuk saat Lapangan boleh melapor
+  // sendiri, sehingga muncul langkah pemeriksaan oleh Divisi Alat.
+  reviewedBy Int?      @map("reviewed_by")
+  reviewedAt DateTime? @map("reviewed_at")
+
+  resolvedAt DateTime? @map("resolved_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  equipmentItem       EquipmentItem                 @relation(fields: [equipmentItemId], references: [id])
+  reportedByUser      User?                         @relation("DamageReportedBy", fields: [reportedBy], references: [id])
+  reviewedByUser      User?                         @relation("DamageReviewedBy", fields: [reviewedBy], references: [id])
+  maintenanceRecords  MaintenanceRecord[]
+  purchaseRepairItems EquipmentPurchaseRepairItem[]
+
+  @@index([equipmentItemId, damageDate])
+  @@index([status])
+  @@map("damage_logs")
+}
+
+// ============================================================
+// DIVISI ALAT — Batch 4: Purchase Request
+// ============================================================
+
+/// Kategori order menentukan tabel item mana yang sah untuk satu pengajuan.
+/// Disimpan sebagai enum, BUKAN FK ke equipment_cash_category, karena kategori
+/// kas adalah tabel master yang boleh diubah Divisi Alat — sedangkan jumlah
+/// tabel item adalah struktur skema yang tetap. Kategori kas diturunkan dari
+/// nilai ini lewat equipment_cash_category.order_category (dibangun di Batch 5).
+enum PurchaseOrderCategory {
+  repair
+  maintenance
+  stock
+
+  @@map("purchase_order_category")
+}
+
+/// `admin_validated` dari ERD DIBUANG (27 Sep 2026): ERD Approval Center
+/// memetakan validate_by_admin langsung ke waiting_finance_approval, jadi status
+/// itu tidak pernah mengendap. Siapa yang memvalidasi dan kapan sudah terekam
+/// kolom admin_validated_by/_at — argumen yang sama dipakai saat membuang
+/// `reviewed` dari damage_status.
+enum PurchaseRequestStatus {
+  submitted
+  rejected_by_admin
+  waiting_finance_approval
+  rejected_by_finance
+  approved
+  cancelled
+
+  @@map("purchase_request_status")
+}
+
+/// Header pengajuan pembelian Divisi Alat. Jadi sumber cash-out Kas Alat
+/// (source_type = equipment_purchase_request) dan approval_tasks di Approval Center.
+model EquipmentPurchaseRequest {
+  id            Int                   @id @default(autoincrement())
+  requestCode   String                @unique @map("request_code") @db.VarChar(50)
+  requestDate   DateTime              @map("request_date") @db.Date
+  // Tidak boleh diubah setelah dibuat — item yang sudah menempel akan jadi yatim
+  orderCategory PurchaseOrderCategory @map("order_category")
+  status        PurchaseRequestStatus @default(submitted)
+
+  // Dihitung sistem dari item, bukan dari kiriman klien
+  totalEstimatedAmount Decimal  @default(0) @map("total_estimated_amount") @db.Decimal(18, 2)
+  // Nominal AKTUAL yang dicairkan Finance. INI yang dipakai sebagai amount
+  // cash-out Kas Alat — bukan totalEstimatedAmount.
+  totalApprovedAmount  Decimal? @map("total_approved_amount") @db.Decimal(18, 2)
+
+  requestedBy       Int       @map("requested_by")
+  adminValidatedBy  Int?      @map("admin_validated_by")
+  adminValidatedAt  DateTime? @map("admin_validated_at")
+  // Catatan keputusan per tahap (Approval Center A5). Penolakan wajib beralasan,
+  // ditulis ke kolom tahap yang menolak.
+  adminNotes        String?   @map("admin_notes") @db.Text
+  financeApprovedBy Int?      @map("finance_approved_by")
+  financeApprovedAt DateTime? @map("finance_approved_at")
+  financeNotes      String?   @map("finance_notes") @db.Text
+  cancelledBy       Int?      @map("cancelled_by")
+  cancelledAt       DateTime? @map("cancelled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  requestedByUser       User  @relation("PrRequestedBy", fields: [requestedBy], references: [id])
+  adminValidatedByUser  User? @relation("PrAdminValidatedBy", fields: [adminValidatedBy], references: [id])
+  financeApprovedByUser User? @relation("PrFinanceApprovedBy", fields: [financeApprovedBy], references: [id])
+  cancelledByUser       User? @relation("PrCancelledBy", fields: [cancelledBy], references: [id])
+
+  repairItems        EquipmentPurchaseRepairItem[]
+  maintenanceItems   EquipmentPurchaseMaintenanceItem[]
+  stockItems         EquipmentPurchaseStockItem[]
+  maintenanceRecords MaintenanceRecord[]
+
+  // Target composite FK dari tabel item — inilah yang membuat baris item
+  // tidak mungkin menempel ke header berkategori lain
+  @@unique([id, orderCategory])
+  @@index([orderCategory, status])
+  @@index([requestDate])
+  @@map("equipment_purchase_requests")
+}
+
+/// Satu baris per kerusakan yang ditangani. Satu order boleh mencakup beberapa
+/// kerusakan. Unit alat dan uraian kerusakan dibaca dari damage_logs.
+model EquipmentPurchaseRepairItem {
+  id                 Int                   @id @default(autoincrement())
+  purchaseRequestId  Int                   @map("purchase_request_id")
+  orderCategory      PurchaseOrderCategory @default(repair) @map("order_category")
+  damageLogId        Int                   @map("damage_log_id")
+  // 0 kalau dikerjakan mekanik internal
+  serviceFee         Decimal               @default(0) @map("service_fee") @db.Decimal(18, 2)
+  approvedServiceFee Decimal?              @map("approved_service_fee") @db.Decimal(18, 2)
+  notes              String?               @db.Text
+
+  purchaseRequest EquipmentPurchaseRequest           @relation(fields: [purchaseRequestId, orderCategory], references: [id, orderCategory], onDelete: Cascade)
+  damageLog       DamageLog                          @relation(fields: [damageLogId], references: [id])
+  spareparts      EquipmentPurchaseRepairSparepart[]
+
+  @@unique([purchaseRequestId, damageLogId])
+  @@index([damageLogId])
+  @@map("equipment_purchase_repair_items")
+}
+
+/// Sparepart yang dibeli untuk satu kerusakan. Induknya sudah terikat kategori
+/// repair, jadi tidak perlu composite FK lagi di sini.
+model EquipmentPurchaseRepairSparepart {
+  id                  Int      @id @default(autoincrement())
+  repairItemId        Int      @map("repair_item_id")
+  itemName            String   @map("item_name") @db.VarChar(200)
+  quantity            Decimal  @default(1) @db.Decimal(18, 2)
+  estimatedUnitPrice  Decimal  @map("estimated_unit_price") @db.Decimal(18, 2)
+  estimatedTotalPrice Decimal  @map("estimated_total_price") @db.Decimal(18, 2)
+  approvedTotalPrice  Decimal? @map("approved_total_price") @db.Decimal(18, 2)
+
+  repairItem EquipmentPurchaseRepairItem @relation(fields: [repairItemId], references: [id], onDelete: Cascade)
+
+  @@index([repairItemId])
+  @@map("equipment_purchase_repair_spareparts")
+}
+
+/// Satu baris per aspek maintenance pada satu unit. maintenanceSettingId sudah
+/// memuat dua input form sekaligus (unit alat + aspek), jadi tidak disimpan ulang.
+model EquipmentPurchaseMaintenanceItem {
+  id                   Int                   @id @default(autoincrement())
+  purchaseRequestId    Int                   @map("purchase_request_id")
+  orderCategory        PurchaseOrderCategory @default(maintenance) @map("order_category")
+  maintenanceSettingId Int                   @map("maintenance_setting_id")
+  estimatedPrice       Decimal               @map("estimated_price") @db.Decimal(18, 2)
+  approvedPrice        Decimal?              @map("approved_price") @db.Decimal(18, 2)
+
+  purchaseRequest    EquipmentPurchaseRequest    @relation(fields: [purchaseRequestId, orderCategory], references: [id, orderCategory], onDelete: Cascade)
+  maintenanceSetting EquipmentMaintenanceSetting @relation(fields: [maintenanceSettingId], references: [id])
+
+  @@unique([purchaseRequestId, maintenanceSettingId])
+  @@index([maintenanceSettingId])
+  @@map("equipment_purchase_maintenance_items")
+}
+
+/// Pembelian stok gudang — mencakup semua jenis barang (sparepart, oli, grease,
+/// majun), tidak dipilah jenisnya. Tanpa satuan, mengikuti form.
+model EquipmentPurchaseStockItem {
+  id                  Int                   @id @default(autoincrement())
+  purchaseRequestId   Int                   @map("purchase_request_id")
+  orderCategory       PurchaseOrderCategory @default(stock) @map("order_category")
+  itemName            String                @map("item_name") @db.VarChar(200)
+  quantity            Decimal               @db.Decimal(18, 2)
+  estimatedUnitPrice  Decimal               @map("estimated_unit_price") @db.Decimal(18, 2)
+  estimatedTotalPrice Decimal               @map("estimated_total_price") @db.Decimal(18, 2)
+  approvedTotalPrice  Decimal?              @map("approved_total_price") @db.Decimal(18, 2)
+
+  purchaseRequest EquipmentPurchaseRequest @relation(fields: [purchaseRequestId, orderCategory], references: [id, orderCategory], onDelete: Cascade)
+
+  @@index([purchaseRequestId])
+  @@map("equipment_purchase_stock_items")
+}
+
+// ============================================================
+// DIVISI ALAT — Batch 5: Kas Alat
+// ============================================================
+
+enum CashTransactionType {
+  cash_in
+  cash_out
+
+  @@map("cash_transaction_type")
+}
+
+/// Dari mana baris kas ini lahir.
+/// `opening_balance`, `manual_expense`, dan `adjustment` diketik manusia.
+/// `equipment_purchase_request` dan `equipment_income_claim` WAJIB dibuat sistem —
+/// kalau boleh diketik manual, orang bisa mencatat cash-in klaim fiktif tanpa
+/// klaim di belakangnya.
+enum CashTransactionSourceType {
+  opening_balance
+  equipment_income_claim
+  equipment_purchase_request
+  manual_expense
+  adjustment
+
+  @@map("cash_transaction_source_type")
+}
+
+/// Master kategori kas, dikelola sendiri oleh Divisi Alat.
+model EquipmentCashCategory {
+  id              Int                 @id @default(autoincrement())
+  categoryName    String              @map("category_name") @db.VarChar(150)
+  transactionType CashTransactionType @map("transaction_type")
+
+  /// Memetakan kategori ORDER pada purchase request (repair/maintenance/stock)
+  /// ke kategori kas ini. Saat Finance menyetujui order, cash-out-nya memakai
+  /// kategori hasil pemetaan ini — tidak dipilih manual, jadi tidak bisa
+  /// bertentangan dengan isi ordernya.
+  /// NULL untuk kategori yang tidak berasal dari order: seluruh cash-in,
+  /// koreksi, dan operasional divisi.
+  /// Unique supaya satu kategori order tidak menunjuk dua kategori kas.
+  orderCategory PurchaseOrderCategory? @unique @map("order_category")
+
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  transactions EquipmentCashTransaction[]
+
+  @@unique([categoryName, transactionType])
+  @@map("equipment_cash_category")
+}
+
+/// Catatan uang masuk dan keluar Kas Alat.
+///
+/// Saldo TIDAK disimpan per baris, melainkan dihitung saat dibaca:
+/// SUM(cash_in) - SUM(cash_out) atas baris yang tidak dibatalkan. Konsekuensinya
+/// baris manual boleh diperbaiki dan dibatalkan tanpa merusak apa pun — beda
+/// dengan buku besar yang menyimpan saldo berjalan, di mana satu perubahan di
+/// tengah membuat saldo seluruh baris sesudahnya salah.
+///
+/// Volume kas divisi ini ratusan baris per tahun, jadi menjumlahkannya saat
+/// dibaca tidak terasa, dan sebagai gantinya tidak perlu penguncian baris
+/// maupun koreksi lewat baris lawan.
+model EquipmentCashTransaction {
+  id              Int                       @id @default(autoincrement())
+  transactionCode String                    @unique @map("transaction_code") @db.VarChar(50)
+  transactionDate DateTime                  @map("transaction_date") @db.Date
+  transactionType CashTransactionType       @map("transaction_type")
+  categoryId      Int                       @map("category_id")
+  amount          Decimal                   @db.Decimal(18, 2)
+  sourceType      CashTransactionSourceType @map("source_type")
+
+  /// Id dokumen sumber — referensi logis, bukan FK, karena tabel tujuannya
+  /// berbeda per sourceType (dan equipment_income_claim belum ada).
+  sourceId Int? @map("source_id")
+
+  description String @db.Text
+
+  /// Pembatalan tidak menghapus barisnya, supaya kalau ada yang bertanya
+  /// "kok catatan ini hilang" jejaknya masih ada beserta alasannya.
+  /// Baris yang dibatalkan tidak ikut dihitung ke saldo.
+  /// Boolean, bukan enum status — hanya ada dua keadaan, sama seperti
+  /// keputusan memakai `stops_operation` untuk damage log.
+  isVoided   Boolean   @default(false) @map("is_voided")
+  voidReason String?   @map("void_reason") @db.Text
+  voidedBy   Int?      @map("voided_by")
+  voidedAt   DateTime? @map("voided_at")
+
+  createdBy Int?     @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  category      EquipmentCashCategory @relation(fields: [categoryId], references: [id])
+  createdByUser User?                 @relation("CashCreatedBy", fields: [createdBy], references: [id])
+  voidedByUser  User?                 @relation("CashVoidedBy", fields: [voidedBy], references: [id])
+
+  /// Satu dokumen sumber hanya boleh punya SATU baris kas — lapis kedua di
+  /// bawah claimTransition (utils/status-transition.js), setelah terbukti tiga
+  /// approval bersamaan bisa membuat tiga cash-out untuk satu order.
+  /// Baris manual selalu sourceId NULL (ditolak validator), dan Postgres
+  /// menganggap NULL saling berbeda, jadi catatan manual tidak terhalang.
+  @@unique([sourceType, sourceId])
+  @@index([transactionDate])
+  @@index([categoryId])
+  @@index([isVoided])
+  @@map("equipment_cash_transaction")
+}
+
+// ============================================================
+// PROJECT — Batch 1: Header project, sub-project, progress, pool alat
+// ============================================================
+// Acuan: docs/claude_knowledge/ERD/MD File/Dokumentasi_ERD_Project.md
+// (docx 11 Sep 2026, Revisi Progress Billing v2).
+//
+// JANGAN pakai DBML_Project_SubProject_Final_Terintegrasi_Request_Alat_FIXED.dbml
+// sebagai acuan — file itu versi SEBELUM Revisi Progress Billing v2: masih punya
+// contract_volume_targets, sub_projects-nya tanpa contract_value/target_volume,
+// dan daily_progress_logs-nya FK ke contract_volume_target_id. Tanggal file-nya
+// lebih baru, isinya lebih lama.
+
+/// Dipakai ketiga tipe project. Tiga tipe project sengaja dipisah fisik
+/// (keputusan PM), jadi enum inilah satu-satunya yang mereka bagi.
+enum ProjectStatus {
+  planned
+  active
+  completed
+  cancelled
+
+  @@map("project_status")
+}
+
+/// Tahapan pekerjaan konstruksi. Berjalan berurutan mengikuti sequence_order,
+/// dan perusahaan tidak wajib mengerjakan semuanya — bisa hanya dapat kontrak
+/// satu atau beberapa tahapan.
+enum SubProjectType {
+  galian
+  timbunan
+  line_clearing
+  aspal
+
+  @@map("sub_project_type")
+}
+
+enum SubProjectStatus {
+  planned
+  active
+  completed
+  cancelled
+
+  @@map("sub_project_status")
+}
+
+/// `validated` adalah satu-satunya status yang menjadi dasar tagihan klien —
+/// angka progress adalah pengali langsung atas sub_projects.contract_value.
+/// Baris `submitted` dilaporkan terpisah sebagai pendingVolume supaya lapangan
+/// tahu mana yang belum diperiksa, tapi tidak pernah ikut menghitung uang.
+enum DailyProgressStatus {
+  submitted
+  validated
+  rejected
+
+  @@map("daily_progress_status")
+}
+
+enum PoolStatus {
+  draft
+  active
+  closed
+  cancelled
+
+  @@map("pool_status")
+}
+
+enum EquipmentPoolOwnerType {
+  construction_project
+  external_rental_project
+
+  @@map("equipment_pool_owner_type")
+}
+
+/// `pending` dan `rejected` TIDAK AKAN PERNAH TERJANGKAU: pool item lahir sesudah
+/// approval Request Alat (atau langsung dari Divisi Alat), selalu `available`.
+/// Unit yang ditolak tercatat di equipment_request_items, bukan di sini.
+/// Dijadwalkan dibuang di tahap contract — lihat keputusan-desain-request-alat.md.
+enum EquipmentPoolItemStatus {
+  pending
+  available
+  assigned
+  completed
+  rejected
+  cancelled
+
+  @@map("equipment_pool_item_status")
+}
+
+/// Diciutkan dari 6 nilai ERD menjadi 4 (keputusan 1 Oktober 2026).
+/// `received_at_site` dibuang: kapan dan siapa yang menerima sudah terekam
+/// penuh di received_at/received_by — alasan yang sama dengan dibuangnya
+/// damage_status.reviewed. `in_use` dibuang: "sudah diterima DAN ada workhour
+/// log" sudah berarti sedang dipakai, tidak ada keputusan yang berubah karenanya.
+/// Arah ini dipilih karena MENAMBAH nilai enum itu migrasi aditif yang aman,
+/// sementara MENGHAPUS-nya destruktif di database yang dipakai bersama.
+enum EquipmentAllocationStatus {
+  assigned
+  completed
+  returned
+  cancelled
+
+  @@map("equipment_allocation_status")
+}
+
+/// Project konstruksi = CONTAINER/lokasi. Pekerjaan dan kontraknya ada di
+/// sub_projects, bukan di sini — tidak ada contract_value di level ini.
+model ConstructionProject {
+  id          Int           @id @default(autoincrement())
+  projectCode String        @unique @map("project_code") @db.VarChar(50)
+  projectName String        @map("project_name") @db.VarChar(255)
+  clientName  String?       @map("client_name") @db.VarChar(255)
+  location    String?       @db.Text
+  startDate   DateTime?     @map("start_date") @db.Date
+  endDate     DateTime?     @map("end_date") @db.Date
+  status      ProjectStatus @default(planned)
+  createdBy   Int?          @map("created_by")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  createdByUser  User?           @relation("ConstructionProjectCreatedBy", fields: [createdBy], references: [id])
+  subProjects    SubProject[]
+  equipmentPools EquipmentPool[]
+  materialPools  MaterialPool[]
+
+  fileFolders     ProjectFileFolder[]
+  closingArchives ProjectClosingArchive[]
+
+  @@index([status])
+  @@map("construction_projects")
+}
+
+/// Kontrak rental alat ke klien eksternal. Tidak punya sub-project: alatnya
+/// dikumpulkan lewat equipment_pools dan jam kerjanya dicatat langsung pada
+/// equipment_pool_items.
+model ExternalRentalProject {
+  id                Int           @id @default(autoincrement())
+  rentalProjectCode String        @unique @map("rental_project_code") @db.VarChar(50)
+  rentalProjectName String        @map("rental_project_name") @db.VarChar(255)
+  clientName        String?       @map("client_name") @db.VarChar(255)
+  location          String?       @db.Text
+  contractNo        String?       @map("contract_no") @db.VarChar(100)
+  contractStartDate DateTime?     @map("contract_start_date") @db.Date
+  contractEndDate   DateTime?     @map("contract_end_date") @db.Date
+  // hourly | daily | monthly | contract — varchar mengikuti ERD, belum enum
+  // karena daftar metode tagihan rental belum dikunci PM.
+  billingMethod     String?       @map("billing_method") @db.VarChar(50)
+  status            ProjectStatus @default(planned)
+  createdBy         Int?          @map("created_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  createdByUser     User?              @relation("RentalProjectCreatedBy", fields: [createdBy], references: [id])
+  equipmentPools    EquipmentPool[]
+  equipmentRequests EquipmentRequest[]
+
+  fileFolders     ProjectFileFolder[]
+  closingArchives ProjectClosingArchive[]
+
+  @@index([status])
+  @@map("external_rental_projects")
+}
+
+/// Kontrak supply material ke klien eksternal. Materialnya dikumpulkan lewat
+/// material_pools. `field_pic_id` DIBUANG 16 Okt 2026: sistem tidak punya proses
+/// menugaskan orang lapangan, jadi aturan "hanya PIC" tidak bisa ditegakkan jujur.
+model ExternalSupplyProject {
+  id                Int           @id @default(autoincrement())
+  supplyProjectCode String        @unique @map("supply_project_code") @db.VarChar(50)
+  supplyProjectName String        @map("supply_project_name") @db.VarChar(255)
+  clientName        String?       @map("client_name") @db.VarChar(255)
+  location          String?       @db.Text
+  contractNo        String?       @map("contract_no") @db.VarChar(100)
+  contractStartDate DateTime?     @map("contract_start_date") @db.Date
+  contractEndDate   DateTime?     @map("contract_end_date") @db.Date
+  status            ProjectStatus @default(planned)
+  createdBy         Int?          @map("created_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  createdByUser    User?             @relation("SupplyProjectCreatedBy", fields: [createdBy], references: [id])
+  materialRequests MaterialRequest[]
+  materialPools    MaterialPool[]
+
+  fileFolders     ProjectFileFolder[]
+  closingArchives ProjectClosingArchive[]
+
+  @@index([status])
+  @@map("external_supply_projects")
+}
+
+/// Satu tahapan pekerjaan dengan KONTRAK SENDIRI. contract_value dan
+/// target_volume hidup di sini, bukan di construction_projects — dasar progress
+/// billing: progress % × contract_value.
+/// Revisi Progress Billing v2 menghapus tabel contract_volume_targets dan
+/// memindahkan kolom volume ke sini.
+model SubProject {
+  id                    Int              @id @default(autoincrement())
+  constructionProjectId Int              @map("construction_project_id")
+  subProjectType        SubProjectType   @map("sub_project_type")
+  status                SubProjectStatus @default(planned)
+  // Urutan tahapan: galian(1) → timbunan(2) → line_clearing(3) → aspal(4).
+  // Ditegakkan sebagai PERINGATAN saat aktivasi, bukan blokir — pengecualian
+  // kontrak ("atau berdasarkan kesepakatan kontrak baru") nyata terjadi.
+  sequenceOrder         Int              @default(1) @map("sequence_order")
+
+  targetVolume      Decimal  @map("target_volume") @db.Decimal(18, 2)
+  dailyTargetVolume Decimal? @map("daily_target_volume") @db.Decimal(18, 2)
+  volumeUnit        String   @map("volume_unit") @db.VarChar(30)
+
+  contractValue     Decimal   @default(0) @map("contract_value") @db.Decimal(18, 2)
+  contractNo        String?   @map("contract_no") @db.VarChar(100)
+  contractDate      DateTime? @map("contract_date") @db.Date
+  contractStartDate DateTime? @map("contract_start_date") @db.Date
+  contractEndDate   DateTime? @map("contract_end_date") @db.Date
+
+  createdBy Int?     @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  constructionProject  ConstructionProject             @relation(fields: [constructionProjectId], references: [id])
+  createdByUser        User?                           @relation("SubProjectCreatedBy", fields: [createdBy], references: [id])
+  progressLogs         DailyProgressLog[]
+  equipmentAllocations SubProjectEquipmentAllocation[]
+  equipmentRequests    EquipmentRequest[]
+  materialRequests     MaterialRequest[]
+  stockMovements       MaterialStockMovement[]
+  workerAssignments    SubProjectWorkerAssignment[]
+  laborLogs            DailyLaborLog[]
+
+  fileFolders     ProjectFileFolder[]
+  closingArchives ProjectClosingArchive[]
+
+  // Satu construction project hanya boleh punya satu tahapan per tipe
+  @@unique([constructionProjectId, subProjectType])
+  // Sasaran composite FK folder berkas: tahapan pasti milik project yang sama
+  @@unique([id, constructionProjectId])
+  @@index([status])
+  @@map("sub_projects")
+}
+
+/// Realisasi volume harian. SUM(realized_volume) baris `validated` dibagi
+/// sub_projects.target_volume adalah progress yang menjadi dasar tagihan klien.
+///
+/// Baris `validated` TIDAK BISA DIEDIT — Admin harus mencabut validasinya dulu
+/// (kembali ke `submitted`). Sekali sudah ditagihkan ke klien, mengeditnya
+/// mengubah angka yang sudah pernah dikirim keluar. Pola kunci ini mengikuti
+/// `daily_labor_logs.locked_at` pada ERD Finance Field.
+///
+/// Alasan penolakan disimpan di `validation_notes` (Approval Center A5, menutup C6).
+model DailyProgressLog {
+  id              Int                 @id @default(autoincrement())
+  subProjectId    Int                 @map("sub_project_id")
+  progressDate    DateTime            @map("progress_date") @db.Date
+  realizedVolume  Decimal             @map("realized_volume") @db.Decimal(18, 2)
+  notes           String?             @db.Text
+  status          DailyProgressStatus @default(submitted)
+  // Jejak siapa yang memeriksa. Di luar ERD, alasannya sama dengan
+  // admin_validated_by pada purchase request: perubahan status tanpa aktor
+  // tidak bisa ditelusuri. Ikut tercatat saat validasi DICABUT.
+  validatedBy     Int?                @map("validated_by")
+  validatedAt     DateTime?           @map("validated_at")
+  // Catatan keputusan TERAKHIR (Approval Center A5): wajib saat ditolak,
+  // ditimpa setiap transisi — termasuk dikosongkan saat kembali ke submitted.
+  validationNotes String?             @map("validation_notes") @db.Text
+  createdBy       Int?                @map("created_by")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  subProject      SubProject         @relation(fields: [subProjectId], references: [id])
+  createdByUser   User?              @relation("ProgressCreatedBy", fields: [createdBy], references: [id])
+  validatedByUser User?              @relation("ProgressValidatedBy", fields: [validatedBy], references: [id])
+  fieldCondition  FieldConditionLog?
+
+  @@unique([subProjectId, progressDate])
+  @@index([subProjectId, status])
+  @@map("daily_progress_logs")
+}
+
+/// Cuaca dan kondisi lapangan untuk satu progress harian. 1:1 — dipisah dari
+/// progress log supaya angka volume tidak bercampur dengan catatan naratif.
+model FieldConditionLog {
+  id                  Int      @id @default(autoincrement())
+  dailyProgressLogId  Int      @unique @map("daily_progress_log_id")
+  weatherMorning      String?  @map("weather_morning") @db.VarChar(50)
+  weatherAfternoon    String?  @map("weather_afternoon") @db.VarChar(50)
+  fieldConditionNotes String?  @map("field_condition_notes") @db.Text
+  incidentNotes       String?  @map("incident_notes") @db.Text
+  createdBy           Int?     @map("created_by")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  dailyProgressLog DailyProgressLog @relation(fields: [dailyProgressLogId], references: [id], onDelete: Cascade)
+  createdByUser    User?            @relation("FieldConditionCreatedBy", fields: [createdBy], references: [id])
+
+  @@map("field_condition_logs")
+}
+
+/// Wadah alat di level project, generic untuk construction DAN external rental.
+/// owner_type adalah diskriminator; FK yang sah dijaga CHECK constraint di
+/// migrasi (Prisma tidak bisa menyatakan CHECK).
+model EquipmentPool {
+  id                      Int                    @id @default(autoincrement())
+  ownerType               EquipmentPoolOwnerType @map("owner_type")
+  constructionProjectId   Int?                   @map("construction_project_id")
+  externalRentalProjectId Int?                   @map("external_rental_project_id")
+  poolCode                String                 @unique @map("pool_code") @db.VarChar(50)
+  status                  PoolStatus             @default(active)
+  createdBy               Int?                   @map("created_by")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+
+  constructionProject   ConstructionProject?   @relation(fields: [constructionProjectId], references: [id])
+  externalRentalProject ExternalRentalProject? @relation(fields: [externalRentalProjectId], references: [id])
+  createdByUser         User?                  @relation("EquipmentPoolCreatedBy", fields: [createdBy], references: [id])
+  items                 EquipmentPoolItem[]
+
+  @@index([ownerType, constructionProjectId])
+  @@index([ownerType, externalRentalProjectId])
+  @@map("equipment_pools")
+}
+
+/// Isi pool: jenis alat yang diminta, dan unit spesifik begitu ditentukan.
+///
+/// `total_used_hours` dari ERD TIDAK DIBUAT (keputusan 1 Oktober 2026) — angkanya
+/// persis SUM(equipment_workhour_logs.total_workhour) dan dihitung saat dibaca.
+/// Alasannya sama dengan saldo Kas Alat: counter tersimpan bisa menyimpang dari
+/// lognya tanpa meninggalkan jejak, dan tidak ada satu modul pun di 9 ERD yang
+/// membacanya (Income membaca equipment_workhour_log_id langsung).
+///
+/// Satu pool item = SATU slot unit: ia memegang satu equipment_item_id dan satu
+/// alokasi menghabiskannya. Request yang disetujui 3 unit melahirkan 3 pool item.
+///
+/// `equipment_request_item_id` terisi kalau pool item lahir dari approval Request
+/// Alat; null kalau dimasukkan langsung oleh Divisi Alat.
+///
+/// `requested_quantity`/`approved_quantity` di sini SISA ERD — keputusan
+/// kuantitas hidup di equipment_request_items. Dijadwalkan di-drop di tahap
+/// contract (menunggu konfirmasi tim), lihat keputusan-desain-request-alat.md.
+model EquipmentPoolItem {
+  id                     Int                     @id @default(autoincrement())
+  equipmentPoolId        Int                     @map("equipment_pool_id")
+  equipmentRequestItemId Int?                    @map("equipment_request_item_id")
+  equipmentTypeId        Int                     @map("equipment_type_id")
+  equipmentItemId        Int?                    @map("equipment_item_id")
+  requestedQuantity      Int                     @default(1) @map("requested_quantity")
+  approvedQuantity       Int                     @default(0) @map("approved_quantity")
+  status                 EquipmentPoolItemStatus @default(pending)
+  // Operator yang ikut bersama unit rental. Satu nama per unit per kontrak,
+  // diisi Divisi Alat. Hanya untuk pool rental — dijaga service.
+  operatorName           String?                 @map("operator_name") @db.VarChar(150)
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
+
+  equipmentPool        EquipmentPool                   @relation(fields: [equipmentPoolId], references: [id])
+  equipmentRequestItem EquipmentRequestItem?           @relation(fields: [equipmentRequestItemId], references: [id])
+  equipmentType        EquipmentType                   @relation(fields: [equipmentTypeId], references: [id])
+  equipmentItem        EquipmentItem?                  @relation(fields: [equipmentItemId], references: [id])
+  allocations          SubProjectEquipmentAllocation[]
+  workhourLogs         EquipmentWorkhourLog[]
+  closingArchives      ProjectClosingArchive[]
+
+  @@index([equipmentPoolId])
+  @@index([equipmentRequestItemId])
+  @@index([equipmentItemId])
+  @@index([status])
+  @@map("equipment_pool_items")
+}
+
+/// SUMBER KEBENARAN PENUGASAN ALAT. Pertanyaan "unit ini sedang dipakai proyek
+/// mana" dijawab tabel ini, bukan equipment_items.current_status — kolom itu
+/// murni KONDISI alat (operational/maintenance/retired).
+///
+/// Alat rusak TIDAK ditarik ke gudang (dikonfirmasi PM 17 Sep 2026): mekanik
+/// datang ke alat, jadi alokasi tetap hidup selama perbaikan.
+///
+/// `total_used_hours` dari ERD tidak dibuat — alasannya sama dengan
+/// EquipmentPoolItem di atas.
+model SubProjectEquipmentAllocation {
+  id                  Int                       @id @default(autoincrement())
+  subProjectId        Int                       @map("sub_project_id")
+  equipmentPoolItemId Int                       @map("equipment_pool_item_id")
+  equipmentItemId     Int?                      @map("equipment_item_id")
+  allocatedBy         Int?                      @map("allocated_by")
+  allocatedAt         DateTime?                 @map("allocated_at")
+  receivedBy          Int?                      @map("received_by")
+  receivedAt          DateTime?                 @map("received_at")
+  status              EquipmentAllocationStatus @default(assigned)
+  createdAt           DateTime                  @default(now()) @map("created_at")
+  updatedAt           DateTime                  @updatedAt @map("updated_at")
+
+  subProject        SubProject             @relation(fields: [subProjectId], references: [id])
+  equipmentPoolItem EquipmentPoolItem      @relation(fields: [equipmentPoolItemId], references: [id])
+  equipmentItem     EquipmentItem?         @relation(fields: [equipmentItemId], references: [id])
+  allocatedByUser   User?                  @relation("AllocationAllocatedBy", fields: [allocatedBy], references: [id])
+  receivedByUser    User?                  @relation("AllocationReceivedBy", fields: [receivedBy], references: [id])
+  workhourLogs      EquipmentWorkhourLog[]
+
+  @@index([subProjectId, status])
+  @@index([equipmentItemId, status])
+  @@index([equipmentPoolItemId])
+  @@map("sub_project_equipment_allocations")
+}
+
+// ============================================================
+// REQUEST ALAT (Build Order langkah 4) — lihat docs/keputusan-desain-request-alat.md
+// ============================================================
+
+enum EquipmentRequestType {
+  internal_project
+  external_rental
+
+  @@map("equipment_request_type")
+}
+
+/// Diciutkan dari 9 nilai ERD menjadi 5 (keputusan 10 Oktober 2026).
+/// - `admin_review` dibuang: "Admin sedang membuka" tidak mengubah antrean siapa pun
+/// - `partially_approved` dibuang: diturunkan dari kuantitas item (approvalOutcome)
+/// - `rejected_by_admin`/`rejected_by_equipment_division` disatukan: siapa yang
+///   menolak terjawab dari kolom reviewer mana yang terisi
+/// - `fulfilled` dibuang: pool item dibuat dalam transaksi yang sama dengan
+///   approval, jadi status itu tidak pernah mengendap
+enum EquipmentRequestStatus {
+  submitted
+  equipment_review
+  approved
+  rejected
+  cancelled
+
+  @@map("equipment_request_status")
+}
+
+/// Header permintaan alat. internal_project dibuat Lapangan dari sub-project dan
+/// melewati Admin; external_rental dibuat Admin dan langsung ke Divisi Alat.
+/// Diskriminator FK dijaga CHECK constraint di migrasi.
+///
+/// equipment_request_status_logs dari ERD TIDAK DIBUAT: alurnya linear dan tiap
+/// langkah terjadi paling banyak sekali, jadi kolom aktor di header sudah memuat
+/// seluruh riwayat — pola yang sama dengan purchase request.
+model EquipmentRequest {
+  id                      Int                    @id @default(autoincrement())
+  requestCode             String                 @unique @map("request_code") @db.VarChar(50)
+  requestType             EquipmentRequestType   @map("request_type")
+  subProjectId            Int?                   @map("sub_project_id")
+  externalRentalProjectId Int?                   @map("external_rental_project_id")
+  requestDate             DateTime               @map("request_date") @db.Date
+  neededDate              DateTime?              @map("needed_date") @db.Date
+  locationDetail          String?                @map("location_detail") @db.Text
+  requestNotes            String?                @map("request_notes") @db.Text
+  status                  EquipmentRequestStatus @default(submitted)
+
+  requestedBy         Int       @map("requested_by")
+  adminReviewedBy     Int?      @map("admin_reviewed_by")
+  adminReviewedAt     DateTime? @map("admin_reviewed_at")
+  adminNotes          String?   @map("admin_notes") @db.Text
+  equipmentReviewedBy Int?      @map("equipment_reviewed_by")
+  equipmentReviewedAt DateTime? @map("equipment_reviewed_at")
+  equipmentNotes      String?   @map("equipment_notes") @db.Text
+  cancelledBy         Int?      @map("cancelled_by")
+  cancelledAt         DateTime? @map("cancelled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subProject              SubProject?            @relation(fields: [subProjectId], references: [id])
+  externalRentalProject   ExternalRentalProject? @relation(fields: [externalRentalProjectId], references: [id])
+  requestedByUser         User                   @relation("EqRequestRequestedBy", fields: [requestedBy], references: [id])
+  adminReviewedByUser     User?                  @relation("EqRequestAdminReviewedBy", fields: [adminReviewedBy], references: [id])
+  equipmentReviewedByUser User?                  @relation("EqRequestEquipmentReviewedBy", fields: [equipmentReviewedBy], references: [id])
+  cancelledByUser         User?                  @relation("EqRequestCancelledBy", fields: [cancelledBy], references: [id])
+  items                   EquipmentRequestItem[]
+
+  @@index([requestType, status])
+  @@index([subProjectId, requestDate])
+  @@index([externalRentalProjectId, requestDate])
+  @@map("equipment_requests")
+}
+
+/// Detail jenis alat yang diminta. `approved_quantity` NULL = belum diputuskan,
+/// 0 = ditolak, < requested = parsial. Karena itu decision_status,
+/// rejected_quantity (= requested - approved), dan checked_by/_at dari ERD tidak
+/// dibuat — semuanya diturunkan atau sudah terekam di header.
+model EquipmentRequestItem {
+  id                 Int      @id @default(autoincrement())
+  equipmentRequestId Int      @map("equipment_request_id")
+  equipmentTypeId    Int      @map("equipment_type_id")
+  requestedQuantity  Int      @map("requested_quantity")
+  approvedQuantity   Int?     @map("approved_quantity")
+  estimatedWorkhours Decimal? @map("estimated_workhours") @db.Decimal(10, 2)
+  itemNotes          String?  @map("item_notes") @db.Text
+  decisionNotes      String?  @map("decision_notes") @db.Text
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  equipmentRequest EquipmentRequest    @relation(fields: [equipmentRequestId], references: [id])
+  equipmentType    EquipmentType       @relation(fields: [equipmentTypeId], references: [id])
+  poolItems        EquipmentPoolItem[]
+
+  @@index([equipmentRequestId, equipmentTypeId])
+  @@map("equipment_request_items")
+}
+
+// ============================================================
+// MATERIAL — master & pool (Request Material RM-1).
+// Lihat docs/keputusan-desain-request-material.md
+// ============================================================
+
+/// Master jenis material. `unit` adalah SATU-SATUNYA tempat satuan disimpan —
+/// keputusan D1 (13 Okt 2026): ERD menaruh unit di lima tabel, sehingga satu
+/// material bisa tercatat m³ di request dan ton di receipt, lalu jumlahannya
+/// tidak bermakna. Semua baris kuantitas mengikuti satuan ini; konversi menjadi
+/// tanggung jawab penginput. Nilainya dari daftar baku di
+/// src/modules/material/material.constants.js, dan terkunci begitu dipakai.
+model MaterialType {
+  id           Int      @id @default(autoincrement())
+  // Disimpan uppercase supaya @unique juga menolak beda huruf besar-kecil
+  materialCode String   @unique @map("material_code") @db.VarChar(50)
+  materialName String   @unique @map("material_name") @db.VarChar(150)
+  unit         String   @db.VarChar(30)
+  description  String?  @db.Text
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  poolItems      MaterialPoolItem[]
+  requestItems   MaterialRequestItem[]
+  stockMovements MaterialStockMovement[]
+
+  @@map("material_types")
+}
+
+/// Pemasok material. Siapa yang mengirim adalah fakta milik delivery (RM-4) —
+/// `supplier_id` pada header material_pools dari ERD TIDAK dibuat (keputusan D2),
+/// karena satu kontrak bisa dipasok lebih dari satu quarry.
+model Supplier {
+  id           Int      @id @default(autoincrement())
+  supplierName String   @unique @map("supplier_name") @db.VarChar(150)
+  phone        String?  @db.VarChar(50)
+  address      String?  @db.Text
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  deliveries MaterialDelivery[]
+
+  @@map("suppliers")
+}
+
+enum MaterialPoolOwnerType {
+  construction_project
+  external_supply_project
+
+  @@map("material_pool_owner_type")
+}
+
+/// Daftar material milik construction project atau supply project. Generic
+/// seperti equipment_pools: owner_type diskriminator, FK yang sah dijaga CHECK
+/// constraint di migrasi.
+model MaterialPool {
+  id                      Int                   @id @default(autoincrement())
+  ownerType               MaterialPoolOwnerType @map("owner_type")
+  constructionProjectId   Int?                  @map("construction_project_id")
+  externalSupplyProjectId Int?                  @map("external_supply_project_id")
+  poolCode                String                @unique @map("pool_code") @db.VarChar(50)
+  status                  PoolStatus            @default(active)
+  createdBy               Int?                  @map("created_by")
+  createdAt               DateTime              @default(now()) @map("created_at")
+  updatedAt               DateTime              @updatedAt @map("updated_at")
+
+  constructionProject   ConstructionProject?   @relation(fields: [constructionProjectId], references: [id])
+  externalSupplyProject ExternalSupplyProject? @relation(fields: [externalSupplyProjectId], references: [id])
+  createdByUser         User?                  @relation("MaterialPoolCreatedBy", fields: [createdBy], references: [id])
+  items                 MaterialPoolItem[]
+
+  @@index([ownerType, constructionProjectId])
+  @@index([ownerType, externalSupplyProjectId])
+  @@map("material_pools")
+}
+
+/// Satu baris per jenis material per pool — BEDA dengan equipment pool item
+/// (di sana satu baris = satu unit). Empat penghitung total_* dari ERD TIDAK
+/// dibuat (keputusan D3): semuanya jumlahan dari request/delivery/receipt dan
+/// dihitung saat dibaca, sama dengan saldo Kas Alat.
+model MaterialPoolItem {
+  id             Int      @id @default(autoincrement())
+  materialPoolId Int      @map("material_pool_id")
+  materialTypeId Int      @map("material_type_id")
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  materialPool MaterialPool          @relation(fields: [materialPoolId], references: [id])
+  materialType MaterialType          @relation(fields: [materialTypeId], references: [id])
+  requestItems MaterialRequestItem[]
+
+  @@unique([materialPoolId, materialTypeId])
+  @@index([materialTypeId])
+  @@map("material_pool_items")
+}
+
+// ============================================================
+// REQUEST MATERIAL — request & validasi Admin (RM-2).
+// Lihat docs/keputusan-desain-request-material.md
+// ============================================================
+
+enum MaterialRequestType {
+  internal_project
+  external_supply
+
+  @@map("material_request_type")
+}
+
+/// Diciutkan dari 6 nilai ERD menjadi 5 (keputusan R1, 14 Okt 2026), selaras
+/// dengan purchase request dan Request Alat:
+/// - `waiting_admin_validation` dinamai `submitted` (antrean Admin)
+/// - `rejected_by_admin`/`rejected_by_finance` disatukan jadi `rejected`; siapa
+///   yang menolak terbaca dari kolom reviewer mana yang terisi
+enum MaterialRequestStatus {
+  submitted
+  waiting_finance_approval
+  approved
+  rejected
+  cancelled
+
+  @@map("material_request_status")
+}
+
+/// Header permintaan material. internal_project dari tahapan (Lapangan),
+/// external_supply dari supply project (HANYA PIC Lapangan project itu).
+/// Diskriminator FK dijaga CHECK constraint di migrasi.
+///
+/// material_request_status_logs dan enum action_type dari ERD TIDAK DIBUAT
+/// (keputusan R2): alur linear, tiap langkah paling banyak sekali, dan ERD
+/// menegaskan revisi = request baru. Kolom aktor di header sudah memuat
+/// seluruh riwayat — pola yang sama dengan Request Alat.
+model MaterialRequest {
+  id                      Int                   @id @default(autoincrement())
+  requestCode             String                @unique @map("request_code") @db.VarChar(50)
+  requestType             MaterialRequestType   @map("request_type")
+  subProjectId            Int?                  @map("sub_project_id")
+  externalSupplyProjectId Int?                  @map("external_supply_project_id")
+  requestDate             DateTime              @map("request_date") @db.Date
+  neededDate              DateTime?             @map("needed_date") @db.Date
+  requestNotes            String?               @map("request_notes") @db.Text
+  status                  MaterialRequestStatus @default(submitted)
+
+  requestedBy       Int       @map("requested_by")
+  adminReviewedBy   Int?      @map("admin_reviewed_by")
+  adminReviewedAt   DateTime? @map("admin_reviewed_at")
+  adminNotes        String?   @map("admin_notes") @db.Text
+  financeReviewedBy Int?      @map("finance_reviewed_by")
+  financeReviewedAt DateTime? @map("finance_reviewed_at")
+  financeNotes      String?   @map("finance_notes") @db.Text
+  cancelledBy       Int?      @map("cancelled_by")
+  cancelledAt       DateTime? @map("cancelled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subProject            SubProject?            @relation(fields: [subProjectId], references: [id])
+  externalSupplyProject ExternalSupplyProject? @relation(fields: [externalSupplyProjectId], references: [id])
+  requestedByUser       User                   @relation("MatRequestRequestedBy", fields: [requestedBy], references: [id])
+  adminReviewedByUser   User?                  @relation("MatRequestAdminReviewedBy", fields: [adminReviewedBy], references: [id])
+  financeReviewedByUser User?                  @relation("MatRequestFinanceReviewedBy", fields: [financeReviewedBy], references: [id])
+  cancelledByUser       User?                  @relation("MatRequestCancelledBy", fields: [cancelledBy], references: [id])
+  items                 MaterialRequestItem[]
+  costs                 MaterialRequestCost[]
+  deliveries            MaterialDelivery[]
+
+  @@index([requestType, status])
+  @@index([subProjectId, requestDate])
+  @@index([externalSupplyProjectId, requestDate])
+  @@map("material_requests")
+}
+
+/// Satu baris per jenis material per request. Material dipilih BEBAS dari master
+/// (keputusan R3) — tidak wajib sudah ada di pool. `unit` dari ERD TIDAK dibuat
+/// (D1): satuan dibaca dari material_types.
+///
+/// `admin_validated_quantity` NULL = Admin belum mengubah (berlaku = diminta).
+/// Boleh dikurangi, tidak boleh dinaikkan maupun dinolkan (R4) — dijaga CHECK.
+/// `material_pool_item_id` terisi saat disetujui Finance (RM-3): material yang
+/// disetujui masuk ke pool project.
+model MaterialRequestItem {
+  id                     Int      @id @default(autoincrement())
+  materialRequestId      Int      @map("material_request_id")
+  materialTypeId         Int      @map("material_type_id")
+  materialPoolItemId     Int?     @map("material_pool_item_id")
+  requestedQuantity      Decimal  @map("requested_quantity") @db.Decimal(18, 2)
+  adminValidatedQuantity Decimal? @map("admin_validated_quantity") @db.Decimal(18, 2)
+  itemNotes              String?  @map("item_notes") @db.Text
+  adminNotes             String?  @map("admin_notes") @db.Text
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  materialRequest  MaterialRequest      @relation(fields: [materialRequestId], references: [id])
+  materialType     MaterialType         @relation(fields: [materialTypeId], references: [id])
+  materialPoolItem MaterialPoolItem?    @relation(fields: [materialPoolItemId], references: [id])
+  materialCost     MaterialRequestCost?
+  deliveries       MaterialDelivery[]
+
+  @@unique([materialRequestId, materialTypeId])
+  // Sasaran composite FK material_deliveries: item wajib milik request yang sama
+  @@unique([id, materialRequestId])
+  @@index([materialTypeId])
+  @@index([materialPoolItemId])
+  @@map("material_request_items")
+}
+
+// ============================================================
+// REQUEST MATERIAL — biaya & approval Finance (RM-3).
+// Lihat docs/keputusan-desain-request-material.md (F1–F5)
+// ============================================================
+
+/// 6 nilai ERD dipertahankan (F2) — kelak dipakai GL memilih akun.
+enum MaterialCostType {
+  material_cost
+  driver_fee
+  delivery_fee
+  loading_unloading_fee
+  fuel_cost
+  other
+
+  @@map("material_cost_type")
+}
+
+/// Rincian biaya paket dana sebuah request. Tabel header
+/// `material_funding_requests` dari ERD TIDAK dibuat (F1): hubungannya 1:1
+/// dengan request dan setiap kolomnya sudah dijawab tempat lain — status
+/// mengikuti request, reviewer ada di `finance_reviewed_*`, total dihitung saat
+/// dibaca, dan Finance tidak mengisi nominal aktual. `approved_amount` dan
+/// `payee_type` dibuang (F2).
+///
+/// `material_cost` WAJIB menunjuk item, biaya lain TIDAK (CHECK); satu
+/// material_cost per item (unique). Nominal > 0 (CHECK). Admin mengganti seluruh
+/// daftar selama request `submitted`; setelah diteruskan ke Finance terkunci.
+model MaterialRequestCost {
+  id                    Int              @id @default(autoincrement())
+  materialRequestId     Int              @map("material_request_id")
+  costType              MaterialCostType @map("cost_type")
+  materialRequestItemId Int?             @unique @map("material_request_item_id")
+  description           String           @db.Text
+  amount                Decimal          @db.Decimal(18, 2)
+  payeeName             String?          @map("payee_name") @db.VarChar(150)
+  notes                 String?          @db.Text
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+
+  materialRequest     MaterialRequest      @relation(fields: [materialRequestId], references: [id])
+  materialRequestItem MaterialRequestItem? @relation(fields: [materialRequestItemId], references: [id], onDelete: Restrict)
+
+  @@index([materialRequestId, costType])
+  @@map("material_request_costs")
+}
+
+// ============================================================
+// LAMPIRAN — fondasi file lintas modul.
+// Lihat docs/keputusan-desain-lampiran.md (L1–L7)
+// ============================================================
+
+enum FileStatus {
+  active
+  superseded
+  trashed
+
+  @@map("file_status")
+}
+
+/// Catatan fisik satu file di penyimpanan (L1). Modul menunjuk ke sini lewat FK
+/// asli — kolom kalau tepat satu (material_deliveries.delivery_note_file_id),
+/// tabel penghubung kalau banyak. `storage_key` adalah kunci di bucket, BUKAN URL
+/// penyedia; nama asli tidak pernah masuk kunci.
+///
+/// File yang diganti tidak dihapus: status `superseded` + `replaced_by_id`
+/// menunjuk penggantinya, sehingga pemilik & hak bacanya tetap bisa dilacak (L6).
+/// Konsistensi status dijaga CHECK di migrasi.
+model File {
+  id           Int        @id @default(autoincrement())
+  storageKey   String     @unique @map("storage_key") @db.VarChar(255)
+  originalName String     @map("original_name") @db.VarChar(255)
+  mimeType     String     @map("mime_type") @db.VarChar(100)
+  sizeBytes    Int        @map("size_bytes")
+  sha256       String     @db.Char(64)
+  status       FileStatus @default(active)
+  replacedById Int?       @unique @map("replaced_by_id")
+  uploadedBy   Int        @map("uploaded_by")
+  uploadedAt   DateTime   @default(now()) @map("uploaded_at")
+  trashedBy    Int?       @map("trashed_by")
+  trashedAt    DateTime?  @map("trashed_at")
+
+  replacedBy     File?                      @relation("FileReplacedBy", fields: [replacedById], references: [id], onDelete: Restrict)
+  replaces       File?                      @relation("FileReplacedBy")
+  uploadedByUser User                       @relation("FileUploadedBy", fields: [uploadedBy], references: [id])
+  trashedByUser  User?                      @relation("FileTrashedBy", fields: [trashedBy], references: [id])
+  deliveryNoteOf MaterialDelivery?
+  receiptProofOf MaterialReceiptAttachment?
+  projectFile    ProjectFile?
+  closingArchive ProjectClosingArchive?
+
+  @@index([status, trashedAt])
+  @@map("files")
+}
+
+// ============================================================
+// BERKAS PROJECT (L8, docs/keputusan-desain-lampiran.md)
+// ============================================================
+
+/// Folder buatan user, SATU tingkat, milik tepat satu project (CHECK
+/// num_nonnulls = 1 — FK mana yang terisi sudah menyatakan jenisnya, jadi tanpa
+/// owner_type). `sub_project_id` = folder milik tahapan; composite FK ke
+/// sub_projects(id, construction_project_id) menjamin tahapannya milik project
+/// yang sama. Nama unik per tempat tanpa membedakan huruf — index ekspresi di SQL.
+/// Folder sistem (surat jalan, bukti penerimaan, arsip) TIDAK disimpan di sini.
+model ProjectFileFolder {
+  id                      Int      @id @default(autoincrement())
+  constructionProjectId   Int?     @map("construction_project_id")
+  externalRentalProjectId Int?     @map("external_rental_project_id")
+  externalSupplyProjectId Int?     @map("external_supply_project_id")
+  subProjectId            Int?     @map("sub_project_id")
+  name                    String   @db.VarChar(120)
+  createdBy               Int      @map("created_by")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  constructionProject   ConstructionProject?   @relation(fields: [constructionProjectId], references: [id], onDelete: Restrict)
+  externalRentalProject ExternalRentalProject? @relation(fields: [externalRentalProjectId], references: [id], onDelete: Restrict)
+  externalSupplyProject ExternalSupplyProject? @relation(fields: [externalSupplyProjectId], references: [id], onDelete: Restrict)
+  subProject            SubProject?            @relation(fields: [subProjectId, constructionProjectId], references: [id, constructionProjectId], onDelete: Restrict)
+  createdByUser         User                   @relation("ProjectFolderCreatedBy", fields: [createdBy], references: [id])
+  files                 ProjectFile[]
+
+  @@index([constructionProjectId])
+  @@index([externalRentalProjectId])
+  @@index([externalSupplyProjectId])
+  @@index([subProjectId])
+  @@map("project_file_folders")
+}
+
+/// Berkas di folder user. Pengunggah, ukuran, jenis, dan status sampah hidup di
+/// `files` (satu fakta). `name` = nama tampilan yang bisa diubah; nama unduhan
+/// tetap `files.original_name`.
+model ProjectFile {
+  id          Int      @id @default(autoincrement())
+  folderId    Int      @map("folder_id")
+  fileId      Int      @unique @map("file_id")
+  name        String   @db.VarChar(150)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  folder ProjectFileFolder @relation(fields: [folderId], references: [id])
+  file   File              @relation(fields: [fileId], references: [id])
+
+  @@index([folderId])
+  @@map("project_files")
+}
+
+/// Arsip Penutupan (L8): XLSX yang dibuat SEKALI di dalam transaksi penutupan
+/// tahapan/project — baca-saja, tidak bisa diubah/dipindah/dibuang. Cakupan sama
+/// dengan folder (tepat satu project, opsional tahapan via composite FK);
+/// `equipment_pool_item_id` = arsip timesheet per unit rental. Siapa & kapan =
+/// files.uploaded_by/at (yang menutup); status akhir dibaca dari tahapan/project.
+/// Sekali per cakupan per jenis: unique index parsial di SQL.
+model ProjectClosingArchive {
+  id                      Int      @id @default(autoincrement())
+  constructionProjectId   Int?     @map("construction_project_id")
+  externalRentalProjectId Int?     @map("external_rental_project_id")
+  externalSupplyProjectId Int?     @map("external_supply_project_id")
+  subProjectId            Int?     @map("sub_project_id")
+  equipmentPoolItemId     Int?     @map("equipment_pool_item_id")
+  archiveKey              String   @map("archive_key") @db.VarChar(40)
+  fileId                  Int      @unique @map("file_id")
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  constructionProject   ConstructionProject?   @relation(fields: [constructionProjectId], references: [id], onDelete: Restrict)
+  externalRentalProject ExternalRentalProject? @relation(fields: [externalRentalProjectId], references: [id], onDelete: Restrict)
+  externalSupplyProject ExternalSupplyProject? @relation(fields: [externalSupplyProjectId], references: [id], onDelete: Restrict)
+  subProject            SubProject?            @relation(fields: [subProjectId, constructionProjectId], references: [id, constructionProjectId], onDelete: Restrict)
+  equipmentPoolItem     EquipmentPoolItem?     @relation(fields: [equipmentPoolItemId], references: [id], onDelete: Restrict)
+  file                  File                   @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([constructionProjectId])
+  @@index([externalRentalProjectId])
+  @@index([externalSupplyProjectId])
+  @@index([subProjectId])
+  @@map("project_closing_archives")
+}
+
+// ============================================================
+// REQUEST MATERIAL — delivery + surat jalan (RM-4).
+// Lihat docs/keputusan-desain-request-material.md (G1–G5)
+// ============================================================
+
+/// Satu baris = satu surat jalan = satu truk = satu material (G1), jadi
+/// material_delivery_items dari ERD TIDAK dibuat. Satuan, jenis material, dan
+/// pool item dibaca dari item request (D1). Tanpa kolom status (G2): pembatalan
+/// lewat kolom cancelled_*, penerimaan diturunkan dari receipt (RM-5).
+///
+/// Nomor surat jalan unik per supplier HANYA di antara delivery yang tidak batal
+/// — index unik memakai NULLS NOT DISTINCT pada cancelled_at (ditulis manual di
+/// migrasi), supaya koreksi "batalkan lalu catat ulang" bisa memakai nomor yang sama.
+/// Item wajib milik request yang sama: composite FK (item, request).
+model MaterialDelivery {
+  id                    Int      @id @default(autoincrement())
+  deliveryCode          String   @unique @map("delivery_code") @db.VarChar(50)
+  materialRequestId     Int      @map("material_request_id")
+  materialRequestItemId Int      @map("material_request_item_id")
+  deliveredQuantity     Decimal  @map("delivered_quantity") @db.Decimal(18, 2)
+  supplierId            Int      @map("supplier_id")
+  deliveryNoteNumber    String   @map("delivery_note_number") @db.VarChar(100)
+  deliveryNoteDate      DateTime @map("delivery_note_date") @db.Date
+  deliveryNoteFileId    Int      @unique @map("delivery_note_file_id")
+  vehicleType           String?  @map("vehicle_type") @db.VarChar(50)
+  vehicleNumber         String   @map("vehicle_number") @db.VarChar(30)
+  driverName            String   @map("driver_name") @db.VarChar(150)
+  driverPhone           String?  @map("driver_phone") @db.VarChar(50)
+  originLocation        String?  @map("origin_location") @db.VarChar(255)
+  destinationLocation   String?  @map("destination_location") @db.VarChar(255)
+  notes                 String?  @db.Text
+
+  createdBy    Int       @map("created_by")
+  cancelledBy  Int?      @map("cancelled_by")
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?   @map("cancel_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  materialRequest     MaterialRequest     @relation(fields: [materialRequestId], references: [id])
+  materialRequestItem MaterialRequestItem @relation(fields: [materialRequestItemId, materialRequestId], references: [id, materialRequestId])
+  supplier            Supplier            @relation(fields: [supplierId], references: [id])
+  deliveryNoteFile    File                @relation(fields: [deliveryNoteFileId], references: [id])
+  createdByUser       User                @relation("MatDeliveryCreatedBy", fields: [createdBy], references: [id])
+  cancelledByUser     User?               @relation("MatDeliveryCancelledBy", fields: [cancelledBy], references: [id])
+  receipts            MaterialReceipt[]
+
+  @@unique([supplierId, deliveryNoteNumber, cancelledAt])
+  @@index([materialRequestId])
+  @@index([materialRequestItemId, materialRequestId])
+  @@map("material_deliveries")
+}
+
+// ============================================================
+// REQUEST MATERIAL — receipt + stok (RM-5).
+// Lihat docs/keputusan-desain-request-material.md (H1–H6)
+// ============================================================
+
+/// Penerimaan satu delivery (= satu truk) — paling banyak SATU receipt aktif per
+/// delivery (index unik NULLS NOT DISTINCT pada cancelled_at, ditulis manual di
+/// migrasi), jadi material_receipt_items dari ERD TIDAK dibuat (H1). Tanpa status
+/// validasi (H2): sah begitu dicatat Lapangan bersama buktinya; koreksi = batalkan
+/// lalu catat ulang.
+///
+/// `rejected_quantity` tidak disimpan (= received - accepted) dan `receiver_type`
+/// tidak disimpan (terbaca dari request_type). Untuk konstruksi,
+/// `accepted_quantity` adalah stok MASUK tahapan — tidak disalin ke
+/// material_stock_movements (H4). Untuk supply, dasar tagihan Income.
+model MaterialReceipt {
+  id                    Int       @id @default(autoincrement())
+  receiptCode           String    @unique @map("receipt_code") @db.VarChar(50)
+  materialDeliveryId    Int       @map("material_delivery_id")
+  receivedAt            DateTime  @map("received_at")
+  receivedQuantity      Decimal   @map("received_quantity") @db.Decimal(18, 2)
+  acceptedQuantity      Decimal   @map("accepted_quantity") @db.Decimal(18, 2)
+  externalReceiverName  String?   @map("external_receiver_name") @db.VarChar(150)
+  externalReceiverPhone String?   @map("external_receiver_phone") @db.VarChar(50)
+  notes                 String?   @db.Text
+  createdBy             Int       @map("created_by")
+  cancelledBy           Int?      @map("cancelled_by")
+  cancelledAt           DateTime? @map("cancelled_at")
+  cancelReason          String?   @map("cancel_reason") @db.Text
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  materialDelivery MaterialDelivery            @relation(fields: [materialDeliveryId], references: [id])
+  createdByUser    User                        @relation("MatReceiptCreatedBy", fields: [createdBy], references: [id])
+  cancelledByUser  User?                       @relation("MatReceiptCancelledBy", fields: [cancelledBy], references: [id])
+  attachments      MaterialReceiptAttachment[]
+
+  @@unique([materialDeliveryId, cancelledAt])
+  @@map("material_receipts")
+}
+
+/// Bukti penerimaan — WAJIB minimal satu untuk konstruksi maupun supply (H3).
+/// Penghubung ke `files` (lampiran L1).
+model MaterialReceiptAttachment {
+  id                Int      @id @default(autoincrement())
+  materialReceiptId Int      @map("material_receipt_id")
+  fileId            Int      @unique @map("file_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  materialReceipt MaterialReceipt @relation(fields: [materialReceiptId], references: [id])
+  file            File            @relation(fields: [fileId], references: [id])
+
+  @@index([materialReceiptId])
+  @@map("material_receipt_attachments")
+}
+
+/// Hanya mutasi MANUAL (H4): `received` tidak ada di sini karena stok masuk sudah
+/// tercatat di material_receipts.accepted_quantity — menyalinnya berarti dua
+/// sumber yang bisa bertentangan. `returned` dibuang (belum ada alur pengembalian).
+enum MaterialMovementType {
+  used
+  adjustment_in
+  adjustment_out
+
+  @@map("material_movement_type")
+}
+
+/// Ledger stok manual per tahapan per jenis material. Tabel
+/// sub_project_material_inventory dari ERD TIDAK dibuat (H5): saldo =
+/// SUM(receipt diterima) + SUM(adjustment_in) - SUM(used) - SUM(adjustment_out),
+/// dihitung saat dibaca dari baris yang tidak dibatalkan. Stok tidak boleh minus
+/// (H6) — dijaga service dengan mengunci baris sub_projects.
+model MaterialStockMovement {
+  id             Int                  @id @default(autoincrement())
+  subProjectId   Int                  @map("sub_project_id")
+  materialTypeId Int                  @map("material_type_id")
+  movementType   MaterialMovementType @map("movement_type")
+  quantity       Decimal              @db.Decimal(18, 2)
+  movementDate   DateTime             @map("movement_date") @db.Date
+  notes          String?              @db.Text
+  createdBy      Int                  @map("created_by")
+  cancelledBy    Int?                 @map("cancelled_by")
+  cancelledAt    DateTime?            @map("cancelled_at")
+  cancelReason   String?              @map("cancel_reason") @db.Text
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  subProject      SubProject   @relation(fields: [subProjectId], references: [id])
+  materialType    MaterialType @relation(fields: [materialTypeId], references: [id])
+  createdByUser   User         @relation("StockMovementCreatedBy", fields: [createdBy], references: [id])
+  cancelledByUser User?        @relation("StockMovementCancelledBy", fields: [cancelledBy], references: [id])
+
+  @@index([subProjectId, materialTypeId])
+  @@map("material_stock_movements")
+}
+
+// ============================================================
+// PEKERJA & LOG TENAGA KERJA — docs/skema-tenaga-kerja-harian.md P1–P11
+// ============================================================
+
+/// Kontrak = disewa selama tahapan berlangsung, dibayar HARIAN (P3). Harian =
+/// hadir ketika dipanggil. Karyawan bergaji bulanan bukan populasi ini.
+enum WorkerType {
+  contract
+  daily
+
+  @@map("worker_type")
+}
+
+/// Identitas pekerja — master GLOBAL, tidak terikat project/tahapan (P5).
+/// Upah TIDAK di sini: milik kesepakatan per tahapan. NIK opsional, unik kalau
+/// diisi (partial unique index + CHECK 16 digit di migrasi).
+model ProjectWorker {
+  id          Int       @id @default(autoincrement())
+  workerCode  String    @unique @map("worker_code") @db.VarChar(20)
+  fullName    String    @map("full_name") @db.VarChar(150)
+  idNumber    String?   @map("id_number") @db.VarChar(16)
+  phone       String?   @db.VarChar(30)
+  defaultRole String?   @map("default_role") @db.VarChar(100)
+  joinedAt    DateTime? @map("joined_at") @db.Date
+  notes       String?   @db.Text
+  createdBy   Int       @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  createdByUser User                         @relation("WorkerCreatedBy", fields: [createdBy], references: [id])
+  assignments   SubProjectWorkerAssignment[]
+  laborLogItems DailyLaborLogItem[]
+
+  @@index([fullName])
+  @@map("project_workers")
+}
+
+/// Kesepakatan kerja satu pekerja di satu tahapan. Tanpa kolom status (P5):
+/// bertugas = end_date kosong atau >= hari ini. Mengubah daily_wage tidak
+/// mengubah log yang sudah tercatat (upah disimpan per baris log).
+model SubProjectWorkerAssignment {
+  id              Int        @id @default(autoincrement())
+  subProjectId    Int        @map("sub_project_id")
+  projectWorkerId Int        @map("project_worker_id")
+  workerType      WorkerType @map("worker_type")
+  assignedRole    String?    @map("assigned_role") @db.VarChar(100)
+  dailyWage       Decimal    @map("daily_wage") @db.Decimal(18, 2)
+  startDate       DateTime   @map("start_date") @db.Date
+  endDate         DateTime?  @map("end_date") @db.Date
+  notes           String?    @db.Text
+  createdBy       Int        @map("created_by")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  subProject    SubProject    @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
+  projectWorker ProjectWorker @relation(fields: [projectWorkerId], references: [id], onDelete: Restrict)
+  createdByUser User          @relation("WorkerAssignmentCreatedBy", fields: [createdBy], references: [id])
+
+  @@unique([subProjectId, projectWorkerId])
+  @@index([projectWorkerId])
+  @@map("sub_project_worker_assignments")
+}
+
+/// Log tenaga kerja satu tahapan satu tanggal. Tanpa status & tanpa validasi
+/// (P1): pemeriksaan Admin -> Finance terjadi di klaim upah. Total dihitung saat
+/// dibaca (tidak ada total_workers/total_wage_amount).
+model DailyLaborLog {
+  id           Int      @id @default(autoincrement())
+  subProjectId Int      @map("sub_project_id")
+  workDate     DateTime @map("work_date") @db.Date
+  notes        String?  @db.Text
+  createdBy    Int      @map("created_by")
+  updatedBy    Int?     @map("updated_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  subProject    SubProject          @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
+  createdByUser User                @relation("LaborLogCreatedBy", fields: [createdBy], references: [id])
+  updatedByUser User?               @relation("LaborLogUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
+  items         DailyLaborLogItem[]
+
+  @@unique([subProjectId, workDate])
+  @@map("daily_labor_logs")
+}
+
+/// SATU BARIS = SATU ORANG (P6: wajib merujuk master). Peran, jenis, upah, dan
+/// lembur adalah fakta HARI ITU — boleh beda dari penugasan.
+/// total = daily_wage + overtime_amount, tanpa pengali (P2), tidak disimpan.
+model DailyLaborLogItem {
+  id              Int        @id @default(autoincrement())
+  dailyLaborLogId Int        @map("daily_labor_log_id")
+  projectWorkerId Int        @map("project_worker_id")
+  workerRole      String     @map("worker_role") @db.VarChar(100)
+  workerType      WorkerType @map("worker_type")
+  dailyWage       Decimal    @map("daily_wage") @db.Decimal(18, 2)
+  overtimeAmount  Decimal    @default(0) @map("overtime_amount") @db.Decimal(18, 2)
+  taskNotes       String?    @map("task_notes") @db.Text
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  dailyLaborLog DailyLaborLog @relation(fields: [dailyLaborLogId], references: [id], onDelete: Cascade)
+  projectWorker ProjectWorker @relation(fields: [projectWorkerId], references: [id], onDelete: Restrict)
+
+  @@unique([dailyLaborLogId, projectWorkerId])
+  @@index([projectWorkerId])
+  @@map("daily_labor_log_items")
 }
