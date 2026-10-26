@@ -51,9 +51,13 @@ constructerp/
 
 ### 1. Clone dan install
 
+Butuh **Node.js 24.22.1 atau lebih baru** (versi di bawahnya terkena rilis keamanan
+Node 21 Okt 2026). Versinya dikunci di `.nvmrc`; dengan nvm cukup `nvm install && nvm use`.
+
 ```bash
 git clone https://github.com/[USERNAME]/constructerp.git
 cd constructerp
+nvm install && nvm use       # membaca .nvmrc
 npm install
 ```
 

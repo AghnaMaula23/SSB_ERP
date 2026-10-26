@@ -16,8 +16,12 @@ setupSwagger(app);
 app.use(helmet());
 app.use(cors());
 app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// inflate: false — body terkompresi (gzip/deflate/br) ditolak 415 sebelum menyentuh
+// dekoder zlib. FE tidak pernah mengirimnya, dan parser ini berjalan SEBELUM login,
+// jadi dekoder yang rentan (mis. CVE-2026-111497, Brotli, Node < 24.22.1) tidak
+// bisa dijangkau dari luar tanpa token.
+app.use(express.json({ inflate: false }));
+app.use(express.urlencoded({ extended: true, inflate: false }));
 
 // Health Check
 app.get('/api/health', (req, res) => {
