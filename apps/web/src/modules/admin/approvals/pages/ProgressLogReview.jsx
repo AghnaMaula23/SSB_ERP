@@ -115,7 +115,7 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
         </div>
         <p className="mt-1 text-xs text-slate-500">
           <span className="font-mono font-semibold text-slate-700">{project.projectCode}</span> {project.projectName} ·{' '}
-          <a href={stageHref} className="font-semibold text-teal-700 hover:underline">buka Kontrak Volume tahapan</a>
+          <a href={stageHref} className="font-semibold text-brand-700 hover:underline">buka Kontrak Volume tahapan</a>
         </p>
       </div>
 
@@ -128,12 +128,12 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
             <div className="grid gap-5 sm:grid-cols-3">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Realisasi Hari Ini</p>
-                <p className={`mt-1 text-3xl font-bold ${log.realizedVolume ? 'text-teal-700' : 'text-amber-700'}`}>{formatVolume(log.realizedVolume, unit)}</p>
+                <p className={`mt-1 text-3xl font-bold ${log.realizedVolume ? 'text-brand-700' : 'text-amber-700'}`}>{formatVolume(log.realizedVolume, unit)}</p>
               </div>
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Target Harian</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">{stage.dailyTargetVolume ? formatVolume(stage.dailyTargetVolume, unit) : '-'}</p>
-                {dailyPct !== null && <p className={`text-xs font-semibold ${dailyPct >= 100 ? 'text-emerald-700' : 'text-amber-700'}`}>{formatNumber(dailyPct)}% dari target</p>}
+                {dailyPct !== null && <p className={`text-xs font-semibold ${dailyPct >= 100 ? 'text-leaf-700' : 'text-amber-700'}`}>{formatNumber(dailyPct)}% dari target</p>}
               </div>
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Nilai per {unit}</p>
@@ -146,7 +146,7 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
                 <span className="font-semibold text-slate-700">Progress tahapan tervalidasi</span>
                 <span className="text-slate-500">
                   {formatNumber(progress.billableProgress || 0)}%
-                  {pending && afterPct !== null && <> → <b className="text-teal-700">{formatNumber(afterPct)}%</b> bila divalidasi</>}
+                  {pending && afterPct !== null && <> → <b className="text-brand-700">{formatNumber(afterPct)}%</b> bila divalidasi</>}
                 </span>
               </div>
               <ProgressBar value={progress.billableProgress || 0} secondary={progress.pendingProgress || 0} label="Progress tahapan" />
@@ -157,7 +157,7 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
           </section>
 
           <section className="card-panel p-5" aria-label="Kondisi lapangan">
-            <p className="mb-4 text-[11px] font-bold uppercase tracking-wider text-teal-700">Kondisi Lapangan</p>
+            <p className="mb-4 text-[11px] font-bold uppercase tracking-wider text-brand-700">Kondisi Lapangan</p>
             <dl className="grid gap-4 sm:grid-cols-2">
               <Fact label="Cuaca Pagi">{condition.weatherMorning}</Fact>
               <Fact label="Cuaca Siang">{condition.weatherAfternoon}</Fact>
@@ -171,7 +171,7 @@ export default function ProgressLogReview({ subProjectId, recordId, onDone }) {
         <aside className="space-y-4">
           {pending && canValidate && !locked && (
             <div className="card-panel space-y-3 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700">Keputusan Admin</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-brand-700">Keputusan Admin</p>
               {rejecting ? (
                 <RejectReasonForm label="Alasan penolakan" submitLabel="Tolak Progress" placeholder="Contoh: Volume tidak sesuai foto lapangan" onSubmit={reject} onCancel={() => setRejecting(false)} />
               ) : (

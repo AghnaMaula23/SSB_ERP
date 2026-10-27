@@ -1,25 +1,27 @@
+import { subProjectTypeLabel } from '../../project/utils/projectFormat.js';
+import { filesHref } from './filesRoute.js';
+
 export const PROJECT_KINDS = {
   construction: { label: 'Konstruksi', icon: '🏗️' },
   rental: { label: 'Rental', icon: '🛠️' },
   supply: { label: 'Supply', icon: '🚚' },
 };
 
-// "Surat Jalan" sengaja tidak ada: surat jalan tampil dari folder sistem (L7),
-// bukan diunggah ulang — satu fakta di satu tempat.
-export const FILE_CATEGORIES = ['Laporan Harian', 'Foto Lapangan', 'Gambar Teknik', 'Sertifikat', 'Kontrak', 'Logistik', 'Invoice', 'Lainnya'];
-
-// Status folder mengikuti status proyeknya; folder bisa diarsipkan manual.
-export const FOLDER_STATUS = {
-  active: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', accent: 'border-l-emerald-500' },
-  pending: { label: 'Pending', className: 'bg-amber-50 text-amber-800 border-amber-200', accent: 'border-l-amber-400' },
-  archived: { label: 'Archived', className: 'bg-slate-100 text-slate-600 border-slate-200', accent: 'border-l-slate-400' },
+// Status folder = status project-nya (L8: arsip manual dibuang). Unggah tidak
+// dikunci status — BAST dsb. justru datang setelah project selesai.
+export const PROJECT_STATUS = {
+  planned: { label: 'Direncanakan', className: 'bg-amber-50 text-amber-800 border-amber-200', accent: 'border-l-amber-400' },
+  active: { label: 'Aktif', className: 'bg-leaf-50 text-leaf-700 border-leaf-200', accent: 'border-l-leaf-500' },
+  completed: { label: 'Selesai', className: 'bg-brand-50 text-brand-700 border-brand-200', accent: 'border-l-brand-500' },
+  cancelled: { label: 'Dibatalkan', className: 'bg-slate-100 text-slate-600 border-slate-200', accent: 'border-l-slate-400' },
 };
 
-export function folderStatus(folder) {
-  if (folder.archived || ['completed', 'cancelled'].includes(folder.projectStatus)) return 'archived';
-  if (folder.projectStatus === 'planned') return 'pending';
-  return 'active';
-}
+/** Folder sistem baca-saja (L7/L8) — isinya dari modul sumbernya. */
+export const SYSTEM_FOLDERS = {
+  'delivery-notes': { label: 'Surat Jalan', icon: '🧾', hint: 'Dari pencatatan pengiriman material (Divisi Lapangan)' },
+  'receipt-proofs': { label: 'Bukti Penerimaan', icon: '📦', hint: 'Foto/dokumen saat material diterima di lokasi' },
+  'closing-archive': { label: 'Arsip Penutupan', icon: '🗄️', hint: 'Rekap XLSX yang dibuat otomatis saat tahapan/project ditutup' },
+};
 
 export function formatBytes(bytes) {
   if (!bytes) return '0 B';
@@ -29,16 +31,30 @@ export function formatBytes(bytes) {
   return `${value >= 10 || index === 0 ? Math.round(value) : value.toFixed(1)} ${units[index]}`;
 }
 
-export function fileKind(file) {
-  const name = (file.fileName || '').toLowerCase();
-  const type = file.mimeType || '';
+const KIND_STYLE = {
+  cad: { icon: '📐', tone: 'bg-violet-50 text-violet-700' },
+  image: { icon: '🖼️', tone: 'bg-sky-50 text-sky-700' },
+  pdf: { icon: '📕', tone: 'bg-red-50 text-red-700' },
+  sheet: { icon: '📗', tone: 'bg-leaf-50 text-leaf-700' },
+  doc: { icon: '📘', tone: 'bg-blue-50 text-blue-700' },
+  other: { icon: '📄', tone: 'bg-slate-100 text-slate-600' },
+};
+
+/**
+ * Jenis berkas untuk ikon & pratinjau. Pakai `kind` dari API kalau ada,
+ * selain itu tebak dari nama + MIME (berkas lokal sebelum diunggah).
+ */
+export function fileKind({ kind, fileName = '', mimeType = '' }) {
+  if (kind && KIND_STYLE[kind]) return { kind, ...KIND_STYLE[kind] };
+  const name = fileName.toLowerCase();
   // DWG dicek dulu: MIME-nya `image/vnd.dwg`, tapi tidak bisa ditampilkan sebagai gambar.
-  if (name.endsWith('.dwg')) return { kind: 'cad', icon: '📐', tone: 'bg-violet-50 text-violet-700' };
-  if (type.startsWith('image/')) return { kind: 'image', icon: '🖼️', tone: 'bg-sky-50 text-sky-700' };
-  if (type === 'application/pdf' || name.endsWith('.pdf')) return { kind: 'pdf', icon: '📕', tone: 'bg-red-50 text-red-700' };
-  if (/\.(xlsx|csv)$/.test(name)) return { kind: 'sheet', icon: '📗', tone: 'bg-emerald-50 text-emerald-700' };
-  if (/\.docx$/.test(name)) return { kind: 'doc', icon: '📘', tone: 'bg-blue-50 text-blue-700' };
-  return { kind: 'other', icon: '📄', tone: 'bg-slate-100 text-slate-600' };
+  let guess = 'other';
+  if (name.endsWith('.dwg')) guess = 'cad';
+  else if (mimeType.startsWith('image/')) guess = 'image';
+  else if (mimeType === 'application/pdf' || name.endsWith('.pdf')) guess = 'pdf';
+  else if (/\.(xlsx|csv)$/.test(name)) guess = 'sheet';
+  else if (/\.docx$/.test(name)) guess = 'doc';
+  return { kind: guess, ...KIND_STYLE[guess] };
 }
 
 /**
@@ -61,4 +77,15 @@ export function timeAgo(iso) {
   if (minutes < 1440) return `${Math.round(minutes / 60)} jam lalu`;
   if (minutes < 43200) return `${Math.round(minutes / 1440)} hari lalu`;
   return new Date(iso).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+}
+
+export const stageLabel = (stage) => (stage ? `Tahapan ${subProjectTypeLabel(stage.subProjectType)}` : 'Tingkat project');
+
+/** Breadcrumb standar: Files › <project> › ...tail */
+export function projectCrumbs(type, directory, ...tail) {
+  return [
+    { label: 'Files', href: filesHref.projects() },
+    { label: directory.project.name, href: filesHref.project(type, directory.project.id) },
+    ...tail,
+  ];
 }

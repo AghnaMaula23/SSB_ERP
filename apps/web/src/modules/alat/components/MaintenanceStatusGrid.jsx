@@ -3,12 +3,12 @@ export default function MaintenanceStatusGrid({ metrics = [], status = 'Running 
     <section className="card-panel" aria-labelledby="maintenance-title">
       <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 font-bold">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-leaf-50 text-leaf-700 font-bold">
             🛠️
           </div>
           <h2 id="maintenance-title" className="text-base font-bold text-slate-900">Maintenance & Workhour Status</h2>
         </div>
-        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 border border-emerald-200">
+        <span className="inline-flex items-center rounded-full bg-leaf-50 px-2.5 py-1 text-xs font-medium text-leaf-700 border border-leaf-200">
           {status}
         </span>
       </div>

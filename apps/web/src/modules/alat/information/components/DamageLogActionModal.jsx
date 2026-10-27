@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { cancelDamageLog, resolveDamageLog } from '../services/informationService.js';
-import { saveResolvePurchaseReference } from '../services/damageLogActionService.js';
 
-const initialResolve = { maintenanceType: 'repair', actionDescription: '', performedBy: '' };
+const initialResolve = { maintenanceType: 'repair', actionDescription: '' };
 
 function todayDate() {
   const date = new Date();
@@ -15,9 +14,9 @@ const itemEstimated = (items) => items.reduce((sum, item) => sum + Number(item.e
 
 /**
  * purchaseOrders: order kategori Repair / Service yang sudah approved dan
- * merujuk damage log ini. Resolve wajib memilih minimal satu order tersebut —
- * endpoint resolve tidak menerima field purchase request, jadi catatan
- * order yang dipakai disimpan lokal untuk keperluan audit.
+ * merujuk damage log ini. Resolve wajib memilih minimal satu order tersebut.
+ * Kaitan PO ↔ damage log sudah tercatat di backend (repairItems[].damageLogId),
+ * jadi pilihan ini tidak disimpan lagi.
  */
 export default function DamageLogActionModal({ log, action, purchaseOrders = [], onClose, onSaved }) {
   const [form, setForm] = useState(initialResolve);
@@ -45,9 +44,7 @@ export default function DamageLogActionModal({ log, action, purchaseOrders = [],
     setLoading(true);
     try {
       if (isResolve) {
-        const selectedOrders = purchaseOrders.filter((order) => selectedOrderIds.includes(String(order.id)));
         await resolveDamageLog(log.id, { ...form, actionDescription: form.actionDescription.trim(), maintenanceDate: todayDate() });
-        saveResolvePurchaseReference({ damageLogId: log.id, purchaseOrderIds: selectedOrders.map((order) => order.id), purchaseOrderCodes: selectedOrders.map((order) => order.orderCode) });
       }
       else await cancelDamageLog(log.id, notes.trim());
       onSaved(action); onClose();
@@ -63,7 +60,7 @@ export default function DamageLogActionModal({ log, action, purchaseOrders = [],
       <div className="modal-content max-w-md" role="dialog" aria-modal="true" aria-labelledby="damage-action-title">
         <header className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className={`flex h-8 w-8 items-center justify-center rounded-lg font-bold ${isResolve ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg font-bold ${isResolve ? 'bg-leaf-50 text-leaf-700' : 'bg-red-50 text-red-700'}`}>
               {isResolve ? '✓' : '✕'}
             </div>
             <div>
@@ -100,8 +97,8 @@ export default function DamageLogActionModal({ log, action, purchaseOrders = [],
                       const checked = selectedOrderIds.includes(id);
                       const items = (order.items || []).filter((item) => item.relatedType === 'damage' && String(item.relatedId) === String(log.id));
                       return (
-                        <label key={id} className={`flex cursor-pointer gap-3 rounded-lg border p-3 text-[11px] transition ${checked ? 'border-teal-500 bg-teal-50/40 ring-1 ring-teal-500' : 'border-slate-200 hover:border-slate-300'}`}>
-                          <input type="checkbox" checked={checked} onChange={() => toggleOrder(id)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600" />
+                        <label key={id} className={`flex cursor-pointer gap-3 rounded-lg border p-3 text-[11px] transition ${checked ? 'border-brand-500 bg-brand-50/40 ring-1 ring-brand-500' : 'border-slate-200 hover:border-slate-300'}`}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleOrder(id)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600" />
                           <span className="min-w-0 text-slate-600">
                             <span className="block text-xs font-bold text-slate-900">{order.orderCode}</span>
                             <span className="mt-0.5 block truncate">{items.map((item) => item.relatedLabel || item.itemName).join(', ') || order.description}</span>
@@ -136,18 +133,6 @@ export default function DamageLogActionModal({ log, action, purchaseOrders = [],
                   rows="3"
                   className="input-control mt-1 text-xs py-2 h-auto"
                   placeholder="Describe maintenance or repair performed..."
-                />
-              </div>
-
-              <div>
-                <label htmlFor="performedBy" className="block text-xs font-semibold text-slate-600">Performed By (Mechanic)</label>
-                <input
-                  id="performedBy"
-                  name="performedBy"
-                  value={form.performedBy}
-                  onChange={update}
-                  className="input-control mt-1 text-xs"
-                  placeholder="Mechanic or technician name (optional)"
                 />
               </div>
             </>

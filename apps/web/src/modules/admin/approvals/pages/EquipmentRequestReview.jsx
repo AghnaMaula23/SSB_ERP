@@ -71,12 +71,12 @@ export default function EquipmentRequestReview({ recordId, onDone }) {
       <div className="mb-5 mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-mono text-2xl font-bold text-emerald-800">{request.requestCode}</h1>
+            <h1 className="font-mono text-2xl font-bold text-leaf-800">{request.requestCode}</h1>
             <StatusBadge status={request.status} map={EQUIPMENT_REQUEST_STATUS} />
           </div>
           <p className="mt-1 text-xs text-slate-500">
             Diajukan {formatDate(request.requestDate)} oleh {actorName(request.requestedBy)}
-            {stage && <> · <a href={`#/admin/projects/${stage.constructionProjectId}/sub/${stage.id}/alat`} className="font-semibold text-teal-700 hover:underline">{subProjectTypeLabel(stage.subProjectType)}</a></>}
+            {stage && <> · <a href={`#/admin/projects/${stage.constructionProjectId}/sub/${stage.id}/alat`} className="font-semibold text-brand-700 hover:underline">{subProjectTypeLabel(stage.subProjectType)}</a></>}
           </p>
         </div>
       </div>
@@ -111,7 +111,7 @@ export default function EquipmentRequestReview({ recordId, onDone }) {
         <aside className="space-y-4">
           {pending && canReview && !own ? (
             <div className="card-panel space-y-3 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700">Keputusan Admin</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-brand-700">Keputusan Admin</p>
               {rejecting ? (
                 <RejectReasonForm
                   label="Alasan penolakan"

@@ -56,7 +56,7 @@ export default function AppHeader({
           <p className="text-xs font-bold text-slate-900">{displayName}</p>
           <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{role}</p>
         </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-700 text-sm font-semibold text-white shadow-xs">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-sm font-semibold text-white shadow-xs">
           {initialsOf(displayName)}
         </div>
       </div>

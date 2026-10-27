@@ -9,7 +9,7 @@ export default function FormPage({ breadcrumb, icon, title, subtitle, busy = fal
     <>
       <Breadcrumb items={breadcrumb} />
       <div className="mb-6 mt-2 flex items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-xl text-teal-700" aria-hidden="true">{icon}</span>
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-xl text-brand-700" aria-hidden="true">{icon}</span>
         <div className="min-w-0">
           <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
           {subtitle && <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{subtitle}</p>}
@@ -50,7 +50,7 @@ export function Field({ label, htmlFor, required = false, error, hint, children,
 export function SectionDivider({ children }) {
   return (
     <div className="flex items-center gap-3 pt-1">
-      <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700">{children}</span>
+      <span className="text-[11px] font-bold uppercase tracking-wider text-brand-700">{children}</span>
       <span className="h-px flex-1 border-t border-dashed border-slate-300" />
     </div>
   );
@@ -60,7 +60,7 @@ export function SectionDivider({ children }) {
 export function InfoCard({ title, children }) {
   return (
     <div className="card-panel p-4">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700">{title}</p>
+      <p className="text-[11px] font-bold uppercase tracking-wider text-brand-700">{title}</p>
       <div className="mt-2 space-y-2 text-xs leading-relaxed text-slate-600">{children}</div>
     </div>
   );

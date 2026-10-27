@@ -11,7 +11,7 @@ const CLOSE_ACTIONS = {
 };
 
 const CONDITION_STYLE = {
-  operational: 'text-emerald-700',
+  operational: 'text-leaf-700',
   maintenance: 'text-amber-700',
   retired: 'text-slate-500',
 };
@@ -140,7 +140,7 @@ export default function SubProjectEquipmentPage({ project, stage, permissions, i
               return (
                 <tr key={row.id} className={inactive ? 'opacity-60' : ''}>
                   <td>
-                    <span className="font-mono text-sm font-bold text-teal-700">{row.equipmentItem?.assetCode || '-'}</span>
+                    <span className="font-mono text-sm font-bold text-brand-700">{row.equipmentItem?.assetCode || '-'}</span>
                   </td>
                   <td>
                     <p className="font-semibold text-slate-900">{row.poolItem?.equipmentType?.typeName || '-'}</p>
@@ -170,10 +170,10 @@ export default function SubProjectEquipmentPage({ project, stage, permissions, i
                     <td>
                       <div className="flex flex-wrap justify-end gap-1">
                         {row.status === 'assigned' && !row.receivedAt && permissions.receiveAllocation && (
-                          <button type="button" disabled={busyId !== null} onClick={() => runAction(row, 'receive')} className="btn btn-ghost px-2 py-1 text-[11px] text-emerald-700 hover:bg-emerald-50">Terima</button>
+                          <button type="button" disabled={busyId !== null} onClick={() => runAction(row, 'receive')} className="btn btn-ghost px-2 py-1 text-[11px] text-leaf-700 hover:bg-leaf-50">Terima</button>
                         )}
                         {row.status === 'assigned' && permissions.updateAllocation && Object.entries(CLOSE_ACTIONS).map(([status, action]) => (
-                          <button key={status} type="button" disabled={busyId !== null} onClick={() => runAction(row, status)} className={`btn btn-ghost px-2 py-1 text-[11px] ${status === 'cancelled' ? 'text-red-600 hover:bg-red-50' : 'text-teal-700 hover:bg-teal-50'}`}>
+                          <button key={status} type="button" disabled={busyId !== null} onClick={() => runAction(row, status)} className={`btn btn-ghost px-2 py-1 text-[11px] ${status === 'cancelled' ? 'text-red-600 hover:bg-red-50' : 'text-brand-700 hover:bg-brand-50'}`}>
                             {busyId === row.id ? '...' : action.label}
                           </button>
                         ))}
@@ -189,7 +189,7 @@ export default function SubProjectEquipmentPage({ project, stage, permissions, i
 
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
         {/* Label sama dengan kolom "Kondisi Unit" (istilah modul Divisi Alat). */}
-        {[['operational', 'bg-emerald-500'], ['maintenance', 'bg-amber-400'], ['retired', 'bg-slate-400']].map(([status, dot]) => (
+        {[['operational', 'bg-leaf-500'], ['maintenance', 'bg-amber-400'], ['retired', 'bg-slate-400']].map(([status, dot]) => (
           <span key={status} className="flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${dot}`} /> {equipmentStatusLabel(status)}</span>
         ))}
       </div>

@@ -26,7 +26,7 @@ export default function FieldConditionModal({ log, unit, onClose }) {
       <div className="modal-content max-w-lg" role="dialog" aria-modal="true" aria-labelledby="field-condition-title">
         <header className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-6 py-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-50 text-lg" aria-hidden="true">🌤️</span>
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-lg" aria-hidden="true">🌤️</span>
             <div>
               <h2 id="field-condition-title" className="text-base font-bold text-slate-900">Kondisi Lapangan</h2>
               <p className="text-xs text-slate-500">{formatDate(log.progressDate, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</p>
@@ -39,7 +39,7 @@ export default function FieldConditionModal({ log, unit, onClose }) {
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Realisasi</p>
-              <p className="text-lg font-bold text-teal-700">{formatVolume(log.realizedVolume, unit)}</p>
+              <p className="text-lg font-bold text-brand-700">{formatVolume(log.realizedVolume, unit)}</p>
             </div>
             <StatusBadge status={log.status} map={PROGRESS_STATUS} />
           </div>

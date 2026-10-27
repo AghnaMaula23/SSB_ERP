@@ -76,7 +76,7 @@ export default function InformationPage({ onBackToModules, onSignOut }) {
             <button type="button" onClick={() => navigate('alat/information/create')} disabled={!canCreate} title={canCreate ? 'Create damage log' : 'Anda tidak memiliki izin membuat damage log'} className="btn btn-primary text-xs">+ Create Damage Log</button>
           </div>
 
-          {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{notice}</div>}
+          {notice && <div className="mb-4 rounded-lg border border-leaf-200 bg-leaf-50 p-3 text-xs text-leaf-700">{notice}</div>}
           {error && <div className="mb-4 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700"><span>{error}</span><button type="button" onClick={loadLogs} className="font-bold underline">Retry</button></div>}
 
           <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">

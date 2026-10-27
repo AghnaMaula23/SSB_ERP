@@ -2,14 +2,14 @@ import ActionButton from '../../../../components/ActionButton.jsx';
 
 const statusMeta = {
   reported: { label: 'Reported', badge: 'border-amber-200 bg-amber-50 text-amber-700', dot: 'bg-amber-500', accent: 'bg-amber-400' },
-  resolved: { label: 'Resolved', badge: 'border-emerald-200 bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500', accent: 'bg-emerald-400' },
+  resolved: { label: 'Resolved', badge: 'border-leaf-200 bg-leaf-50 text-leaf-700', dot: 'bg-leaf-500', accent: 'bg-leaf-400' },
   cancelled: { label: 'Cancelled', badge: 'border-slate-200 bg-slate-100 text-slate-500', dot: 'bg-slate-400', accent: 'bg-slate-300' },
 };
 
 const levelMeta = {
   critical: { badge: 'border-red-200 bg-red-50 text-red-600' },
   moderate: { badge: 'border-amber-200 bg-amber-50 text-amber-700' },
-  minor: { badge: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+  minor: { badge: 'border-leaf-200 bg-leaf-50 text-leaf-700' },
 };
 
 const metaFor = (status) => statusMeta[status] || statusMeta.reported;

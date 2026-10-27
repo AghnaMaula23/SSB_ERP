@@ -146,7 +146,7 @@ export default function ApprovalQueue({ sourceType, initialNotice }) {
                 label: 'Referensi',
                 primary: true,
                 render: (row) => (row.referenceCode
-                  ? (queueDetailRoute(row) ? <a href={queueDetailRoute(row)} className="font-mono text-sm font-bold text-emerald-700 hover:underline">{row.referenceCode}</a> : <span className="font-mono text-sm font-bold">{row.referenceCode}</span>)
+                  ? (queueDetailRoute(row) ? <a href={queueDetailRoute(row)} className="font-mono text-sm font-bold text-leaf-700 hover:underline">{row.referenceCode}</a> : <span className="font-mono text-sm font-bold">{row.referenceCode}</span>)
                   : <span className="text-xs text-slate-400">-</span>),
                 sub: (row) => row.summary || '',
               },
@@ -191,7 +191,7 @@ export default function ApprovalQueue({ sourceType, initialNotice }) {
                   if (row.sourceType === 'progress_log') {
                     return (
                       <div className="flex items-center justify-end gap-2">
-                        {href && <a href={href} className="text-[11px] font-semibold text-teal-700 hover:underline" title="Lihat kondisi lapangan & dampak ke progress tahapan">Detail</a>}
+                        {href && <a href={href} className="text-[11px] font-semibold text-brand-700 hover:underline" title="Lihat kondisi lapangan & dampak ke progress tahapan">Detail</a>}
                         <DecisionButtons
                           busy={busyKey === key}
                           disabled={busyKey !== null || rejectingKey !== null}
@@ -203,7 +203,7 @@ export default function ApprovalQueue({ sourceType, initialNotice }) {
                     );
                   }
                   if (href) {
-                    return <a href={href} className="inline-block rounded-md border border-slate-300 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-800 hover:border-teal-600 hover:text-teal-700">Periksa →</a>;
+                    return <a href={href} className="inline-block rounded-md border border-slate-300 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-800 hover:border-brand-600 hover:text-brand-700">Periksa →</a>;
                   }
                   return null;
                 },

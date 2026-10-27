@@ -8,7 +8,7 @@ const navigationItems = [
   { key: 'kas', label: 'Kas', icon: '💳', route: 'alat/kas' },
 ];
 
-const BRAND = { mark: '⚒', title: 'Divisi Alat', subtitle: 'Resource System' };
+const BRAND = { title: 'Divisi Alat', subtitle: 'Resource System' };
 
 export default function AlatSidebar({
   collapsed,

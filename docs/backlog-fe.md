@@ -726,3 +726,36 @@ untuk request alat, manajemen akun, master material/supplier/jenis alat, kategor
   `GET /worker-assignments` membalas `data: { data: [...], summary }`.
 - `meta.summary` progress harian (`GET .../progress-logs`) kini benar-benar terkirim —
   sebelumnya dibuang `paginated()`.
+
+---
+
+# Audit FE desktop & mobile (26 Oktober 2026)
+
+## E28. Tema warna logo + penyambungan sisa mock
+
+**Tema.** Warna utama mengikuti logo SSB: biru `#029fe6` (skala `brand-*`) dan hijau daun
+`#069b47` (skala `leaf-*`), didefinisikan di `@theme` pada `src/index.css`. Kelas `teal-*`
+dan `emerald-*` sudah diganti seluruhnya — pakai `brand-*` / `leaf-*` untuk layar baru.
+Logo ada di `public/logo-ssb.png` (sidebar, login, pemilihan divisi, favicon).
+
+**Audit tata letak.** 44 rute dibuka di lebar 375 px dan 817 px: tidak ada overflow
+horizontal halaman maupun elemen terpotong di luar wadah gulir.
+
+**Disambungkan ke API (ditutup):**
+
+| Butir | Sekarang |
+|---|---|
+| E9a | `alat/services/projectService.js` → `/api/projects/construction?status=active` + tahapan aktif; `DUMMY_PROJECTS` dihapus |
+| E9b | Isian "dikerjakan oleh" dibuang dari resolve kerusakan & reset maintenance; `getMaintenancePerformedByOptions` dan `resolveDamageIssue` dihapus |
+| E4e | Fallback localStorage aspek maintenance dihapus; gagal API = error tampil |
+| E4d | Ambang per jenis × aspek pakai `GET /maintenance-thresholds` + `PUT/DELETE /types/:typeId/maintenance-thresholds/:aspectId`; isian default threshold aspek diganti "Peringatan Dini" (`warningLeadValue`) |
+| E10 (sebagian) | `damage_log_resolve_purchase_refs` dihapus (tak pernah dibaca). **Masih terbuka:** status tindakan di localStorage & aturan "wajib PO approved" — butuh keputusan desain |
+| E3 | `ModuleSelection` tanpa bypass `super_admin` |
+| E26 | `WorkersPage`/`WorkerFormPage` → `/api/workers` + `/api/worker-assignments`; status turunan dari periode, "Keluarkan" = isi `endDate`, hapus hanya bila belum ada log. `fieldMockService.js` dihapus. **Layar log harian (Lapangan) belum dibuat.** |
+| E21 Files | Modul `admin/files` ditulis ulang di atas `/api/project-files`: daftar project → direktori (project + tahapan) → folder → berkas, folder sistem (surat jalan, bukti penerimaan, arsip penutupan), sampah 30 hari. `fileStore.js`, `projectSources.js`, `systemFiles.js` dihapus |
+
+**Catatan lingkungan:** sesudah menarik migrasi `20261019120000_labor_workers`, jalankan
+`npx prisma generate` di `apps/api` lalu restart API — tanpa itu `/api/worker-assignments`
+membalas 500 `Cannot read properties of undefined (reading 'findMany')`.
+
+**Tetap mock (backend belum ada):** income, klaim pendapatan alat, kas lapangan, log aktivitas.

@@ -1,7 +1,7 @@
 const toneStyles = {
   blue: { icon: '📦', badge: 'bg-blue-50 text-blue-700 border-blue-200' },
   amber: { icon: '⚠️', badge: 'bg-amber-50 text-amber-700 border-amber-200' },
-  green: { icon: '✅', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  green: { icon: '✅', badge: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   red: { icon: '🛑', badge: 'bg-red-50 text-red-700 border-red-200' },
   slate: { icon: '📋', badge: 'bg-slate-50 text-slate-700 border-slate-200' },
   violet: { icon: '🧾', badge: 'bg-violet-50 text-violet-700 border-violet-200' },

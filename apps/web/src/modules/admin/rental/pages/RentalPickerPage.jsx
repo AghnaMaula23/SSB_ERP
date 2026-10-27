@@ -64,9 +64,9 @@ export default function RentalPickerPage({ projects, loading, error, canCreate }
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((project) => (
-            <a key={project.id} href={`#/admin/rental/${project.id}`} className="card-panel group flex flex-col overflow-hidden transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md">
+            <a key={project.id} href={`#/admin/rental/${project.id}`} className="card-panel group flex flex-col overflow-hidden transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md">
               <div className="flex items-start justify-between gap-3 p-5 pb-0">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-lg" aria-hidden="true">🛠️</span>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-lg" aria-hidden="true">🛠️</span>
                 <div className="flex items-center gap-1.5">
                   {project.isDemo && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-violet-600">Contoh</span>}
                   <StatusBadge status={project.status} map={RENTAL_STATUS} />
@@ -74,7 +74,7 @@ export default function RentalPickerPage({ projects, loading, error, canCreate }
               </div>
               <div className="flex-1 px-5 pt-3">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{project.clientName || 'Penyewa belum diisi'}</p>
-                <h2 className="mt-0.5 line-clamp-2 text-base font-bold text-slate-900 group-hover:text-teal-800">{project.projectName}</h2>
+                <h2 className="mt-0.5 line-clamp-2 text-base font-bold text-slate-900 group-hover:text-brand-800">{project.projectName}</h2>
                 <p className="mt-1 truncate text-xs text-slate-500">📍 {project.location || 'Lokasi belum diisi'}</p>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-3 text-[11px]">

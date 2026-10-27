@@ -78,7 +78,7 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
         <div className="flex flex-wrap items-center gap-2">
           <input type="month" value={month} max={todayIso().slice(0, 7)} onChange={(event) => event.target.value && setMonth(event.target.value)} className="input-control h-9 w-40 text-xs" aria-label="Periode timesheet" />
           <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
-            <input type="checkbox" checked={showAllDays} onChange={(event) => setShowAllDays(event.target.checked)} className="accent-teal-700" />
+            <input type="checkbox" checked={showAllDays} onChange={(event) => setShowAllDays(event.target.checked)} className="accent-brand-700" />
             Semua tanggal
           </label>
           <button type="button" onClick={exportCsv} disabled={loading || grouped.length === 0} className="btn btn-secondary h-9 text-xs">↓ Export CSV</button>
@@ -100,7 +100,7 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
               {SESSIONS.map((session) => (
                 <th key={session.key} colSpan={3} className={`border-b border-r border-slate-200 px-3 py-2 text-center ${session.key === 'overtime' ? 'text-amber-700' : ''}`}>{session.label}</th>
               ))}
-              <th rowSpan={2} className="border-b border-r border-slate-200 bg-teal-50 px-3 py-2 text-center text-teal-800">Total Jam</th>
+              <th rowSpan={2} className="border-b border-r border-slate-200 bg-brand-50 px-3 py-2 text-center text-brand-800">Total Jam</th>
               <th rowSpan={2} className="border-b border-r border-slate-200 px-3 py-2 text-center">Hari</th>
               <th rowSpan={2} className="border-b border-slate-200 px-3 py-2 text-left">Keterangan</th>
             </tr>
@@ -132,7 +132,7 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
                       <td key={`${session.key}-s`} className="border-r border-slate-100 px-2 py-2 text-center font-semibold">{value ? formatNumber(value.hours) : '-'}</td>,
                     ];
                   })}
-                  <td className="border-r border-slate-100 bg-teal-50/50 px-3 py-2 text-center font-mono text-sm font-bold text-slate-900">{row.empty ? '-' : formatNumber(row.total)}</td>
+                  <td className="border-r border-slate-100 bg-brand-50/50 px-3 py-2 text-center font-mono text-sm font-bold text-slate-900">{row.empty ? '-' : formatNumber(row.total)}</td>
                   <td className="border-r border-slate-100 px-3 py-2 text-center">{row.total > 0 ? 1 : 0}</td>
                   <td className="max-w-64 px-3 py-2">
                     <span className={`block truncate ${row.empty ? 'italic' : ''}`} title={row.notes.join('; ')}>
@@ -149,7 +149,7 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
               <tr className="border-t-2 border-slate-300 bg-slate-100 text-sm font-bold text-slate-900">
                 <td colSpan={3} className="px-3 py-3 text-right text-[11px] uppercase tracking-wider text-slate-600">Jumlah Total</td>
                 {SESSIONS.map((session) => <td key={session.key} colSpan={3} className="border-l border-slate-200 px-3 py-3">{sum(session.key) ? `${fmtHours(sum(session.key))} Jam` : '-'}</td>)}
-                <td className="bg-teal-700 px-3 py-3 text-center text-white">{formatNumber(totalHours)} Jam</td>
+                <td className="bg-brand-700 px-3 py-3 text-center text-white">{formatNumber(totalHours)} Jam</td>
                 <td className="px-3 py-3 text-center">{workDays} Hari</td>
                 <td className="px-3 py-3 text-slate-500">-</td>
               </tr>

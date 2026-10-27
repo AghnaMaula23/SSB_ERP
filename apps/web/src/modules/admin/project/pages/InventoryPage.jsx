@@ -167,7 +167,7 @@ export default function InventoryPage({ project, stage, canRecord, initialNotice
               key: 'action',
               label: 'Aksi',
               align: 'right',
-              render: (row) => <a href={`${base}/${row.materialType.id}/mutasi`} className="text-xs font-semibold text-teal-700 hover:underline">Catat Mutasi</a>,
+              render: (row) => <a href={`${base}/${row.materialType.id}/mutasi`} className="text-xs font-semibold text-brand-700 hover:underline">Catat Mutasi</a>,
             }] : []),
           ]}
           rows={stock}
@@ -189,7 +189,7 @@ export default function InventoryPage({ project, stage, canRecord, initialNotice
                 role="tab"
                 aria-selected={tab === option.value}
                 onClick={() => setTab(option.value)}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${tab === option.value ? 'bg-white text-teal-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${tab === option.value ? 'bg-white text-brand-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 {option.label}
               </button>
@@ -226,7 +226,7 @@ export default function InventoryPage({ project, stage, canRecord, initialNotice
                         {row.isCancelled && <span className="ml-1 rounded bg-red-50 px-1 py-0.5 text-[10px] font-bold uppercase text-red-600">Batal</span>}
                       </td>
                       <td className="text-sm text-slate-800">{row.material || '-'}</td>
-                      <td className={`whitespace-nowrap text-right font-mono text-sm font-bold ${row.isCancelled ? 'line-through' : row.sign > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                      <td className={`whitespace-nowrap text-right font-mono text-sm font-bold ${row.isCancelled ? 'line-through' : row.sign > 0 ? 'text-leaf-700' : 'text-red-600'}`}>
                         {row.sign > 0 ? '+' : '−'}{formatNumber(row.quantity)} <span className="text-[11px] font-medium text-slate-500">{row.unit}</span>
                       </td>
                       <td className="max-w-64 truncate text-xs text-slate-600" title={row.isCancelled ? `Dibatalkan: ${row.cancelReason || '-'}` : row.note || undefined}>

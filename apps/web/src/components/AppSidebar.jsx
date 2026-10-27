@@ -69,7 +69,7 @@ export default function AppSidebar({
                 compact ? 'justify-center px-0' : 'gap-3 px-3'
               } ${
                 isActive
-                  ? 'bg-teal-50 font-semibold text-teal-800 ring-1 ring-inset ring-teal-100'
+                  ? 'bg-brand-50 font-semibold text-brand-800 ring-1 ring-inset ring-brand-100'
                   : isEnabled
                     ? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     : 'cursor-not-allowed text-slate-400'
@@ -95,7 +95,7 @@ export default function AppSidebar({
       className={`flex min-w-0 items-center gap-3 text-left ${compact ? 'mx-auto' : 'flex-1'}`}
       title="Kembali ke pilihan divisi"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-700 text-lg font-bold text-white shadow-xs" aria-hidden="true">{brand.mark}</span>
+      <img src="/logo-ssb.png" alt="" aria-hidden="true" className="h-10 w-10 shrink-0 rounded-xl bg-white object-contain p-0.5 ring-1 ring-slate-200" />
       {!compact && (
         <span className="min-w-0">
           <span className="block truncate text-sm font-bold leading-tight text-slate-900">{brand.title}</span>

@@ -91,7 +91,7 @@ export default function InventoryMovementPage({ project, stage, materialTypeId, 
         <legend className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Jenis Mutasi</legend>
         <div className="mt-2 grid gap-2 sm:grid-cols-3">
           {Object.entries(MOVEMENT_TYPES).map(([value, option]) => (
-            <label key={value} className={`cursor-pointer rounded-lg border p-3 transition ${form.movementType === value ? 'border-teal-600 bg-teal-50/60 ring-2 ring-teal-600/15' : 'border-slate-200 hover:bg-slate-50'}`}>
+            <label key={value} className={`cursor-pointer rounded-lg border p-3 transition ${form.movementType === value ? 'border-brand-600 bg-brand-50/60 ring-2 ring-brand-600/15' : 'border-slate-200 hover:bg-slate-50'}`}>
               <input type="radio" name="movementType" value={value} checked={form.movementType === value} onChange={update} className="sr-only" />
               <span className="block text-sm font-semibold text-slate-900">{option.icon} {option.label}</span>
               <span className="block text-[11px] text-slate-500">{option.hint}</span>

@@ -162,7 +162,7 @@ export default function WorkhourFormPage({ project, stage, onCancel, onSaved }) 
                 setManualTotal(event.target.checked);
                 if (event.target.checked) setForm((current) => ({ ...current, totalWorkhour: computed ?? '' }));
               }}
-              className="accent-teal-700"
+              className="accent-brand-700"
             />
             Isi manual
           </label>

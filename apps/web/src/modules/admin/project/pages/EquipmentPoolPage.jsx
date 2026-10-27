@@ -21,7 +21,7 @@ function BindUnitControl({ item, disabled, onBind }) {
   };
 
   if (!open) {
-    return <button type="button" disabled={disabled} onClick={openPicker} className="btn btn-ghost px-2 py-1 text-[11px] text-teal-700 hover:bg-teal-50">Ikat Unit</button>;
+    return <button type="button" disabled={disabled} onClick={openPicker} className="btn btn-ghost px-2 py-1 text-[11px] text-brand-700 hover:bg-brand-50">Ikat Unit</button>;
   }
   return (
     <div className="flex flex-wrap items-center justify-end gap-1">
@@ -131,7 +131,7 @@ export default function EquipmentPoolPage({ project, permissions, initialNotice 
                       )}
                       {permissions.updatePool && (
                         <>
-                          <button type="button" disabled={busy} onClick={() => run(() => changePoolStatus(pool.id, 'closed'), `Pool ${pool.poolCode} ditutup.`, 'Tutup pool ini? Item yang masih available ikut ditutup.')} className="btn btn-ghost px-2 py-1 text-[11px] text-teal-700 hover:bg-teal-50">Tutup</button>
+                          <button type="button" disabled={busy} onClick={() => run(() => changePoolStatus(pool.id, 'closed'), `Pool ${pool.poolCode} ditutup.`, 'Tutup pool ini? Item yang masih available ikut ditutup.')} className="btn btn-ghost px-2 py-1 text-[11px] text-brand-700 hover:bg-brand-50">Tutup</button>
                           <button type="button" disabled={busy} onClick={() => run(() => changePoolStatus(pool.id, 'cancelled'), `Pool ${pool.poolCode} dibatalkan.`, 'Batalkan pool ini? Status final.')} className="btn btn-ghost px-2 py-1 text-[11px] text-red-600 hover:bg-red-50">Batalkan</button>
                         </>
                       )}
@@ -157,7 +157,7 @@ export default function EquipmentPoolPage({ project, permissions, initialNotice 
                         key: 'unit',
                         label: 'Unit',
                         render: (item) => (item.equipmentItem
-                          ? <span className="font-mono text-sm font-bold text-teal-700">{item.equipmentItem.assetCode}</span>
+                          ? <span className="font-mono text-sm font-bold text-brand-700">{item.equipmentItem.assetCode}</span>
                           : <span className="text-[11px] font-semibold text-amber-700">Belum terikat unit</span>),
                       },
                       { key: 'source', label: 'Asal', render: (item) => <span className="text-xs text-slate-600">{item.equipmentRequestItemId ? 'Request Alat' : 'Ditambah manual'}</span> },
@@ -177,7 +177,7 @@ export default function EquipmentPoolPage({ project, permissions, initialNotice 
                             )}
                             {item.status === 'available' && (
                               <>
-                                <button type="button" disabled={busy} onClick={() => run(() => closePoolItem(pool.id, item.id, 'completed'), 'Pool item ditandai selesai.', 'Tandai item ini selesai? Unit dilepas dari pool.')} className="btn btn-ghost px-2 py-1 text-[11px] text-teal-700 hover:bg-teal-50">Selesai</button>
+                                <button type="button" disabled={busy} onClick={() => run(() => closePoolItem(pool.id, item.id, 'completed'), 'Pool item ditandai selesai.', 'Tandai item ini selesai? Unit dilepas dari pool.')} className="btn btn-ghost px-2 py-1 text-[11px] text-brand-700 hover:bg-brand-50">Selesai</button>
                                 <button type="button" disabled={busy} onClick={() => run(() => closePoolItem(pool.id, item.id, 'cancelled'), 'Pool item dibatalkan.', 'Batalkan item ini? Status final.')} className="btn btn-ghost px-2 py-1 text-[11px] text-red-600 hover:bg-red-50">Batalkan</button>
                               </>
                             )}

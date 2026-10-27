@@ -4,7 +4,7 @@ export const SUB_PAGES = [
   { key: 'alat', label: 'Alat', icon: '🚜' },
   { key: 'timesheet', label: 'Timesheet Alat', icon: '⏱️' },
   { key: 'inventory', label: 'Inventory', icon: '📦' },
-  { key: 'pekerja', label: 'Pekerja', icon: '👷', mock: true },
+  { key: 'pekerja', label: 'Pekerja', icon: '👷' },
 ];
 
 const SUB_PAGE_KEYS = SUB_PAGES.map((page) => page.key);

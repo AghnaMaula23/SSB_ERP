@@ -73,7 +73,7 @@ export default function AllocationFormPage({ project, stage, onCancel, onSaved }
       footerNote={`${ready.length} unit siap dialokasikan`}
       aside={(
         <InfoCard title="Alur alokasi">
-          <p>1. Divisi Alat memasukkan unit ke <a href={poolHref} className="font-semibold text-teal-700 hover:underline">Equipment Pool</a> project.</p>
+          <p>1. Divisi Alat memasukkan unit ke <a href={poolHref} className="font-semibold text-brand-700 hover:underline">Equipment Pool</a> project.</p>
           <p>2. Unit dialokasikan ke tahapan di halaman ini.</p>
           <p>3. Lapangan menekan <b>Terima</b> saat unit sampai di lokasi, lalu jam kerjanya dicatat di Timesheet.</p>
         </InfoCard>
@@ -100,11 +100,11 @@ export default function AllocationFormPage({ project, stage, onCancel, onSaved }
               return (
                 <label
                   key={item.id}
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${checked ? 'border-teal-600 bg-teal-50/60 ring-2 ring-teal-600/15' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${checked ? 'border-brand-600 bg-brand-50/60 ring-2 ring-brand-600/15' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
                 >
-                  <input type="radio" name="poolItem" value={item.id} checked={checked} onChange={() => { setSelected(String(item.id)); setFormError(''); }} className="mt-1 accent-teal-700" />
+                  <input type="radio" name="poolItem" value={item.id} checked={checked} onChange={() => { setSelected(String(item.id)); setFormError(''); }} className="mt-1 accent-brand-700" />
                   <span className="min-w-0">
-                    <span className="block font-mono text-sm font-bold text-teal-700">{item.equipmentItem?.assetCode}</span>
+                    <span className="block font-mono text-sm font-bold text-brand-700">{item.equipmentItem?.assetCode}</span>
                     <span className="block text-xs font-semibold text-slate-800">{item.equipmentType?.typeName}</span>
                     <span className="mt-0.5 block text-[11px] text-slate-500">{item.poolCode} · {equipmentStatusLabel(item.equipmentItem?.currentStatus)}</span>
                   </span>

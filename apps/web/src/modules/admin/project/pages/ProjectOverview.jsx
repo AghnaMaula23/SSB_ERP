@@ -21,7 +21,7 @@ function ScheduleCard({ project, progress }) {
         <div>
           {schedule ? (
             <>
-              <p className="text-3xl font-bold tracking-tight text-teal-700">
+              <p className="text-3xl font-bold tracking-tight text-brand-700">
                 {schedule.notStarted ? 'Belum mulai' : `Minggu ${schedule.currentWeek}`}
               </p>
               <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">dari {schedule.totalWeeks} minggu</p>
@@ -33,7 +33,7 @@ function ScheduleCard({ project, progress }) {
             </>
           )}
         </div>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700" aria-hidden="true">↗</span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700" aria-hidden="true">↗</span>
       </div>
 
       <div className="flex flex-1 items-center justify-center py-6">
@@ -71,7 +71,7 @@ function StageRow({ project, stage, canUpdate, busy, onChangeStatus, onEdit }) {
   return (
     <tr>
       <td>
-        <a href={volumeHref} className="font-semibold text-slate-900 hover:text-teal-700">{subProjectTypeLabel(stage.subProjectType)}</a>
+        <a href={volumeHref} className="font-semibold text-slate-900 hover:text-brand-700">{subProjectTypeLabel(stage.subProjectType)}</a>
         <p className="mt-0.5 whitespace-nowrap text-[11px] text-slate-500">Target {formatVolume(stage.targetVolume, stage.volumeUnit)}</p>
         {stage.contractNo && <p className="whitespace-nowrap font-mono text-[10px] text-slate-400">{stage.contractNo}</p>}
         {/* Aksi di bawah nama tahapan — tabel tetap muat tanpa digulir ke samping. */}
@@ -83,7 +83,7 @@ function StageRow({ project, stage, canUpdate, busy, onChangeStatus, onEdit }) {
                 type="button"
                 disabled={busy}
                 onClick={() => onChangeStatus(stage, status)}
-                className={`${actionClass} ${status === 'cancelled' ? 'text-red-600 hover:bg-red-50' : 'text-teal-700 hover:bg-teal-50'}`}
+                className={`${actionClass} ${status === 'cancelled' ? 'text-red-600 hover:bg-red-50' : 'text-brand-700 hover:bg-brand-50'}`}
               >
                 {STAGE_ACTIONS[status].label}
               </button>
@@ -257,7 +257,7 @@ export default function ProjectOverview({ project, stagesEntry, permissions, onP
           )}
 
           <div className="mt-auto flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-slate-200 bg-slate-50 px-5 py-3 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1.5"><span className="h-2 w-3 rounded-sm bg-teal-600" /> Tervalidasi (dasar tagihan)</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-3 rounded-sm bg-brand-600" /> Tervalidasi (dasar tagihan)</span>
             <span className="flex items-center gap-1.5"><span className="h-2 w-3 rounded-sm bg-amber-300" /> Menunggu validasi</span>
           </div>
         </section>

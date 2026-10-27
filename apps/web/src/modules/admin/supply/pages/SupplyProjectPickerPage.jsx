@@ -70,23 +70,23 @@ export default function SupplyProjectPickerPage({ projects, loading, error, canC
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((project) => (
-            <a key={project.id} href={`#/admin/supply/${project.id}`} className="card-panel group flex flex-col p-5 transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md">
+            <a key={project.id} href={`#/admin/supply/${project.id}`} className="card-panel group flex flex-col p-5 transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md">
               <div className="flex items-start justify-between gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-lg" aria-hidden="true">🚚</span>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-lg" aria-hidden="true">🚚</span>
                 <div className="flex items-center gap-1.5">
                   {project.isDemo && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-violet-600" title="Data contoh, belum tersimpan di server">Contoh</span>}
                   <StatusBadge status={project.status} map={SUPPLY_STATUS} />
                 </div>
               </div>
               <p className="mt-3 text-[11px] font-bold uppercase tracking-wider text-slate-500">{project.clientName || 'Client belum diisi'}</p>
-              <h2 className="mt-0.5 line-clamp-2 text-base font-bold text-slate-900 group-hover:text-teal-800">{project.projectName}</h2>
+              <h2 className="mt-0.5 line-clamp-2 text-base font-bold text-slate-900 group-hover:text-brand-800">{project.projectName}</h2>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
                 <span className="font-mono font-semibold">{project.projectCode}</span>
                 <span>
                   {project.contractStartDate ? `${formatDate(project.contractStartDate)} – ${formatDate(project.contractEndDate)}` : 'Periode belum diisi'}
                 </span>
               </div>
-              <span className="mt-3 text-xs font-semibold text-teal-700">Buka rekap ritase →</span>
+              <span className="mt-3 text-xs font-semibold text-brand-700">Buka rekap ritase →</span>
             </a>
           ))}
         </div>

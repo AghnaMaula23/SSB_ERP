@@ -9,21 +9,21 @@ import { hasPermission } from '../../../services/permissions.js';
 
 const statusLabels = { normal: 'Normal', warning: 'Scheduled', due: 'Due Soon', overdue: 'Alert', inactive: 'Inactive' };
 const statusStyles = {
-  normal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  normal: 'bg-leaf-50 text-leaf-700 border-leaf-200',
   warning: 'bg-amber-50 text-amber-700 border-amber-200',
   due: 'bg-orange-50 text-orange-700 border-orange-200',
   overdue: 'bg-red-50 text-red-700 border-red-200',
   inactive: 'bg-slate-100 text-slate-500 border-slate-200',
 };
 const statusDot = {
-  normal: 'bg-emerald-500',
+  normal: 'bg-leaf-500',
   warning: 'bg-amber-500',
   due: 'bg-orange-500',
   overdue: 'bg-red-500',
   inactive: 'bg-slate-400',
 };
 const statusAccent = {
-  normal: 'bg-emerald-400',
+  normal: 'bg-leaf-400',
   warning: 'bg-amber-400',
   due: 'bg-orange-400',
   overdue: 'bg-red-400',
@@ -83,7 +83,7 @@ export default function MaintenancePage({ onNavigateToReset, onNavigateToThresho
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><nav className="flex items-center gap-2 text-xs font-medium text-slate-500"><span>Divisi Alat</span><span>/</span><span className="text-slate-900 font-semibold">Maintenance Tracking</span></nav><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Maintenance Overview</h1></div><div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center"><button type="button" onClick={() => onNavigateToThresholds?.()} className="btn btn-secondary w-full text-xs sm:w-auto">⚙️ Threshold per Type</button><button type="button" onClick={handleExport} className="btn btn-secondary w-full text-xs sm:w-auto">↓ Export Data</button></div></div>
           <div className="mb-6 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3 sm:gap-4"><StatCard label="Total Monitored Units" value={rows.length} tone="blue" /><StatCard label="Service Alerts" value={alertCount} tone="amber" /><StatCard label="Scheduled Service" value={scheduledCount} tone="green" /></div>
-          {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700" role="status">{notice}</div>}
+          {notice && <div className="mb-4 rounded-lg border border-leaf-200 bg-leaf-50 p-3 text-xs text-leaf-700" role="status">{notice}</div>}
           {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">{error}</div>}
           <section className="card-panel mb-6 p-4" aria-label="Maintenance filters"><div className="grid grid-cols-2 items-end gap-3 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1 md:grid-cols-[minmax(0,1.5fr)_minmax(140px,0.6fr)_auto] md:items-end"><div><label htmlFor="search-maintenance" className="block text-xs font-semibold text-slate-600">Search Machine or Code</label><div className="relative mt-1"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">🔍</span><input id="search-maintenance" value={search} onChange={(event) => setSearch(event.target.value)} className="input-control pl-8 text-xs" placeholder="Search item code..." /></div></div><div><label htmlFor="status-filter" className="block text-xs font-semibold text-slate-600">Status</label><select id="status-filter" value={status} onChange={(event) => setStatus(event.target.value)} className="input-control mt-1 text-xs"><option value="all">All Statuses</option><option value="overdue">Alert</option><option value="warning">Scheduled</option><option value="due">Due Soon</option><option value="normal">Normal</option></select></div><button type="button" onClick={() => { setSearch(''); setStatus('all'); }} className="btn btn-secondary py-2 text-xs">Reset Filters</button></div></section>
           {loading ? <div className="card-panel p-12 text-center text-sm text-slate-500">Loading maintenance parameters...</div> : (

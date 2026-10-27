@@ -11,8 +11,8 @@ export function StatusBadge({ status, map, className = '' }) {
 }
 
 const barTone = {
-  teal: 'bg-teal-600',
-  emerald: 'bg-emerald-500',
+  teal: 'bg-brand-600',
+  emerald: 'bg-leaf-500',
   amber: 'bg-amber-400',
   slate: 'bg-slate-400',
 };
@@ -34,7 +34,7 @@ export function ProgressRing({ value = 0, size = 168, stroke = 14, tone = 'teal'
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const pct = Math.min(100, Math.max(0, value));
-  const color = tone === 'emerald' ? 'stroke-emerald-500' : 'stroke-teal-600';
+  const color = tone === 'emerald' ? 'stroke-leaf-500' : 'stroke-brand-600';
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
@@ -60,7 +60,7 @@ export function ProgressRing({ value = 0, size = 168, stroke = 14, tone = 'teal'
 
 export function Notice({ tone = 'success', children, onDismiss }) {
   const styles = {
-    success: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    success: 'border-leaf-200 bg-leaf-50 text-leaf-700',
     error: 'border-red-200 bg-red-50 text-red-700',
     warning: 'border-amber-200 bg-amber-50 text-amber-800',
   };
@@ -80,7 +80,7 @@ export function Breadcrumb({ items }) {
         const isLast = index === items.length - 1;
         return (
           <span key={`${item.label}-${index}`} className="flex items-center gap-1.5">
-            {item.href && !isLast ? <a href={item.href} className="hover:text-teal-700">{item.label}</a> : <span className={isLast ? 'text-teal-700' : ''}>{item.label}</span>}
+            {item.href && !isLast ? <a href={item.href} className="hover:text-brand-700">{item.label}</a> : <span className={isLast ? 'text-brand-700' : ''}>{item.label}</span>}
             {!isLast && <span aria-hidden="true">›</span>}
           </span>
         );
@@ -94,9 +94,9 @@ export function Breadcrumb({ items }) {
  * sebelum data datang tidak terbaca sebagai data sungguhan.
  */
 export function MetricCard({ label, value, hint, accent = false, tone = 'slate', loading = false }) {
-  const valueTone = { slate: 'text-slate-900', teal: 'text-teal-700', emerald: 'text-emerald-700', amber: 'text-amber-700', red: 'text-red-600' };
+  const valueTone = { slate: 'text-slate-900', teal: 'text-brand-700', emerald: 'text-leaf-700', amber: 'text-amber-700', red: 'text-red-600' };
   return (
-    <article className={`card-panel p-4 ${accent ? 'border-l-4 border-l-teal-600' : ''}`} aria-busy={loading || undefined}>
+    <article className={`card-panel p-4 ${accent ? 'border-l-4 border-l-brand-600' : ''}`} aria-busy={loading || undefined}>
       <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
       {loading ? (
         <>
@@ -121,7 +121,7 @@ export function LoadingPanel({ children = 'Memuat data...' }) {
 export function EmptyPanel({ icon = '📂', title, children, action }) {
   return (
     <div className="card-panel flex flex-col items-center px-6 py-14 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-2xl" aria-hidden="true">{icon}</span>
+      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-2xl" aria-hidden="true">{icon}</span>
       <h2 className="mt-4 text-base font-bold text-slate-900">{title}</h2>
       {children && <p className="mt-1 max-w-md text-xs leading-relaxed text-slate-500">{children}</p>}
       {action && <div className="mt-5">{action}</div>}

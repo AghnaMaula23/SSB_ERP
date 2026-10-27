@@ -3,7 +3,7 @@
 export const PR_STATUS = {
   submitted: { label: 'Menunggu Admin', className: 'bg-amber-50 text-amber-700 border-amber-200' },
   waiting_finance_approval: { label: 'Menunggu Finance', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  approved: { label: 'Disetujui', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  approved: { label: 'Disetujui', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   rejected_by_admin: { label: 'Ditolak Admin', className: 'bg-red-50 text-red-700 border-red-200' },
   rejected_by_finance: { label: 'Ditolak Finance', className: 'bg-red-50 text-red-700 border-red-200' },
   cancelled: { label: 'Dibatalkan', className: 'bg-slate-100 text-slate-600 border-slate-200' },
@@ -57,7 +57,7 @@ export function prSummary(pr) {
 
 export const KAS_STATUS = {
   submitted: { label: 'Menunggu Verifikasi', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  approved: { label: 'Disetujui', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  approved: { label: 'Disetujui', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   rejected: { label: 'Ditolak', className: 'bg-red-50 text-red-700 border-red-200' },
 };
 
@@ -86,7 +86,7 @@ export const QUEUE_SOURCES = {
   purchase_request: { label: 'PR Divisi Alat', icon: '🔧', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   material_request: { label: 'Request Material', icon: '🧱', className: 'bg-amber-50 text-amber-800 border-amber-200' },
   equipment_request: { label: 'Request Alat', icon: '🚜', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  progress_log: { label: 'Progress Harian', icon: '📈', className: 'bg-teal-50 text-teal-700 border-teal-200' },
+  progress_log: { label: 'Progress Harian', icon: '📈', className: 'bg-brand-50 text-brand-700 border-brand-200' },
 };
 
 // detailPath progress: /api/projects/sub-projects/:subId/progress-logs/:logId
@@ -121,7 +121,7 @@ export const COST_TYPES = {
 export const MATERIAL_REQUEST_STATUS = {
   submitted: { label: 'Menunggu Admin', className: 'bg-amber-50 text-amber-700 border-amber-200' },
   waiting_finance_approval: { label: 'Menunggu Finance', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  approved: { label: 'Disetujui', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  approved: { label: 'Disetujui', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   rejected: { label: 'Ditolak', className: 'bg-red-50 text-red-700 border-red-200' },
   cancelled: { label: 'Dibatalkan', className: 'bg-slate-100 text-slate-600 border-slate-200' },
 };
@@ -129,7 +129,7 @@ export const MATERIAL_REQUEST_STATUS = {
 export const EQUIPMENT_REQUEST_STATUS = {
   submitted: { label: 'Menunggu Admin', className: 'bg-amber-50 text-amber-700 border-amber-200' },
   equipment_review: { label: 'Di Divisi Alat', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  approved: { label: 'Disetujui', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  approved: { label: 'Disetujui', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   rejected: { label: 'Ditolak', className: 'bg-red-50 text-red-700 border-red-200' },
   cancelled: { label: 'Dibatalkan', className: 'bg-slate-100 text-slate-600 border-slate-200' },
 };

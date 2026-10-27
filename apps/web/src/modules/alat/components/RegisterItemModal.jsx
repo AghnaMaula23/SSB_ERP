@@ -86,7 +86,7 @@ export default function RegisterItemModal({ isOpen, onClose, onSaved }) {
       <div className="modal-content max-w-md" role="dialog" aria-modal="true" aria-labelledby="register-item-title">
         <header className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-teal-700 font-bold">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700 font-bold">
               📦
             </div>
             <div>

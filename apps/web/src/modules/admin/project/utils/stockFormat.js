@@ -15,7 +15,7 @@ export const MOVEMENT_TYPES = {
     icon: '＋',
     sign: 1,
     needsNotes: true,
-    className: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    className: 'bg-leaf-50 text-leaf-700 border-leaf-200',
   },
   adjustment_out: {
     label: 'Koreksi Keluar',
