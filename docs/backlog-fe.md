@@ -766,6 +766,15 @@ muncul di tiap tahapan konstruksi di halaman Files. Pengajuan kini memuat angka 
 `realizedAmount` (laporan `validated`), `difference` (boleh negatif = realisasi melebihi
 pengajuan), `reports[]` (semua laporan, ringkas). Field tambahan opsional: `itemCount`,
 `receiptCount` (list laporan), `request.status` (detail laporan). Seeder: 3 laporan demo
-(validated merujuk pengajuan, mendesak menunggu Finance, ditolak). Antrean Approval Center
-untuk laporan masih T15.3 — sementara baca `GET /field-expense-reports?status=submitted`.
+(validated merujuk pengajuan, mendesak menunggu Finance, ditolak).
+
+**Update 4 Nov 2026 — Approval Center & penutupan kas (T15.3, T16.3, T16.4).**
+`GET /approval-queue` kini memuat `field_operational_request` (tahap `admin` dan `finance`,
+aksi validate/reject lalu approve/reject) dan `field_expense_report` (tahap `finance`, aksi
+validate/reject). `amount` = total perkiraan/nota. `summary` laporan diawali
+`Mendesak · tanpa pengajuan` atau `Realisasi FOR-xxxxxx` — itulah penanda "tanpa pengajuan"
+untuk 15.5. Menutup tahapan kini 409 selama ada pengajuan dana menunggu keputusan atau
+laporan menunggu validasi (pesannya menyebut jumlah masing-masing); pengajuan `approved`
+tanpa laporan tidak menahan. Penutupan menulis arsip ke-5 `stage-field-cash` (sheet
+Pengajuan, Item Pengajuan, Laporan Realisasi, Item Laporan) di folder Arsip Penutupan.
 

@@ -20,6 +20,9 @@ const QUEUES = [
   { sourceType: 'material_request', stage: 'finance', permission: 'material-request:approve', actions: ['approve', 'reject'] },
   { sourceType: 'equipment_request', stage: 'admin', permission: 'equipment-request:review', actions: ['admin-review'] },
   { sourceType: 'progress_log', stage: 'admin', permission: 'progress:validate', actions: ['validate'] },
+  { sourceType: 'field_operational_request', stage: 'admin', permission: 'field-cash:validate', actions: ['validate', 'reject'] },
+  { sourceType: 'field_operational_request', stage: 'finance', permission: 'field-cash:approve', actions: ['approve', 'reject'] },
+  { sourceType: 'field_expense_report', stage: 'finance', permission: 'field-cash:approve', actions: ['validate', 'reject'] },
 ];
 
 const SOURCE_TYPES = [...new Set(QUEUES.map((q) => q.sourceType))];

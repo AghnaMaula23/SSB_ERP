@@ -331,11 +331,114 @@ const stageLaborBook = async (tx, sp, ctx, subject) => {
   return wb;
 };
 
+const FIELD_REQUEST_STATUS_LABEL = {
+  submitted: 'Menunggu Admin', waiting_finance_approval: 'Menunggu Finance', approved: 'Disetujui', rejected: 'Ditolak',
+};
+const FIELD_REPORT_STATUS_LABEL = { submitted: 'Menunggu Finance', validated: 'Divalidasi', rejected: 'Ditolak' };
+
+/**
+ * Kas lapangan tahapan (docs/plan-divisi-lapangan.md L1–L2, L7): pengajuan dana
+ * (perkiraan) dan laporan realisasi (harga nota), masing-masing header + baris.
+ * Yang dibatalkan tidak ikut; yang ditolak ikut beserta alasannya. Syarat
+ * penutupan menjamin tidak ada lagi yang menunggu keputusan, jadi pengajuan
+ * `approved` tanpa laporan terlihat sebagai realisasi 0.
+ */
+const stageFieldCashBook = async (tx, sp, ctx, subject) => {
+  const actor = { select: { username: true, fullName: true } };
+  const requests = await tx.fieldOperationalRequest.findMany({
+    where: { subProjectId: sp.id, status: { not: 'cancelled' } },
+    include: {
+      items: { include: { category: true }, orderBy: { id: 'asc' } },
+      requestedByUser: actor, adminValidatedByUser: actor, financeReviewedByUser: actor,
+    },
+    orderBy: { id: 'asc' },
+  });
+  const reports = await tx.fieldExpenseReport.findMany({
+    where: { subProjectId: sp.id, status: { not: 'cancelled' } },
+    include: {
+      items: { include: { category: true }, orderBy: { id: 'asc' } },
+      request: { select: { requestCode: true } },
+      receipts: true, submittedByUser: actor, validatedByUser: actor,
+    },
+    orderBy: { id: 'asc' },
+  });
+
+  const lineTotal = (qty, price) => round2(toNumber(qty) * toNumber(price));
+  const sum = (items, price) => round2(items.reduce((s, i) => s + lineTotal(i.quantity, i[price]), 0));
+  const realizedByRequest = new Map();
+  for (const r of reports.filter((x) => x.status === 'validated' && x.fieldOperationalRequestId)) {
+    realizedByRequest.set(r.fieldOperationalRequestId,
+      round2((realizedByRequest.get(r.fieldOperationalRequestId) ?? 0) + sum(r.items, 'unitPrice')));
+  }
+  const requestRows = requests.map((r) => {
+    const requested = sum(r.items, 'estimatedUnitPrice');
+    const realized = realizedByRequest.get(r.id) ?? 0;
+    return { r, requested, realized, difference: round2(requested - realized) };
+  });
+  const reportRows = reports.map((r) => ({ r, total: sum(r.items, 'unitPrice') }));
+  const validatedTotal = round2(reportRows.filter(({ r }) => r.status === 'validated').reduce((s, x) => s + x.total, 0));
+
+  const wb = new ExcelJS.Workbook();
+  const head = headBlock(ctx, subject);
+  addSheet(wb, 'Pengajuan', head, [
+    { header: 'Kode', value: ({ r }) => r.requestCode, width: 14 },
+    { header: 'Tanggal', value: ({ r }) => toDateOnly(r.requestDate), width: 12 },
+    { header: 'Dibutuhkan', value: ({ r }) => toDateOnly(r.neededDate), width: 12 },
+    { header: 'Status', value: ({ r }) => FIELD_REQUEST_STATUS_LABEL[r.status], width: 16 },
+    { header: 'Perkiraan', value: ({ requested }) => requested },
+    { header: 'Realisasi tervalidasi', value: ({ realized }) => realized, width: 20 },
+    { header: 'Selisih', value: ({ difference }) => difference },
+    { header: 'Diajukan oleh', value: ({ r }) => actorName(r.requestedByUser), width: 20 },
+    { header: 'Admin', value: ({ r }) => actorName(r.adminValidatedByUser), width: 20 },
+    { header: 'Catatan Admin', value: ({ r }) => r.adminNotes, width: 28 },
+    { header: 'Finance', value: ({ r }) => actorName(r.financeReviewedByUser), width: 20 },
+    { header: 'Catatan Finance', value: ({ r }) => r.financeNotes, width: 28 },
+    { header: 'Catatan pengaju', value: ({ r }) => r.notes, width: 28 },
+  ], requestRows);
+  addSheet(wb, 'Item Pengajuan', head, [
+    { header: 'Kode pengajuan', value: ({ r }) => r.requestCode, width: 14 },
+    { header: 'Kategori', value: ({ i }) => i.category.categoryName, width: 16 },
+    { header: 'Uraian', value: ({ i }) => i.itemName, width: 28 },
+    { header: 'Kuantitas', value: ({ i }) => toNumber(i.quantity), width: 12 },
+    { header: 'Satuan', value: ({ i }) => i.unit, width: 10 },
+    { header: 'Harga perkiraan', value: ({ i }) => toNumber(i.estimatedUnitPrice) },
+    { header: 'Jumlah', value: ({ i }) => lineTotal(i.quantity, i.estimatedUnitPrice) },
+    { header: 'Catatan', value: ({ i }) => i.notes, width: 28 },
+  ], requests.flatMap((r) => r.items.map((i) => ({ r, i }))));
+  addSheet(wb, 'Laporan Realisasi', head, [
+    { header: 'Kode', value: ({ r }) => r.reportCode, width: 14 },
+    { header: 'Tanggal', value: ({ r }) => toDateOnly(r.reportDate), width: 12 },
+    { header: 'Pengajuan', value: ({ r }) => r.request?.requestCode ?? 'MENDESAK', width: 14 },
+    { header: 'Alasan mendesak', value: ({ r }) => r.urgentReason, width: 28 },
+    { header: 'Status', value: ({ r }) => FIELD_REPORT_STATUS_LABEL[r.status], width: 16 },
+    { header: 'Total nota', value: ({ total }) => total },
+    { header: 'Jumlah nota', value: ({ r }) => r.receipts.length, width: 12 },
+    { header: 'Dilaporkan oleh', value: ({ r }) => actorName(r.submittedByUser), width: 20 },
+    { header: 'Finance', value: ({ r }) => actorName(r.validatedByUser), width: 20 },
+    { header: 'Catatan Finance', value: ({ r }) => r.financeNotes, width: 28 },
+    { header: 'Catatan pelapor', value: ({ r }) => r.notes, width: 28 },
+  ], reportRows, [['Total tervalidasi', '', '', '', '', validatedTotal]]);
+  addSheet(wb, 'Item Laporan', head, [
+    { header: 'Kode laporan', value: ({ r }) => r.reportCode, width: 14 },
+    { header: 'Tanggal belanja', value: ({ i }) => toDateOnly(i.expenseDate), width: 14 },
+    { header: 'Kategori', value: ({ i }) => i.category.categoryName, width: 16 },
+    { header: 'Uraian', value: ({ i }) => i.itemName, width: 28 },
+    { header: 'Kuantitas', value: ({ i }) => toNumber(i.quantity), width: 12 },
+    { header: 'Satuan', value: ({ i }) => i.unit, width: 10 },
+    { header: 'Harga nota', value: ({ i }) => toNumber(i.unitPrice) },
+    { header: 'Total', value: ({ i }) => lineTotal(i.quantity, i.unitPrice) },
+    { header: 'Toko/vendor', value: ({ i }) => i.vendorName, width: 22 },
+    { header: 'Catatan', value: ({ i }) => i.notes, width: 28 },
+  ], reports.flatMap((r) => r.items.map((i) => ({ r, i }))));
+  return wb;
+};
+
 const STAGE_ARCHIVES = [
   ['stage-progress', 'progress', stageProgressBook],
   ['stage-equipment', 'alat', stageEquipmentBook],
   ['stage-material', 'material', stageMaterialBook],
   ['stage-labor', 'pekerja', stageLaborBook],
+  ['stage-field-cash', 'kas-lapangan', stageFieldCashBook],
 ];
 
 /** Dipanggil di transaksi penutupan tahapan, setelah lockForClosing & syarat lolos. */
