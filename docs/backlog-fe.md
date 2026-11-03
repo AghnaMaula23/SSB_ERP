@@ -768,7 +768,7 @@ pengajuan), `reports[]` (semua laporan, ringkas). Field tambahan opsional: `item
 `receiptCount` (list laporan), `request.status` (detail laporan). Seeder: 3 laporan demo
 (validated merujuk pengajuan, mendesak menunggu Finance, ditolak).
 
-**Update 4 Nov 2026 — Approval Center & penutupan kas (T15.3, T16.3, T16.4).**
+**Update 3 Nov 2026 — Approval Center & penutupan kas (T15.3, T16.3, T16.4).**
 `GET /approval-queue` kini memuat `field_operational_request` (tahap `admin` dan `finance`,
 aksi validate/reject lalu approve/reject) dan `field_expense_report` (tahap `finance`, aksi
 validate/reject). `amount` = total perkiraan/nota. `summary` laporan diawali
@@ -778,7 +778,7 @@ laporan menunggu validasi (pesannya menyebut jumlah masing-masing); pengajuan `a
 tanpa laporan tidak menahan. Penutupan menulis arsip ke-5 `stage-field-cash` (sheet
 Pengajuan, Item Pengajuan, Laporan Realisasi, Item Laporan) di folder Arsip Penutupan.
 
-**Update 5 Nov 2026 — API klaim upah + bukti bayar SUDAH ADA (T13, T14)**, persis kontrak:
+**Update 3 Nov 2026 — API klaim upah + bukti bayar SUDAH ADA (T13, T14)**, persis kontrak:
 `GET/POST /labor-wage-claims` (`{ subProjectId, periodStart, periodEnd, notes }` — log
 TIDAK dipilih FE: semua log tahapan dalam rentang yang belum di klaim aktif ikut; 0 log →
 409), `GET /:id`, `PUT /:id/cancel` (`{ reason }`), `/validate`, `/approve`, `/reject`
@@ -798,8 +798,19 @@ TIDAK dipilih FE: semua log tahapan dalam rentang yang belum di klaim aktif ikut
 - Folder sistem `labor-payment-proofs` ("Bukti Bayar Upah") di tiap tahapan konstruksi.
 - Seeder: 4 klaim demo dari 5 log terakhir tahapan demo — lunas (bukti pertama ditolak,
   kedua validated), antrean Finance, ditolak Admin, antrean Admin.
-- **Belum ada:** antrean Approval Center untuk klaim/bukti (T15.4) — sementara layar
-  Admin/Finance membaca `GET /labor-wage-claims?status=submitted|waiting_finance_approval`
-  dan `GET /labor-payment-proofs?status=submitted`; syarat penutupan bagian upah (T16.3) dan
-  status klaim di arsip `stage-labor` (T16.4).
+
+**Update 3 Nov 2026 — Approval Center & penutupan upah (T15.4, T16.3, T16.4).** Backend
+Divisi Lapangan kini lengkap.
+- `GET /approval-queue` memuat `labor_wage_claim` (tahap `admin`: validate/reject; `finance`:
+  approve/reject) dan `labor_payment_proof` (`finance`: validate/reject). `amount` klaim =
+  total upah + lembur; `amount` bukti = nominal DIBAYAR. `summary` klaim
+  `Periode DD-MM-YYYY s/d DD-MM-YYYY · N orang · M hari-orang`; bukti
+  `Bayar LWC-xxxxxx · diterima <nama> · N berkas` (bagian "diterima" hanya kalau diisi).
+- **Menutup tahapan kini 409 selama upah belum tuntas** — pesan menyebut jumlah: log pekerja
+  belum masuk klaim upah; klaim upah menunggu keputusan; klaim disetujui tanpa bukti bayar
+  tervalidasi. Klaim ditolak/batal membuat lognya kembali "belum diklaim". Untuk tahapan yang
+  punya log lama, alurnya: klaim semua periode → validasi → approve → bukti → validasi.
+- Arsip `stage-labor`: sheet `Log Pekerja` mendapat kolom `Klaim upah`; sheet baru `Klaim
+  Upah` (klaim ditolak ikut, dibatalkan tidak; footer total klaim aktif) dan `Bukti Bayar`
+  (yang ditolak ikut beserta alasannya).
 

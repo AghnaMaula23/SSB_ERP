@@ -4,7 +4,9 @@ const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { assertContextOpen } = require('../project/context-lock.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
-const { activeClaimsOfLogs, assertLogUnclaimed, ACTIVE_STATUSES: ACTIVE_CLAIM_STATUSES } = require('./labor-wage-claim.service.js');
+const {
+  activeClaimsOfLogs, assertLogUnclaimed, LOG_IN_ACTIVE_CLAIM, ACTIVE_STATUSES: ACTIVE_CLAIM_STATUSES,
+} = require('./labor-wage-claim.service.js');
 
 // ============================================================
 // LOG TENAGA KERJA HARIAN — satu tahapan, satu tanggal, satu baris = satu orang
@@ -137,9 +139,6 @@ const findOrFail = async (id, client = prisma) => {
 // READ
 // ------------------------------------------------------------
 
-/** Log yang punya baris di klaim aktif (L6). */
-const IN_ACTIVE_CLAIM = { items: { some: { wageClaimItems: { some: { claim: { status: { in: ACTIVE_CLAIM_STATUSES } } } } } } };
-
 const list = async ({ page = 1, limit = 20, subProjectId, startDate, endDate, projectWorkerId, claimed }) => {
   const stage = await prisma.subProject.findUnique({ where: { id: subProjectId }, select: { id: true } });
   if (!stage) throw httpError(`Tahapan dengan ID ${subProjectId} tidak ditemukan`, 404);
@@ -152,8 +151,8 @@ const list = async ({ page = 1, limit = 20, subProjectId, startDate, endDate, pr
     } }),
     AND: [
       ...(projectWorkerId ? [{ items: { some: { projectWorkerId } } }] : []),
-      ...(claimed === true ? [IN_ACTIVE_CLAIM] : []),
-      ...(claimed === false ? [{ NOT: IN_ACTIVE_CLAIM }] : []),
+      ...(claimed === true ? [LOG_IN_ACTIVE_CLAIM] : []),
+      ...(claimed === false ? [{ NOT: LOG_IN_ACTIVE_CLAIM }] : []),
     ],
   };
   const [rows, total] = await Promise.all([

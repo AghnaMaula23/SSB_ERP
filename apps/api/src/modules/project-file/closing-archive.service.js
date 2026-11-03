@@ -3,6 +3,7 @@ const { httpError } = require('../../utils/error.js');
 const { toNumber, toDateOnly } = require('../../utils/shape.js');
 const fileService = require('../file/file.service.js');
 const stock = require('../request-material/material-stock.service.js');
+const { ACTIVE_STATUSES: ACTIVE_CLAIM_STATUSES } = require('../labor/labor-wage-claim.service.js');
 
 // ============================================================
 // ARSIP PENUTUPAN (L8, docs/keputusan-desain-lampiran.md)
@@ -262,16 +263,38 @@ const stageMaterialBook = async (tx, sp, ctx, subject) => {
 
 const WORKER_TYPE_LABEL = { contract: 'Kontrak', daily: 'Harian' };
 
+const WAGE_CLAIM_STATUS_LABEL = {
+  submitted: 'Menunggu Admin', waiting_finance_approval: 'Menunggu Finance', approved: 'Disetujui', rejected: 'Ditolak',
+};
+const PAYMENT_PROOF_STATUS_LABEL = { submitted: 'Menunggu Finance', validated: 'Divalidasi', rejected: 'Ditolak' };
+
 /**
  * Pekerja tahapan (docs/skema-tenaga-kerja-harian.md): log per baris (satu baris =
- * satu orang, total = upah + lembur tanpa pengali), rekap per pekerja, penugasan.
+ * satu orang, total = upah + lembur tanpa pengali) beserta klaim aktif yang
+ * memuatnya, rekap per pekerja, penugasan, klaim upah, dan bukti bayar (L5–L8).
  * Penugasan terbuka sudah diakhiri di transaksi yang sama sebelum ini dipanggil.
+ * Syarat penutupan (L7a) menjamin setiap log ada di klaim yang sudah lunas; klaim
+ * ditolak & bukti ditolak ikut sebagai riwayat, yang dibatalkan tidak.
  */
 const stageLaborBook = async (tx, sp, ctx, subject) => {
   const items = await tx.dailyLaborLogItem.findMany({
     where: { dailyLaborLog: { subProjectId: sp.id } },
-    include: { projectWorker: true, dailyLaborLog: { include: { createdByUser: true } } },
+    include: {
+      projectWorker: true,
+      dailyLaborLog: { include: { createdByUser: true } },
+      wageClaimItems: { where: { claim: { status: { in: ACTIVE_CLAIM_STATUSES } } }, include: { claim: { select: { claimCode: true } } } },
+    },
     orderBy: [{ dailyLaborLog: { workDate: 'asc' } }, { projectWorker: { fullName: 'asc' } }],
+  });
+  const actor = { select: { username: true, fullName: true } };
+  const claims = await tx.fieldLaborWageClaim.findMany({
+    where: { subProjectId: sp.id, status: { not: 'cancelled' } },
+    include: {
+      items: { select: { projectWorkerId: true, dailyWage: true, overtimeAmount: true } },
+      paymentProofs: { where: { status: { not: 'cancelled' } }, include: { submittedByUser: actor, validatedByUser: actor, _count: { select: { files: true } } }, orderBy: { id: 'asc' } },
+      requestedByUser: actor, adminValidatedByUser: actor, financeReviewedByUser: actor,
+    },
+    orderBy: { id: 'asc' },
   });
   const assignments = await tx.subProjectWorkerAssignment.findMany({
     where: { subProjectId: sp.id },
@@ -308,6 +331,7 @@ const stageLaborBook = async (tx, sp, ctx, subject) => {
     { header: 'Keterangan tugas', value: (i) => i.taskNotes, width: 28 },
     { header: 'Catatan log', value: (i) => i.dailyLaborLog.notes, width: 28 },
     { header: 'Dicatat oleh', value: (i) => actorName(i.dailyLaborLog.createdByUser), width: 20 },
+    { header: 'Klaim upah', value: (i) => i.wageClaimItems[0]?.claim.claimCode ?? '', width: 14 },
   ], items, [['Total', '', '', '', '', grandWage, grandOvertime, grand]]);
   addSheet(wb, 'Rekap per Pekerja', head, [
     { header: 'Kode', value: (w) => w.code, width: 12 },
@@ -328,6 +352,47 @@ const stageLaborBook = async (tx, sp, ctx, subject) => {
     { header: 'Selesai', value: (a) => toDateOnly(a.endDate), width: 12 },
     { header: 'Catatan', value: (a) => a.notes, width: 28 },
   ], assignments);
+
+  const claimRows = claims.map((c) => {
+    const total = round2(c.items.reduce((s, i) => s + toNumber(i.dailyWage) + toNumber(i.overtimeAmount), 0));
+    const paid = c.paymentProofs.find((p) => p.status === 'validated');
+    const paidAmount = paid ? toNumber(paid.paidAmount) : null;
+    return { c, total, paid, paidAmount, difference: paidAmount === null ? null : round2(total - paidAmount) };
+  });
+  const sumOf = (rows, key) => round2(rows.reduce((s, r) => s + (r[key] ?? 0), 0));
+  const active = claimRows.filter(({ c }) => ACTIVE_CLAIM_STATUSES.includes(c.status));
+  addSheet(wb, 'Klaim Upah', head, [
+    { header: 'Kode', value: ({ c }) => c.claimCode, width: 14 },
+    { header: 'Periode awal', value: ({ c }) => toDateOnly(c.periodStart), width: 12 },
+    { header: 'Periode akhir', value: ({ c }) => toDateOnly(c.periodEnd), width: 12 },
+    { header: 'Status', value: ({ c }) => WAGE_CLAIM_STATUS_LABEL[c.status], width: 16 },
+    { header: 'Orang', value: ({ c }) => new Set(c.items.map((i) => i.projectWorkerId)).size, width: 8 },
+    { header: 'Hari-orang', value: ({ c }) => c.items.length, width: 10 },
+    { header: 'Total klaim', value: ({ total }) => total },
+    { header: 'Bukti bayar', value: ({ paid }) => paid?.proofCode ?? '', width: 14 },
+    { header: 'Tanggal bayar', value: ({ paid }) => (paid ? toDateOnly(paid.paymentDate) : ''), width: 12 },
+    { header: 'Dibayar', value: ({ paidAmount }) => paidAmount },
+    { header: 'Selisih', value: ({ difference }) => difference },
+    { header: 'Diajukan oleh', value: ({ c }) => actorName(c.requestedByUser), width: 20 },
+    { header: 'Admin', value: ({ c }) => actorName(c.adminValidatedByUser), width: 20 },
+    { header: 'Catatan Admin', value: ({ c }) => c.adminNotes, width: 28 },
+    { header: 'Finance', value: ({ c }) => actorName(c.financeReviewedByUser), width: 20 },
+    { header: 'Catatan Finance', value: ({ c }) => c.financeNotes, width: 28 },
+    { header: 'Catatan pengaju', value: ({ c }) => c.notes, width: 28 },
+  ], claimRows, [['Total klaim aktif', '', '', '', '', '', sumOf(active, 'total'), '', '', sumOf(active, 'paidAmount'), sumOf(active, 'difference')]]);
+  addSheet(wb, 'Bukti Bayar', head, [
+    { header: 'Kode', value: ({ p }) => p.proofCode, width: 14 },
+    { header: 'Klaim', value: ({ c }) => c.claimCode, width: 14 },
+    { header: 'Tanggal bayar', value: ({ p }) => toDateOnly(p.paymentDate), width: 12 },
+    { header: 'Dibayar', value: ({ p }) => toNumber(p.paidAmount) },
+    { header: 'Penerima', value: ({ p }) => p.receiverName, width: 20 },
+    { header: 'Status', value: ({ p }) => PAYMENT_PROOF_STATUS_LABEL[p.status], width: 16 },
+    { header: 'Jumlah berkas', value: ({ p }) => p._count.files, width: 12 },
+    { header: 'Diunggah oleh', value: ({ p }) => actorName(p.submittedByUser), width: 20 },
+    { header: 'Finance', value: ({ p }) => actorName(p.validatedByUser), width: 20 },
+    { header: 'Catatan Finance', value: ({ p }) => p.financeNotes, width: 28 },
+    { header: 'Catatan', value: ({ p }) => p.notes, width: 28 },
+  ], claims.flatMap((c) => c.paymentProofs.map((p) => ({ c, p }))));
   return wb;
 };
 

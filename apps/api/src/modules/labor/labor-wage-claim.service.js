@@ -91,6 +91,9 @@ const claimTotalsOf = async (ids, client = prisma) => {
 
 const EMPTY_TOTALS = { totalAmount: 0, workerCount: 0, manDays: 0 };
 
+/** Filter Prisma `dailyLaborLog`: log yang punya baris di klaim aktif (L6). */
+const LOG_IN_ACTIVE_CLAIM = { items: { some: { wageClaimItems: { some: { claim: { status: { in: ACTIVE_STATUSES } } } } } } };
+
 /**
  * Klaim AKTIF yang memuat tiap log: Map(logId → { id, claimCode, status }).
  * Dipakai list log (`claim`), pengunci log (L6), dan pemilih log saat mengklaim.
@@ -382,8 +385,9 @@ const reject = async (id, { notes }, user) => {
   return decide(row, row.status, rule.data(user.id, notes.trim()));
 };
 
-// activeClaimsOfLogs & assertLogUnclaimed dipakai labor-log; claimTotalsOf dipakai bukti bayar
+// activeClaimsOfLogs, assertLogUnclaimed & LOG_IN_ACTIVE_CLAIM dipakai labor-log; claimTotalsOf dipakai
+// bukti bayar; LOG_IN_ACTIVE_CLAIM dipakai juga syarat penutupan tahapan
 module.exports = {
   list, getById, create, cancel, validate, approve, reject,
-  activeClaimsOfLogs, assertLogUnclaimed, claimTotalsOf, ACTIVE_STATUSES,
+  activeClaimsOfLogs, assertLogUnclaimed, claimTotalsOf, ACTIVE_STATUSES, LOG_IN_ACTIVE_CLAIM,
 };

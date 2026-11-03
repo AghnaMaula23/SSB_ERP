@@ -23,6 +23,9 @@ const QUEUES = [
   { sourceType: 'field_operational_request', stage: 'admin', permission: 'field-cash:validate', actions: ['validate', 'reject'] },
   { sourceType: 'field_operational_request', stage: 'finance', permission: 'field-cash:approve', actions: ['approve', 'reject'] },
   { sourceType: 'field_expense_report', stage: 'finance', permission: 'field-cash:approve', actions: ['validate', 'reject'] },
+  { sourceType: 'labor_wage_claim', stage: 'admin', permission: 'labor-claim:validate', actions: ['validate', 'reject'] },
+  { sourceType: 'labor_wage_claim', stage: 'finance', permission: 'labor-claim:approve', actions: ['approve', 'reject'] },
+  { sourceType: 'labor_payment_proof', stage: 'finance', permission: 'labor-claim:approve', actions: ['validate', 'reject'] },
 ];
 
 const SOURCE_TYPES = [...new Set(QUEUES.map((q) => q.sourceType))];
