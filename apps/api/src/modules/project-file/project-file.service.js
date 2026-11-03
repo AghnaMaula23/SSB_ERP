@@ -114,6 +114,28 @@ const SYSTEM_FOLDERS = [
       };
     },
   },
+  {
+    key: 'field-expense-receipts',
+    name: 'Nota Kas Lapangan',
+    permission: 'field-cash:read',
+    // Kas lapangan hanya milik tahapan konstruksi — tidak muncul di project supply
+    stageOnly: true,
+    where: (scope) => ({ fieldReceiptOf: { is: { report: { subProjectId: scope.subProjectId } } } }),
+    include: { fieldReceiptOf: { select: { report: { select: {
+      id: true, reportCode: true, status: true, fieldOperationalRequestId: true, subProjectId: true,
+      subProject: { select: { subProjectType: true } },
+    } } } } },
+    source: (file) => {
+      const r = file.fieldReceiptOf.report;
+      return {
+        cancelled: r.status === 'cancelled',
+        source: {
+          type: 'field-expense-report', id: r.id, code: r.reportCode, status: r.status, isUrgent: r.fieldOperationalRequestId === null,
+          subProjectId: r.subProjectId, subProjectType: r.subProject.subProjectType,
+        },
+      };
+    },
+  },
 ];
 
 /** Folder sistem lampiran modul hanya untuk tahapan konstruksi dan project supply. */
@@ -124,7 +146,7 @@ const systemScopeFor = (kind, projectId, subProjectId) => {
 };
 
 const systemFolderEntries = async (scope, subProjectId, user) => {
-  const visible = SYSTEM_FOLDERS.filter((f) => user.permissions.includes(f.permission));
+  const visible = SYSTEM_FOLDERS.filter((f) => user.permissions.includes(f.permission) && (!f.stageOnly || scope.subProjectId));
   return Promise.all(visible.map(async (folder) => {
     const agg = await prisma.file.aggregate({
       where: folder.where(scope), _count: { _all: true }, _sum: { sizeBytes: true }, _max: { uploadedAt: true },
@@ -531,7 +553,9 @@ const listSystemFolder = async (kind, projectId, key, { subProjectId, page = 1, 
   }
 
   const folder = SYSTEM_FOLDERS.find((f) => f.key === key);
-  if (!folder || kind === 'rental') throw httpError('Folder sistem ini tidak ada untuk jenis project tersebut', 404);
+  if (!folder || kind === 'rental' || (folder.stageOnly && kind !== 'construction')) {
+    throw httpError('Folder sistem ini tidak ada untuk jenis project tersebut', 404);
+  }
 
   if (kind === 'construction') {
     if (!subProjectId) throw httpError('subProjectId wajib — folder sistem project konstruksi ada di tahapan', 400);
@@ -575,4 +599,5 @@ module.exports = {
   createFolder, renameFolder, deleteFolder,
   listFolderFiles, uploadFile, getFile, updateFile, trashFile, restoreFile, listTrash,
   listSystemFolder,
+  SYSTEM_FOLDER_KEYS: [...SYSTEM_FOLDERS.map((f) => f.key), CLOSING_ARCHIVE.key],
 };

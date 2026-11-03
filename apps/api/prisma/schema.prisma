@@ -75,6 +75,9 @@ model User {
   fieldRequestsAdminValidated     FieldOperationalRequest[]    @relation("FieldRequestAdminValidatedBy")
   fieldRequestsFinanceReviewed    FieldOperationalRequest[]    @relation("FieldRequestFinanceReviewedBy")
   fieldRequestsCancelled          FieldOperationalRequest[]    @relation("FieldRequestCancelledBy")
+  fieldReportsSubmitted           FieldExpenseReport[]         @relation("FieldReportSubmittedBy")
+  fieldReportsValidated           FieldExpenseReport[]         @relation("FieldReportValidatedBy")
+  fieldReportsCancelled           FieldExpenseReport[]         @relation("FieldReportCancelledBy")
 
   @@map("users")
 }
@@ -1036,6 +1039,7 @@ model SubProject {
   workerAssignments    SubProjectWorkerAssignment[]
   laborLogs            DailyLaborLog[]
   fieldRequests        FieldOperationalRequest[]
+  fieldReports         FieldExpenseReport[]
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
@@ -1605,6 +1609,7 @@ model File {
   receiptProofOf MaterialReceiptAttachment?
   projectFile    ProjectFile?
   closingArchive ProjectClosingArchive?
+  fieldReceiptOf FieldExpenseReceipt?
 
   @@index([status, trashedAt])
   @@map("files")
@@ -1954,8 +1959,8 @@ model DailyLaborLogItem {
 }
 
 // ============================================================
-// KAS LAPANGAN — pengajuan dana operasional (docs/plan-divisi-lapangan.md L1–L3).
-// Laporan realisasi + nota (field_expense_reports*) = T12, belum dibangun.
+// KAS LAPANGAN — pengajuan dana operasional (T11) + laporan realisasi & nota (T12).
+// docs/plan-divisi-lapangan.md L1–L4.
 // ============================================================
 
 /// Kategori biaya lapangan. Diisi SEEDER saja, tanpa endpoint kelola (L3).
@@ -1971,6 +1976,7 @@ model FieldExpenseCategory {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   requestItems FieldOperationalRequestItem[]
+  reportItems  FieldExpenseReportItem[]
 
   @@map("field_expense_categories")
 }
@@ -2022,6 +2028,7 @@ model FieldOperationalRequest {
   financeReviewedByUser User?                         @relation("FieldRequestFinanceReviewedBy", fields: [financeReviewedBy], references: [id], onDelete: Restrict)
   cancelledByUser       User?                         @relation("FieldRequestCancelledBy", fields: [cancelledBy], references: [id], onDelete: Restrict)
   items                 FieldOperationalRequestItem[]
+  reports               FieldExpenseReport[]
 
   @@index([subProjectId, status])
   @@index([requestedBy, requestDate])
@@ -2043,10 +2050,106 @@ model FieldOperationalRequestItem {
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
 
-  request  FieldOperationalRequest @relation(fields: [fieldOperationalRequestId], references: [id], onDelete: Cascade)
-  category FieldExpenseCategory    @relation(fields: [fieldExpenseCategoryId], references: [id], onDelete: Restrict)
+  request     FieldOperationalRequest  @relation(fields: [fieldOperationalRequestId], references: [id], onDelete: Cascade)
+  category    FieldExpenseCategory     @relation(fields: [fieldExpenseCategoryId], references: [id], onDelete: Restrict)
+  reportItems FieldExpenseReportItem[]
 
   @@index([fieldOperationalRequestId])
   @@index([fieldExpenseCategoryId])
   @@map("field_operational_request_items")
+}
+
+/// Laporan realisasi: `validated` = sumber jurnal Beban Operasional Lapangan (GL,
+/// belum dibangun). Ditolak/dibatalkan = final; koreksi = lapor ulang.
+enum FieldExpenseReportStatus {
+  submitted
+  validated
+  rejected
+  cancelled
+
+  @@map("field_expense_report_status")
+}
+
+/// Laporan realisasi + nota (L1, L4). Dua bentuk: merujuk pengajuan `approved`
+/// tahapan yang sama (satu pengajuan boleh beberapa laporan), atau MENDESAK tanpa
+/// pengajuan dengan `urgent_reason` wajib — dijaga CHECK. Harga = harga nota,
+/// boleh melebihi pengajuan (L2). Total tidak disimpan (ERD total_spent_amount).
+/// `validated_by/at` + `finance_notes` = keputusan Finance, termasuk penolakan
+/// (satu-satunya pemutus laporan). corrected_by_correction_id ERD menunggu GL.
+model FieldExpenseReport {
+  id                        Int                      @id @default(autoincrement())
+  reportCode                String                   @unique @map("report_code") @db.VarChar(50)
+  fieldOperationalRequestId Int?                     @map("field_operational_request_id")
+  subProjectId              Int                      @map("sub_project_id")
+  reportDate                DateTime                 @map("report_date") @db.Date
+  urgentReason              String?                  @map("urgent_reason") @db.Text
+  notes                     String?                  @db.Text
+  status                    FieldExpenseReportStatus @default(submitted)
+
+  submittedBy  Int       @map("submitted_by")
+  validatedBy  Int?      @map("validated_by")
+  validatedAt  DateTime? @map("validated_at")
+  financeNotes String?   @map("finance_notes") @db.Text
+  cancelledBy  Int?      @map("cancelled_by")
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?   @map("cancel_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  request         FieldOperationalRequest? @relation(fields: [fieldOperationalRequestId], references: [id], onDelete: Restrict)
+  subProject      SubProject               @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
+  submittedByUser User                     @relation("FieldReportSubmittedBy", fields: [submittedBy], references: [id])
+  validatedByUser User?                    @relation("FieldReportValidatedBy", fields: [validatedBy], references: [id], onDelete: Restrict)
+  cancelledByUser User?                    @relation("FieldReportCancelledBy", fields: [cancelledBy], references: [id], onDelete: Restrict)
+  items           FieldExpenseReportItem[]
+  receipts        FieldExpenseReceipt[]
+
+  @@index([subProjectId, reportDate])
+  @@index([fieldOperationalRequestId])
+  @@index([status])
+  @@map("field_expense_reports")
+}
+
+/// Baris realisasi. total = quantity × unit_price, dihitung saat dibaca.
+/// `field_operational_request_item_id` (opsional) wajib milik pengajuan yang
+/// dirujuk header — dijaga service saat lapor (header tidak bisa diubah).
+model FieldExpenseReportItem {
+  id                            Int      @id @default(autoincrement())
+  fieldExpenseReportId          Int      @map("field_expense_report_id")
+  fieldOperationalRequestItemId Int?     @map("field_operational_request_item_id")
+  fieldExpenseCategoryId        Int      @map("field_expense_category_id")
+  expenseDate                   DateTime @map("expense_date") @db.Date
+  itemName                      String   @map("item_name") @db.VarChar(150)
+  quantity                      Decimal  @db.Decimal(18, 2)
+  unit                          String   @db.VarChar(30)
+  unitPrice                     Decimal  @map("unit_price") @db.Decimal(18, 2)
+  vendorName                    String?  @map("vendor_name") @db.VarChar(150)
+  notes                         String?  @db.Text
+  createdAt                     DateTime @default(now()) @map("created_at")
+  updatedAt                     DateTime @updatedAt @map("updated_at")
+
+  report      FieldExpenseReport           @relation(fields: [fieldExpenseReportId], references: [id], onDelete: Cascade)
+  requestItem FieldOperationalRequestItem? @relation(fields: [fieldOperationalRequestItemId], references: [id], onDelete: Restrict)
+  category    FieldExpenseCategory         @relation(fields: [fieldExpenseCategoryId], references: [id], onDelete: Restrict)
+
+  @@index([fieldExpenseReportId])
+  @@index([fieldOperationalRequestItemId])
+  @@index([fieldExpenseCategoryId])
+  @@map("field_expense_report_items")
+}
+
+/// Nota per laporan (L4), minimal 1 — lewat `files` + storage.service, pola
+/// material_receipt_attachments. Nota per baris (ERD) tidak dibuat.
+model FieldExpenseReceipt {
+  id                   Int      @id @default(autoincrement())
+  fieldExpenseReportId Int      @map("field_expense_report_id")
+  fileId               Int      @unique @map("file_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  report FieldExpenseReport @relation(fields: [fieldExpenseReportId], references: [id], onDelete: Restrict)
+  file   File               @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([fieldExpenseReportId])
+  @@map("field_expense_receipts")
 }

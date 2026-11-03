@@ -756,3 +756,16 @@ di FE. Belum ada juga: antrean Approval Center untuk pengajuan ini (T15.3) dan s
 penutupan tahapan (T16.3) — sampai itu, layar Admin/Finance membaca langsung
 `GET /field-operational-requests?status=submitted|waiting_finance_approval`.
 
+**Update 3 Nov 2026 — API laporan realisasi + nota SUDAH ADA (T12)**, persis kontrak:
+`GET /field-expense-reports` (filter `subProjectId`, `fieldOperationalRequestId`,
+`urgent`, `status`, `startDate`/`endDate`), `GET /:id`, `POST` multipart (`items` = string
+JSON, nota di field `receipts` 1–10 file), `PUT /:id/cancel` (`{ reason }`), `/validate`,
+`/reject` (`{ notes }` wajib) — keduanya Finance saja. Nota dibuka lewat
+`GET /files/{fileId}/url`. Folder sistem `field-expense-receipts` ("Nota Kas Lapangan")
+muncul di tiap tahapan konstruksi di halaman Files. Pengajuan kini memuat angka sungguhan:
+`realizedAmount` (laporan `validated`), `difference` (boleh negatif = realisasi melebihi
+pengajuan), `reports[]` (semua laporan, ringkas). Field tambahan opsional: `itemCount`,
+`receiptCount` (list laporan), `request.status` (detail laporan). Seeder: 3 laporan demo
+(validated merujuk pengajuan, mendesak menunggu Finance, ditolak). Antrean Approval Center
+untuk laporan masih T15.3 — sementara baca `GET /field-expense-reports?status=submitted`.
+

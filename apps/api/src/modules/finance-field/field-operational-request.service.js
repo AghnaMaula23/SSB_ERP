@@ -73,7 +73,44 @@ const shapeItem = (item) => {
   };
 };
 
-const shapeHeader = (row, requestedAmount) => ({
+/** Total perkiraan per pengajuan: Map(id → amount). Rumus sama dengan shapeItem. */
+const requestedAmountsOf = async (ids) => {
+  if (!ids.length) return new Map();
+  const rows = await prisma.$queryRaw`
+    SELECT field_operational_request_id AS id, SUM(ROUND(quantity * estimated_unit_price, 2)) AS amount
+    FROM field_operational_request_items
+    WHERE field_operational_request_id = ANY(${ids})
+    GROUP BY field_operational_request_id`;
+  return new Map(rows.map((r) => [r.id, toNumber(r.amount)]));
+};
+
+/** Realisasi = jumlah laporan `validated` yang merujuk pengajuan (L2): Map(id → amount). */
+const realizedAmountsOf = async (ids) => {
+  if (!ids.length) return new Map();
+  const rows = await prisma.$queryRaw`
+    SELECT r.field_operational_request_id AS id, SUM(ROUND(i.quantity * i.unit_price, 2)) AS amount
+    FROM field_expense_reports r
+    JOIN field_expense_report_items i ON i.field_expense_report_id = r.id
+    WHERE r.status = 'validated' AND r.field_operational_request_id = ANY(${ids})
+    GROUP BY r.field_operational_request_id`;
+  return new Map(rows.map((r) => [r.id, toNumber(r.amount)]));
+};
+
+/** Laporan yang merujuk satu pengajuan, ringkas, semua status. */
+const reportsOf = async (requestId) => {
+  const rows = await prisma.$queryRaw`
+    SELECT r.id, r.report_code, r.report_date, r.status::text AS status,
+      COALESCE(SUM(ROUND(i.quantity * i.unit_price, 2)), 0) AS amount
+    FROM field_expense_reports r
+    LEFT JOIN field_expense_report_items i ON i.field_expense_report_id = r.id
+    WHERE r.field_operational_request_id = ${requestId}
+    GROUP BY r.id ORDER BY r.id`;
+  return rows.map((r) => ({
+    id: r.id, reportCode: r.report_code, reportDate: toDateOnly(r.report_date), status: r.status, totalAmount: toNumber(r.amount),
+  }));
+};
+
+const shapeHeader = (row, requestedAmount, realizedAmount) => ({
   id: row.id,
   requestCode: row.requestCode,
   subProjectId: row.subProjectId,
@@ -84,20 +121,19 @@ const shapeHeader = (row, requestedAmount) => ({
   status: row.status,
   rejectedBy: rejectedBy(row),
   requestedAmount,
-  // TODO(T12): SUM laporan realisasi `validated` yang merujuk pengajuan ini.
-  // Tabel laporan belum ada, jadi selalu 0 (dan `reports` di detail kosong).
-  realizedAmount: 0,
+  realizedAmount,
   requestedBy: shapeActor(row.requestedByUser),
   createdAt: row.createdAt,
 });
 
-const shapeDetail = (row) => {
+const shapeDetail = async (row) => {
   const items = row.items.map(shapeItem);
   const requestedAmount = round2(items.reduce((sum, i) => sum + i.estimatedAmount, 0));
-  const header = shapeHeader(row, requestedAmount);
+  const realizedAmount = (await realizedAmountsOf([row.id])).get(row.id) ?? 0;
   return {
-    ...header,
-    difference: round2(requestedAmount - header.realizedAmount),
+    ...shapeHeader(row, requestedAmount, realizedAmount),
+    // Hanya ditampilkan, tidak dikelola (L2) — negatif = realisasi melebihi pengajuan
+    difference: round2(requestedAmount - realizedAmount),
     adminValidatedBy: shapeActor(row.adminValidatedByUser),
     adminValidatedAt: row.adminValidatedAt,
     adminNotes: row.adminNotes,
@@ -108,8 +144,7 @@ const shapeDetail = (row) => {
     cancelledAt: row.cancelledAt,
     cancelReason: row.cancelReason,
     items,
-    // TODO(T12): laporan realisasi yang merujuk pengajuan ini (ringkas)
-    reports: [],
+    reports: await reportsOf(row.id),
   };
 };
 
@@ -148,17 +183,14 @@ const list = async ({ page = 1, limit = 20, subProjectId, status, startDate, end
     prisma.fieldOperationalRequest.count({ where }),
   ]);
 
-  // Total per baris untuk satu halaman — satu query, rumus sama dengan shapeItem
   const ids = rows.map((r) => r.id);
-  const sums = ids.length ? await prisma.$queryRaw`
-    SELECT field_operational_request_id AS id, SUM(ROUND(quantity * estimated_unit_price, 2)) AS amount
-    FROM field_operational_request_items
-    WHERE field_operational_request_id = ANY(${ids})
-    GROUP BY field_operational_request_id` : [];
-  const amountById = new Map(sums.map((s) => [s.id, toNumber(s.amount)]));
+  const [requested, realized] = await Promise.all([requestedAmountsOf(ids), realizedAmountsOf(ids)]);
 
   return {
-    data: rows.map((row) => ({ ...shapeHeader(row, amountById.get(row.id) ?? 0), itemCount: row._count.items })),
+    data: rows.map((row) => ({
+      ...shapeHeader(row, requested.get(row.id) ?? 0, realized.get(row.id) ?? 0),
+      itemCount: row._count.items,
+    })),
     total, page, limit,
   };
 };
@@ -316,4 +348,5 @@ const reject = async (id, { notes }, user) => {
   return decide(row, row.status, rule.data(user.id, notes.trim()));
 };
 
-module.exports = { list, getById, create, cancel, validate, approve, reject };
+// assertCategories & requestedAmountsOf dipakai juga laporan realisasi
+module.exports = { list, getById, create, cancel, validate, approve, reject, assertCategories, requestedAmountsOf };
