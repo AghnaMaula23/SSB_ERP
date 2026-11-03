@@ -127,13 +127,14 @@ const update = async (id, payload) => {
 /** Hanya untuk salah input: pekerja yang sudah punya jejak tidak boleh hilang. */
 const remove = async (id) => {
   const row = await findOrFail(id);
-  const [assignments, logItems] = await Promise.all([
+  const [assignments, logItems, claimItems] = await Promise.all([
     prisma.subProjectWorkerAssignment.count({ where: { projectWorkerId: id } }),
     prisma.dailyLaborLogItem.count({ where: { projectWorkerId: id } }),
+    prisma.fieldLaborWageClaimItem.count({ where: { projectWorkerId: id } }),
   ]);
-  if (assignments || logItems) {
+  if (assignments || logItems || claimItems) {
     throw httpError(
-      `${row.fullName} tidak bisa dihapus — sudah punya ${assignments} penugasan dan tercatat di ${logItems} log harian.`,
+      `${row.fullName} tidak bisa dihapus — sudah punya ${assignments} penugasan, tercatat di ${logItems} log harian, dan ${claimItems} baris klaim upah.`,
       409
     );
   }

@@ -2652,7 +2652,7 @@ const swaggerSpec = {
     '/labor-wage-claims/{id}': {
       get: {
         tags: ['Upah Pekerja'], summary: 'Detail klaim',
-        description: 'Permission: labor-claim:read. Header + keputusan Admin/Finance + `items[]` snapshot (`workDate`, `dailyLaborLogItemId`, `workerCode`, `workerName`, `workerRole`, `workerType`, `dailyWage`, `overtimeAmount`, `totalWage`) + `perWorker` (rekap per orang: hari, upah, lembur, total) + `paymentProofs[]` + `totalAmount`, `paidAmount`, `difference` (dihitung).',
+        description: 'Permission: labor-claim:read. Header + keputusan Admin/Finance + `items[]` snapshot (`workDate`, `dailyLaborLogItemId`, `workerCode`, `workerName`, `workerRole`, `workerType`, `dailyWage`, `overtimeAmount`, `totalWage`) + `perWorker` (rekap per orang: hari, upah, lembur, total) + `paymentProofs[]` + `totalAmount`, `paidAmount`, `difference` (dihitung). `paidAmount` = bukti `validated`; `paidAmount` & `difference` null selama belum lunas. `difference` = totalAmount − paidAmount (negatif = dibayar lebih).',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } },
       },
     },

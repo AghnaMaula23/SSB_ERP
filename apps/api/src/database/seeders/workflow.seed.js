@@ -13,8 +13,8 @@
 // pun. Bagian yang gagal dicatat lalu dilewati — bagian lain tetap jalan.
 //
 // Tidak dibuat di sini: delivery & penerimaan material (butuh unggah file ke
-// storage) dan klaim upah (modulnya belum ada). Laporan realisasi kas lapangan
-// IKUT dibuat: notanya PNG kecil yang diunggah ke storage (gagal = dilewati).
+// storage). Laporan realisasi kas lapangan dan bukti bayar upah IKUT dibuat:
+// berkasnya PNG kecil yang diunggah ke storage (gagal = dilewati).
 const prisma = require('../../config/database.js');
 const cashSvc = require('../../modules/divisi-alat/cash.service.js');
 const prSvc = require('../../modules/divisi-alat/purchase-request.service.js');
@@ -28,6 +28,8 @@ const laborLogSvc = require('../../modules/labor/labor-log.service.js');
 const projectFileSvc = require('../../modules/project-file/project-file.service.js');
 const fieldRequestSvc = require('../../modules/finance-field/field-operational-request.service.js');
 const fieldReportSvc = require('../../modules/finance-field/field-expense-report.service.js');
+const wageClaimSvc = require('../../modules/labor/labor-wage-claim.service.js');
+const paymentProofSvc = require('../../modules/labor/labor-payment-proof.service.js');
 const { detect } = require('../../modules/file/file-types.js');
 
 // Penanda baris buatan seeder ini — dipakai untuk memeriksa "sudah pernah jalan".
@@ -468,6 +470,50 @@ async function seedFieldReports(ctx, lapangan, finance) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Klaim upah + bukti bayar — dari 5 log terakhir tahapan (bagian Pekerja).
+// Tanggalnya dibaca dari log, bukan daysAgo(): log demo bertanggal hari seed
+// PERTAMA. Butuh storage (unggah bukti bayar).
+// ─────────────────────────────────────────────────────────────────────────
+async function seedWageClaims(ctx, lapangan, admin, finance) {
+  if (await prisma.fieldLaborWageClaim.count({ where: { notes: { startsWith: MARK } } })) return 'sudah ada';
+  const logs = await prisma.dailyLaborLog.findMany({
+    where: { subProjectId: ctx.stage.id }, orderBy: { workDate: 'desc' }, take: 5, select: { workDate: true },
+  });
+  if (logs.length < 5) throw new Error(`butuh 5 log tenaga kerja di tahapan, ada ${logs.length} — bagian Pekerja gagal?`);
+  const d = logs.map((l) => l.workDate.toISOString().slice(0, 10)).reverse(); // terlama → terbaru
+  const claim = (from, to, notes) => wageClaimSvc.create({
+    subProjectId: ctx.stage.id, periodStart: from, periodEnd: to, notes: `${MARK} ${notes}`,
+  }, lapangan.id);
+
+  // 1. Lunas: Admin → Finance → bukti pertama ditolak, bukti kedua divalidasi
+  const paid = await claim(d[0], d[1], 'Upah dua hari pertama');
+  await wageClaimSvc.validate(paid.id, { notes: 'Kehadiran cocok dengan absen mandor.' }, admin.id);
+  await wageClaimSvc.approve(paid.id, { notes: null }, finance.id);
+  const blurry = await paymentProofSvc.create({
+    laborWageClaimId: paid.id, paymentDate: d[2], paidAmount: paid.totalAmount, receiverName: 'Mandor Slamet',
+  }, [demoReceipt('bukti-bayar-upah.png')], lapangan.id);
+  await paymentProofSvc.reject(blurry.id, { notes: 'Tanda tangan penerima tidak terlihat. Foto ulang lembar tanda terimanya.' }, finance.id);
+  const proof = await paymentProofSvc.create({
+    laborWageClaimId: paid.id, paymentDate: d[2], paidAmount: paid.totalAmount, receiverName: 'Mandor Slamet',
+    notes: 'Dibayar tunai di lokasi',
+  }, [demoReceipt('tanda-terima-upah.png'), demoReceipt('daftar-tanda-tangan.png')], lapangan.id);
+  await paymentProofSvc.validate(proof.id, { notes: 'Lengkap.' }, finance.id);
+
+  // 2. Antrean Finance
+  const forwarded = await claim(d[2], d[2], 'Upah hari ketiga (ada lembur operator)');
+  await wageClaimSvc.validate(forwarded.id, { notes: 'Lembur operator sesuai catatan pekerjaan.' }, admin.id);
+
+  // 3. Ditolak Admin — lognya terbuka lagi untuk diperbaiki & diklaim ulang
+  const rejected = await claim(d[3], d[3], 'Upah hari keempat');
+  await wageClaimSvc.reject(rejected.id, { notes: 'Hujan sejak 14.00 — cek ulang apakah upah dibayar penuh, lalu ajukan ulang.' }, admin);
+
+  // 4. Antrean Admin
+  await claim(d[4], d[4], 'Upah hari kelima');
+
+  return '1 lunas (1 bukti ditolak, 1 validated), 1 antrean Finance, 1 ditolak Admin, 1 antrean Admin';
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Berkas project — folder kosong, supaya halaman Files tidak hanya folder sistem.
 // ─────────────────────────────────────────────────────────────────────────
 async function seedFolders(ctx, admin) {
@@ -518,6 +564,7 @@ async function seedWorkflowDemo() {
   await section('Stok material', () => seedStock(ctx, lapangan));
   await section('Kas lapangan', () => seedFieldCash(ctx, lapangan, admin, finance));
   await section('Laporan kas lapangan', () => seedFieldReports(ctx, lapangan, finance));
+  await section('Klaim upah', () => seedWageClaims(ctx, lapangan, admin, finance));
   await section('Berkas project', () => seedFolders(ctx, admin));
 
   const queue = await prisma.$queryRaw`SELECT source_type, stage, count(*)::int AS n FROM approval_queue GROUP BY 1, 2 ORDER BY 1, 2`;

@@ -778,3 +778,28 @@ laporan menunggu validasi (pesannya menyebut jumlah masing-masing); pengajuan `a
 tanpa laporan tidak menahan. Penutupan menulis arsip ke-5 `stage-field-cash` (sheet
 Pengajuan, Item Pengajuan, Laporan Realisasi, Item Laporan) di folder Arsip Penutupan.
 
+**Update 5 Nov 2026 — API klaim upah + bukti bayar SUDAH ADA (T13, T14)**, persis kontrak:
+`GET/POST /labor-wage-claims` (`{ subProjectId, periodStart, periodEnd, notes }` — log
+TIDAK dipilih FE: semua log tahapan dalam rentang yang belum di klaim aktif ikut; 0 log →
+409), `GET /:id`, `PUT /:id/cancel` (`{ reason }`), `/validate`, `/approve`, `/reject`
+(`{ notes }` wajib). `GET/POST /labor-payment-proofs` (multipart, berkas di field `proofs`
+1–10 file), `GET /:id`, `PUT /:id/cancel`, `/validate`, `/reject` (Finance). Kode
+`LWC-NNNNNN` / `LPP-NNNNNN`. Yang perlu diketahui layar:
+- `GET /labor-logs?claimed=true|false` + field `claim` (`{ id, claimCode, status }` atau
+  null) di list DAN detail log. Log dengan `claim` ≠ null: sembunyikan tombol ubah/hapus
+  (server 409). Klaim ditolak/batal → `claim` kembali null.
+- Detail klaim: `paidAmount` dan `difference` **null selama belum ada bukti `validated`**
+  (bukan 0). `difference = totalAmount − paidAmount`, negatif = dibayar melebihi klaim.
+  `payment` = bukti aktif (submitted/validated) atau null — penentu tombol "Unggah bukti"
+  (hanya kalau klaim `approved` dan `payment` null).
+- Field tambahan opsional: `rejectedBy` (`admin`/`finance`), `items[].taskNotes` (alasan
+  lembur untuk pemeriksa), `perWorker[].totalDailyWage`/`totalOvertime`, `payment` di detail,
+  `claim.status/periodStart/periodEnd/subProject` dan `fileCount` di bukti bayar.
+- Folder sistem `labor-payment-proofs` ("Bukti Bayar Upah") di tiap tahapan konstruksi.
+- Seeder: 4 klaim demo dari 5 log terakhir tahapan demo — lunas (bukti pertama ditolak,
+  kedua validated), antrean Finance, ditolak Admin, antrean Admin.
+- **Belum ada:** antrean Approval Center untuk klaim/bukti (T15.4) — sementara layar
+  Admin/Finance membaca `GET /labor-wage-claims?status=submitted|waiting_finance_approval`
+  dan `GET /labor-payment-proofs?status=submitted`; syarat penutupan bagian upah (T16.3) dan
+  status klaim di arsip `stage-labor` (T16.4).
+

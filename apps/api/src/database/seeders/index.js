@@ -122,6 +122,12 @@ const PERMISSIONS = [
   { module: 'field-cash', action: 'create',   label: 'Ajukan dana operasional & laporkan realisasi, batalkan milik sendiri' },
   { module: 'field-cash', action: 'validate', label: 'Validasi Admin: teruskan atau tolak pengajuan dana lapangan' },
   { module: 'field-cash', action: 'approve',  label: 'Finance: setujui/tolak pengajuan dana, validasi/tolak laporan realisasi' },
+  // Upah pekerja (L5–L8). `approve` dipakai juga validasi bukti bayar — satu
+  // wewenang Finance, pola field-cash.
+  { module: 'labor-claim', action: 'read',     label: 'Lihat klaim upah pekerja dan bukti bayarnya' },
+  { module: 'labor-claim', action: 'create',   label: 'Ajukan klaim upah & unggah bukti bayar, batalkan milik sendiri' },
+  { module: 'labor-claim', action: 'validate', label: 'Validasi Admin: periksa kehadiran & upah, teruskan atau tolak klaim' },
+  { module: 'labor-claim', action: 'approve',  label: 'Finance: setujui/tolak klaim upah, validasi/tolak bukti bayar' },
 ];
 
 // Kategori kas Divisi Alat. Data master, bukan data demo — sistem tidak bisa
@@ -201,6 +207,8 @@ const ROLE_PERMISSIONS = {
     'worker:read', 'worker:create', 'worker:update', 'worker:delete', 'labor-log:read',
     // Admin memeriksa pengajuan dana lapangan lalu meneruskan/menolak — tanpa approve
     'field-cash:read', 'field-cash:validate',
+    // Admin memeriksa kehadiran & upah di klaim (P1) lalu meneruskan — tanpa approve
+    'labor-claim:read', 'labor-claim:validate',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
@@ -218,7 +226,9 @@ const ROLE_PERMISSIONS = {
     // Upah pekerja = biaya proyek yang akan Finance setujui di klaim upah
     'worker:read', 'labor-log:read',
     // Finance memutuskan izin belanja lapangan (dan kelak memvalidasi laporannya)
-    'field-cash:read', 'field-cash:approve'],
+    'field-cash:read', 'field-cash:approve',
+    // Finance menyetujui klaim upah dan memvalidasi bukti bayarnya (sumber jurnal GL)
+    'labor-claim:read', 'labor-claim:approve'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
@@ -268,7 +278,9 @@ const ROLE_PERMISSIONS = {
     'worker:read', 'worker:create', 'worker:update',
     'labor-log:read', 'labor-log:create', 'labor-log:update', 'labor-log:delete',
     // Lapangan pengaju dana operasional — tanpa validate/approve
-    'field-cash:read', 'field-cash:create'],
+    'field-cash:read', 'field-cash:create',
+    // Lapangan mengajukan klaim upah, membayar pekerja, lalu mengunggah bukti
+    'labor-claim:read', 'labor-claim:create'],
 };
 
 async function main() {

@@ -136,6 +136,28 @@ const SYSTEM_FOLDERS = [
       };
     },
   },
+  {
+    key: 'labor-payment-proofs',
+    name: 'Bukti Bayar Upah',
+    permission: 'labor-claim:read',
+    // Upah pekerja hanya milik tahapan konstruksi
+    stageOnly: true,
+    where: (scope) => ({ laborProofOf: { is: { proof: { claim: { subProjectId: scope.subProjectId } } } } }),
+    include: { laborProofOf: { select: { proof: { select: {
+      id: true, proofCode: true, status: true,
+      claim: { select: { id: true, claimCode: true, subProjectId: true, subProject: { select: { subProjectType: true } } } },
+    } } } } },
+    source: (file) => {
+      const p = file.laborProofOf.proof;
+      return {
+        cancelled: p.status === 'cancelled',
+        source: {
+          type: 'labor-payment-proof', id: p.id, code: p.proofCode, status: p.status, claimCode: p.claim.claimCode,
+          subProjectId: p.claim.subProjectId, subProjectType: p.claim.subProject.subProjectType,
+        },
+      };
+    },
+  },
 ];
 
 /** Folder sistem lampiran modul hanya untuk tahapan konstruksi dan project supply. */

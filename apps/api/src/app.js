@@ -49,6 +49,8 @@ app.use('/api/labor-logs',         require('./modules/labor/labor-log.routes.js'
 app.use('/api/field-expense-categories',   require('./modules/finance-field/field-expense-category.routes.js'));
 app.use('/api/field-operational-requests', require('./modules/finance-field/field-operational-request.routes.js'));
 app.use('/api/field-expense-reports',      require('./modules/finance-field/field-expense-report.routes.js'));
+app.use('/api/labor-wage-claims',          require('./modules/labor/labor-wage-claim.routes.js'));
+app.use('/api/labor-payment-proofs',       require('./modules/labor/labor-payment-proof.routes.js'));
 // Didaftarkan SEBELUM /api/equipment supaya jelas mana yang menangani
 // /purchase-requests — bukan bergantung pada fall-through router.
 app.use('/api/equipment/purchase-requests', require('./modules/divisi-alat/purchase-request.routes.js'));
