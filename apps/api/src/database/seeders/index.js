@@ -116,6 +116,12 @@ const PERMISSIONS = [
   { module: 'labor-log', action: 'create', label: 'Catat log tenaga kerja harian' },
   { module: 'labor-log', action: 'update', label: 'Ubah log tenaga kerja harian' },
   { module: 'labor-log', action: 'delete', label: 'Hapus log tenaga kerja harian' },
+  // Kas lapangan (docs/plan-divisi-lapangan.md L1–L4). `approve` dipakai juga
+  // untuk validasi laporan realisasi (T12) — satu wewenang Finance, jangan dibelah.
+  { module: 'field-cash', action: 'read',     label: 'Lihat kategori biaya, pengajuan dana, dan laporan realisasi lapangan' },
+  { module: 'field-cash', action: 'create',   label: 'Ajukan dana operasional & laporkan realisasi, batalkan milik sendiri' },
+  { module: 'field-cash', action: 'validate', label: 'Validasi Admin: teruskan atau tolak pengajuan dana lapangan' },
+  { module: 'field-cash', action: 'approve',  label: 'Finance: setujui/tolak pengajuan dana, validasi/tolak laporan realisasi' },
 ];
 
 // Kategori kas Divisi Alat. Data master, bukan data demo — sistem tidak bisa
@@ -135,6 +141,19 @@ const CASH_CATEGORIES = [
   { categoryName: 'Operasional Divisi',                 transactionType: 'cash_out', orderCategory: null,          description: 'Bukan biaya alat: perkakas, kebutuhan gudang, ATK. Sementara lewat manual_expense' },
   { categoryName: 'Koreksi Keluar',                     transactionType: 'cash_out', orderCategory: null,          description: 'Koreksi saldo yang tercatat kelebihan' },
 ];
+
+// Kategori biaya kas lapangan (L3) — data master, HANYA dari sini (tanpa endpoint
+// kelola). Kategori tidak dihapus: yang tidak dipakai lagi diberi isActive: false.
+const FIELD_EXPENSE_CATEGORIES = [
+  { categoryCode: 'BBM',            categoryName: 'BBM',            description: 'Solar/bensin untuk genset, pompa, kendaraan operasional lapangan' },
+  { categoryCode: 'KONSUMSI',       categoryName: 'Konsumsi',       description: 'Makan, minum, dan snack pekerja di lokasi' },
+  { categoryCode: 'TRANSPORT',      categoryName: 'Transport',      description: 'Ongkos angkut orang/barang kecil, tol, parkir' },
+  { categoryCode: 'SEWA',           categoryName: 'Sewa',           description: 'Sewa alat bantu kecil, lahan, atau tempat tinggal sementara' },
+  { categoryCode: 'PERBAIKAN',      categoryName: 'Perbaikan',      description: 'Perbaikan kecil fasilitas lapangan (bukan alat berat — itu Divisi Alat)' },
+  { categoryCode: 'K3',             categoryName: 'K3',             description: 'APD, rambu, P3K, dan perlengkapan keselamatan kerja' },
+  { categoryCode: 'MATERIAL-KECIL', categoryName: 'Material Kecil', description: 'Paku, kawat, terpal, dan bahan habis pakai di luar request material' },
+  { categoryCode: 'LAIN-LAIN',      categoryName: 'Lain-lain',      description: 'Pengeluaran operasional yang tidak masuk kategori lain — jelaskan di nama baris' },
+].map((c) => ({ isActive: true, ...c }));
 
 // Modul manajemen akun — satu-satunya tempat super_admin boleh menulis.
 const ACCOUNT_MODULES = ['user', 'role', 'permission'];
@@ -180,6 +199,8 @@ const ROLE_PERMISSIONS = {
     // Admin mengelola pekerja & penugasan, tapi TIDAK menulis log — dia yang akan
     // memeriksanya di klaim upah (P4)
     'worker:read', 'worker:create', 'worker:update', 'worker:delete', 'labor-log:read',
+    // Admin memeriksa pengajuan dana lapangan lalu meneruskan/menolak — tanpa approve
+    'field-cash:read', 'field-cash:validate',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
@@ -195,7 +216,9 @@ const ROLE_PERMISSIONS = {
     // Pemakaian material = biaya proyek yang akan dibaca GL
     'material-stock:read',
     // Upah pekerja = biaya proyek yang akan Finance setujui di klaim upah
-    'worker:read', 'labor-log:read'],
+    'worker:read', 'labor-log:read',
+    // Finance memutuskan izin belanja lapangan (dan kelak memvalidasi laporannya)
+    'field-cash:read', 'field-cash:approve'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
@@ -243,7 +266,9 @@ const ROLE_PERMISSIONS = {
     // Lapangan bertemu orangnya: mendaftarkan, menugaskan, mencatat kehadiran harian.
     // Tanpa worker:delete — mengeluarkan pekerja cukup lewat endDate (P4/P5)
     'worker:read', 'worker:create', 'worker:update',
-    'labor-log:read', 'labor-log:create', 'labor-log:update', 'labor-log:delete'],
+    'labor-log:read', 'labor-log:create', 'labor-log:update', 'labor-log:delete',
+    // Lapangan pengaju dana operasional — tanpa validate/approve
+    'field-cash:read', 'field-cash:create'],
 };
 
 async function main() {
@@ -351,6 +376,12 @@ async function main() {
       update: { description: category.description, orderCategory: category.orderCategory },
       create: category,
     });
+  }
+
+  console.log('Seeding kategori biaya lapangan...');
+  for (const category of FIELD_EXPENSE_CATEGORIES) {
+    const { categoryCode, ...fields } = category;
+    await prisma.fieldExpenseCategory.upsert({ where: { categoryCode }, update: fields, create: category });
   }
 
   console.log('Seeding demo data Divisi Alat...');

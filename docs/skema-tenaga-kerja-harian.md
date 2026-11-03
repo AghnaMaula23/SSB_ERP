@@ -281,6 +281,10 @@ indexes {
 
 ## Hilir — catatan untuk sesi klaim
 
+**Diputuskan 26 Okt 2026 — lihat `plan-divisi-lapangan.md` L5–L8** (klaim per periode
+bebas, log terkunci di klaim aktif, tahapan baru bisa ditutup setelah upah tuntas,
+bukti bayar oleh Lapangan divalidasi Finance). Butir di bawah adalah catatan asal.
+
 ```
 daily_labor_logs → daily_labor_log_items
   → field_labor_wage_claim_items (snapshot)

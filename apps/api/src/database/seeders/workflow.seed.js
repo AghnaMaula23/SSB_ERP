@@ -13,7 +13,7 @@
 // pun. Bagian yang gagal dicatat lalu dilewati — bagian lain tetap jalan.
 //
 // Tidak dibuat di sini: delivery & penerimaan material (butuh unggah file ke
-// storage) dan klaim upah (modulnya belum ada).
+// storage), klaim upah, dan laporan realisasi kas lapangan (modulnya belum ada).
 const prisma = require('../../config/database.js');
 const cashSvc = require('../../modules/divisi-alat/cash.service.js');
 const prSvc = require('../../modules/divisi-alat/purchase-request.service.js');
@@ -25,6 +25,7 @@ const workerSvc = require('../../modules/labor/worker.service.js');
 const assignmentSvc = require('../../modules/labor/worker-assignment.service.js');
 const laborLogSvc = require('../../modules/labor/labor-log.service.js');
 const projectFileSvc = require('../../modules/project-file/project-file.service.js');
+const fieldRequestSvc = require('../../modules/finance-field/field-operational-request.service.js');
 
 // Penanda baris buatan seeder ini — dipakai untuk memeriksa "sudah pernah jalan".
 const MARK = '[demo]';
@@ -370,6 +371,56 @@ async function seedStock(ctx, lapangan) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Kas lapangan — pengajuan dana di setiap status. Laporan realisasi (T12) belum ada.
+// ─────────────────────────────────────────────────────────────────────────
+async function seedFieldCash(ctx, lapangan, admin, finance) {
+  if (await prisma.fieldOperationalRequest.count({ where: { notes: { startsWith: MARK } } })) return 'sudah ada';
+  const rows = await prisma.fieldExpenseCategory.findMany({ where: { isActive: true } });
+  const cat = new Map(rows.map((r) => [r.categoryCode, r.id]));
+  const missing = ['BBM', 'KONSUMSI', 'K3', 'TRANSPORT', 'SEWA'].filter((c) => !cat.has(c));
+  if (missing.length) throw new Error(`kategori biaya belum di-seed: ${missing.join(', ')}`);
+
+  const create = (notes, items, day) => fieldRequestSvc.create({
+    subProjectId: ctx.stage.id,
+    requestDate: daysAgo(day),
+    neededDate: daysAgo(Math.max(day - 2, 0)),
+    notes: `${MARK} ${notes}`,
+    items: items.map(([code, itemName, quantity, unit, estimatedUnitPrice]) => ({ categoryId: cat.get(code), itemName, quantity, unit, estimatedUnitPrice })),
+  }, lapangan.id);
+
+  // 1. Antrean Admin
+  await create('Kebutuhan operasional minggu depan', [
+    ['KONSUMSI', 'Makan siang pekerja 6 hari', 48, 'porsi', 25000],
+    ['BBM', 'Solar genset penerangan malam', 120, 'liter', 6800],
+  ], 1);
+
+  // 2. Antrean Finance — divalidasi Admin dengan catatan
+  const forwarded = await create('APD pekerja baru', [['K3', 'Helm proyek', 6, 'buah', 45000], ['K3', 'Rompi reflektor', 6, 'buah', 35000]], 3);
+  await fieldRequestSvc.validate(forwarded.id, { notes: 'Ada 6 pekerja harian baru minggu ini, APD lama tidak cukup.' }, admin.id);
+
+  // 3. Disetujui Finance
+  const approved = await create('Transport & sewa minggu lalu', [
+    ['TRANSPORT', 'Sewa pikap angkut terpal & kawat', 2, 'hari', 350000],
+    ['SEWA', 'Sewa pompa air kecil', 3, 'hari', 150000],
+  ], 9);
+  await fieldRequestSvc.validate(approved.id, { notes: null }, admin.id);
+  await fieldRequestSvc.approve(approved.id, { notes: 'Dana ditransfer ke rekening pelaksana.' }, finance.id);
+
+  // 4. Ditolak Admin & 5. ditolak Finance — alasan tampil ke pengaju
+  const rejectedAdmin = await create('Konsumsi lembur', [['KONSUMSI', 'Snack lembur', 30, 'paket', 15000]], 6);
+  await fieldRequestSvc.reject(rejectedAdmin.id, { notes: 'Lembur minggu ini belum dijadwalkan. Ajukan setelah jadwal lembur disetujui PM.' }, admin);
+  const rejectedFinance = await create('BBM kendaraan pelaksana', [['BBM', 'Bensin motor pelaksana', 40, 'liter', 10000]], 7);
+  await fieldRequestSvc.validate(rejectedFinance.id, { notes: null }, admin.id);
+  await fieldRequestSvc.reject(rejectedFinance.id, { notes: 'Kendaraan pribadi diganti lewat tunjangan transport bulanan, bukan kas lapangan.' }, finance);
+
+  // 6. Dibatalkan pengaju
+  const cancelled = await create('Sewa tenda', [['SEWA', 'Sewa tenda istirahat', 1, 'minggu', 500000]], 4);
+  await fieldRequestSvc.cancel(cancelled.id, { reason: 'Dapat pinjaman tenda dari kontraktor sebelah.' }, lapangan.id);
+
+  return '1 antrean Admin, 1 antrean Finance, 1 approved, 1 ditolak Admin, 1 ditolak Finance, 1 dibatalkan';
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Berkas project — folder kosong, supaya halaman Files tidak hanya folder sistem.
 // ─────────────────────────────────────────────────────────────────────────
 async function seedFolders(ctx, admin) {
@@ -418,6 +469,7 @@ async function seedWorkflowDemo() {
   await section('Progress harian', () => seedProgress(ctx, lapangan, admin));
   await section('Pekerja', () => seedLabor(ctx, lapangan));
   await section('Stok material', () => seedStock(ctx, lapangan));
+  await section('Kas lapangan', () => seedFieldCash(ctx, lapangan, admin, finance));
   await section('Berkas project', () => seedFolders(ctx, admin));
 
   const queue = await prisma.$queryRaw`SELECT source_type, stage, count(*)::int AS n FROM approval_queue GROUP BY 1, 2 ORDER BY 1, 2`;

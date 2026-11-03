@@ -726,3 +726,33 @@ untuk request alat, manajemen akun, master material/supplier/jenis alat, kategor
   `GET /worker-assignments` membalas `data: { data: [...], summary }`.
 - `meta.summary` progress harian (`GET .../progress-logs`) kini benar-benar terkirim —
   sebelumnya dibuang `paginated()`.
+
+## E27. Kontrak Divisi Lapangan BEKU — kas lapangan & upah pekerja (26 Okt 2026)
+
+Rencana & fase: `docs/plan-divisi-lapangan.md`. Kontrak: Swagger tag *Kas Lapangan* dan
+*Upah Pekerja*. **API belum dibangun** (fase F2/F4) — jangan buat mock/localStorage untuk
+endpoint ini; layar menunggu API + data seeder.
+
+- `fieldCashMockService.js` diganti di F3. Bentuknya berubah: bukan satu "klaim kas"
+  yang diputuskan Admin, tapi **pengajuan** (Admin → Finance, nominal perkiraan) lalu
+  **laporan realisasi + nota** (Finance validasi). Laporan boleh tanpa pengajuan dengan
+  `urgentReason` wajib — tampilkan penanda "tanpa pengajuan" di antrean Finance.
+- Kategori biaya dari `GET /field-expense-categories` (seeder), bukan daftar di kode.
+- Antrean Approval Center bertambah 4 `sourceType`: `field_operational_request`,
+  `field_expense_report`, `labor_wage_claim`, `labor_payment_proof`.
+- `GET /labor-logs` mendapat `?claimed=` dan field `claim` per log; ubah/hapus log yang
+  ada di klaim aktif → 409.
+- Menutup tahapan kini juga 409 selama urusan upah/kas belum tuntas (L7a).
+
+**Update 3 Nov 2026 — API pengajuan dana SUDAH ADA (T11)**, persis kontrak swagger:
+`GET /field-expense-categories[?activeOnly=false]`, `GET/POST /field-operational-requests`,
+`GET /:id`, `PUT /:id/cancel` (`{ reason }` wajib), `/validate`, `/approve`, `/reject`
+(`{ notes }` wajib). Seeder membuat 8 kategori + 6 pengajuan demo (satu per status, dua
+penolakan: Admin & Finance). Field tambahan opsional di response: `rejectedBy`
+(`admin`/`finance`), `itemCount` (list), `cancelledBy`/`cancelledAt`/`cancelReason` (detail).
+Yang **masih kosong sampai laporan realisasi dibangun (T12)**: `realizedAmount` selalu `0`,
+`difference` = `requestedAmount`, `reports` = `[]` — tampilkan apa adanya, jangan dihitung
+di FE. Belum ada juga: antrean Approval Center untuk pengajuan ini (T15.3) dan syarat
+penutupan tahapan (T16.3) — sampai itu, layar Admin/Finance membaca langsung
+`GET /field-operational-requests?status=submitted|waiting_finance_approval`.
+

@@ -96,7 +96,7 @@ const swaggerSpec = {
         properties: {
           kind: { type: 'string', enum: ['user', 'system'] },
           id: { type: 'integer', nullable: true, description: 'Hanya `user`' },
-          key: { type: 'string', nullable: true, enum: ['delivery-notes', 'receipt-proofs', 'closing-archive'], description: 'Hanya `system`' },
+          key: { type: 'string', nullable: true, enum: ['delivery-notes', 'receipt-proofs', 'field-expense-receipts', 'labor-payment-proofs', 'closing-archive'], description: 'Hanya `system`' },
           name: { type: 'string', example: 'Surat Jalan' },
           subProjectId: { type: 'integer', nullable: true, description: 'Folder milik tahapan (konstruksi); null = tingkat project' },
           fileCount: { type: 'integer', description: 'Berkas aktif (sampah tidak dihitung)' },
@@ -132,7 +132,7 @@ const swaggerSpec = {
         type: 'object',
         description: 'Satu baris antrean Approval Center. Ringkasan untuk list — detail & aksi selalu lewat endpoint modul sumber.',
         properties: {
-          sourceType: { type: 'string', enum: ['purchase_request', 'material_request', 'equipment_request', 'progress_log'] },
+          sourceType: { type: 'string', enum: ['purchase_request', 'material_request', 'equipment_request', 'progress_log', 'field_operational_request', 'field_expense_report', 'labor_wage_claim', 'labor_payment_proof'] },
           sourceId: { type: 'integer', example: 12 },
           stage: { type: 'string', enum: ['admin', 'finance'] },
           referenceCode: { type: 'string', nullable: true, example: 'MRQ-000012', description: 'Kode dokumen. `null` untuk progress_log (tidak bernomor)' },
@@ -229,8 +229,8 @@ const swaggerSpec = {
     { name: 'Income Records', description: 'Pencatatan pendapatan dan billing' },
     { name: 'Income Payments', description: 'Pembayaran client' },
     { name: 'Equipment Income Claims', description: 'Klaim pendapatan alat oleh Divisi Alat' },
-    { name: 'Finance Field', description: 'Pengeluaran operasional lapangan' },
-    { name: 'Daily Labor', description: 'PLACEHOLDER September — klaim upah & bukti bayar dirancang ulang di sesi klaim (docs/skema-tenaga-kerja-harian.md "Hilir")' },
+    { name: 'Kas Lapangan', description: 'Pengajuan dana operasional (izin belanja) + laporan realisasi & nota — docs/plan-divisi-lapangan.md L1–L4, L7' },
+    { name: 'Upah Pekerja', description: 'Klaim upah dari log tenaga kerja + bukti bayar — docs/plan-divisi-lapangan.md L5–L8' },
     { name: 'Chart of Accounts', description: 'Master akun keuangan' },
     { name: 'Journal Entries', description: 'Jurnal umum debit-credit' },
     { name: 'Financial Corrections', description: 'Koreksi transaksi keuangan' },
@@ -612,7 +612,7 @@ const swaggerSpec = {
     '/projects/construction/{projectId}/sub-projects/{id}/status': {
       put: {
         tags: ['Sub-Projects'], summary: 'Ubah status tahapan',
-        description: 'Permission: sub-project:update. Mengaktifkan tahapan yang pendahulunya belum selesai BERHASIL, tapi response memuat `sequenceWarning` berisi daftar tahapan pendahulu yang masih terbuka — urutan tidak diblokir karena ERD menyebut "atau berdasarkan kesepakatan kontrak baru". Yang DIBLOKIR (409) adalah KEBERSAMAAN: dalam satu project hanya satu tahapan boleh `active` — aktifkan tahapan berikutnya setelah yang aktif ditutup (dikonfirmasi 14 Okt 2026). Menutup tahapan DITOLAK 409 kalau masih ada alat teralokasi. **Tahapan selesai = terkunci (L8, dibangun bersama Berkas Project):** `completed` DAN `cancelled` ditolak 409 selama masih ada urusan terbuka — progress `submitted`, request material `submitted`/`waiting_finance_approval`, request alat `submitted`/`equipment_review`, delivery aktif tanpa penerimaan aktif, alokasi `assigned`; pesan menyebut jumlah per jenis. Sesudahnya semua jalur tulis data tahapan menolak 409: ubah/validasi progress, catat/batal mutasi stok, catat/batal penerimaan, ganti surat jalan/batal delivery, validasi/biaya/approve request material, catat/batal jam kerja (sudah sejak 17 Okt). **Arsip penutupan:** di request yang sama, sebelum status berubah, sistem menyusun XLSX `stage-progress`, `stage-equipment`, `stage-material` dari data tahapan (baris kepala: "Diarsipkan saat penutupan <waktu> oleh <user>", status akhir), mengunggahnya, lalu status + baris arsip ditulis dalam SATU transaksi; transaksi gagal → file dihapus. Storage tidak tersedia → 503 dan tahapan TIDAK ditutup (coba lagi). Request ini lebih lambat (±1–3 detik).',
+        description: 'Permission: sub-project:update. **Divisi Lapangan (L7a, 26 Okt 2026):** menutup juga DITOLAK 409 selama ada log pekerja yang belum masuk klaim aktif, klaim upah belum tuntas (submitted/waiting_finance_approval, atau approved tanpa bukti bayar validated), pengajuan dana menunggu keputusan, atau laporan realisasi menunggu validasi. Mengaktifkan tahapan yang pendahulunya belum selesai BERHASIL, tapi response memuat `sequenceWarning` berisi daftar tahapan pendahulu yang masih terbuka — urutan tidak diblokir karena ERD menyebut "atau berdasarkan kesepakatan kontrak baru". Yang DIBLOKIR (409) adalah KEBERSAMAAN: dalam satu project hanya satu tahapan boleh `active` — aktifkan tahapan berikutnya setelah yang aktif ditutup (dikonfirmasi 14 Okt 2026). Menutup tahapan DITOLAK 409 kalau masih ada alat teralokasi. **Tahapan selesai = terkunci (L8, dibangun bersama Berkas Project):** `completed` DAN `cancelled` ditolak 409 selama masih ada urusan terbuka — progress `submitted`, request material `submitted`/`waiting_finance_approval`, request alat `submitted`/`equipment_review`, delivery aktif tanpa penerimaan aktif, alokasi `assigned`; pesan menyebut jumlah per jenis. Sesudahnya semua jalur tulis data tahapan menolak 409: ubah/validasi progress, catat/batal mutasi stok, catat/batal penerimaan, ganti surat jalan/batal delivery, validasi/biaya/approve request material, catat/batal jam kerja (sudah sejak 17 Okt). **Arsip penutupan:** di request yang sama, sebelum status berubah, sistem menyusun XLSX `stage-progress`, `stage-equipment`, `stage-material` dari data tahapan (baris kepala: "Diarsipkan saat penutupan <waktu> oleh <user>", status akhir), mengunggahnya, lalu status + baris arsip ditulis dalam SATU transaksi; transaksi gagal → file dihapus. Storage tidak tersedia → 503 dan tahapan TIDAK ditutup (coba lagi). Request ini lebih lambat (±1–3 detik).',
         parameters: [
           { in: 'path', name: 'projectId', required: true, schema: { type: 'integer' } },
           { in: 'path', name: 'id', required: true, schema: { type: 'integer' } }
@@ -2217,12 +2217,12 @@ const swaggerSpec = {
           '| `project-summary` | project konstruksi ditutup | Rekap tahapan: jenis, status, nilai kontrak, target & volume tervalidasi, progress %, nilai tertagih |\n' +
           '| `supply-deliveries` | supply ditutup | Tanggal, no. surat jalan, jenis kendaraan, nopol, sopir, material, asal, tujuan, volume; total per satuan |\n' +
           '| `rental-timesheet` | rental ditutup (1 file per unit) | Penyewa, periode, alat, operator; per tanggal sesi pagi/siang/overtime (awal, akhir, jam), total jam, hari kerja, keterangan; baris jumlah |\n\n' +
-          'Log/dokumen yang dibatalkan tidak ikut. `stage-labor` (tahapan ditutup; Log Pekerja per baris, Rekap per Pekerja, Penugasan) menyusul bersama modul Pekerja — berlaku untuk tahapan yang ditutup sesudahnya.\n\n' +
+          'Log/dokumen yang dibatalkan tidak ikut. `stage-labor` (tahapan ditutup; Log Pekerja per baris + kode & status klaim, Rekap per Pekerja, Penugasan, Klaim Upah & bukti bayar). `stage-field-cash` (tahapan ditutup; Pengajuan + item, Laporan Realisasi + item, termasuk laporan mendesak) — kontrak Divisi Lapangan 26 Okt 2026.\n\n' +
           '`delivery-notes`: surat jalan aktif tiap delivery (yang sudah diganti tidak tampil). `receipt-proofs`: semua bukti penerimaan. Delivery/receipt yang dibatalkan tetap tampil dengan `cancelled: true` (pembatalan juga riwayat). delivery-notes/receipt-proofs: construction WAJIB `subProjectId` (hidup di tahapan), supply tanpa; rental tidak punya (404). Buka file lewat `GET /api/files/{fileId}/url`.',
         parameters: [
           { in: 'path', name: 'type', required: true, schema: { type: 'string', enum: ['construction', 'rental', 'supply'] } },
           { in: 'path', name: 'projectId', required: true, schema: { type: 'integer' } },
-          { in: 'path', name: 'key', required: true, schema: { type: 'string', enum: ['delivery-notes', 'receipt-proofs', 'closing-archive'] } },
+          { in: 'path', name: 'key', required: true, schema: { type: 'string', enum: ['delivery-notes', 'receipt-proofs', 'field-expense-receipts', 'labor-payment-proofs', 'closing-archive'] } },
           { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
           { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
         ],
@@ -2270,7 +2270,7 @@ const swaggerSpec = {
         parameters: [
           { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
           { in: 'query', name: 'stage', schema: { type: 'string', enum: ['admin', 'finance'] }, description: 'Kosong = semua tahap yang boleh Anda proses' },
-          { in: 'query', name: 'sourceType', schema: { type: 'string', enum: ['purchase_request', 'material_request', 'equipment_request', 'progress_log'] } },
+          { in: 'query', name: 'sourceType', schema: { type: 'string', enum: ['purchase_request', 'material_request', 'equipment_request', 'progress_log', 'field_operational_request', 'field_expense_report', 'labor_wage_claim', 'labor_payment_proof'] } },
           { in: 'query', name: 'search', schema: { type: 'string' }, description: 'Cocokkan `referenceCode` atau `context` (tidak peka huruf besar-kecil)' },
           { in: 'query', name: 'sort', schema: { type: 'string', enum: ['oldest', 'newest'], default: 'oldest' } },
         ],
@@ -2471,9 +2471,10 @@ const swaggerSpec = {
           { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
           { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } },
           { in: 'query', name: 'projectWorkerId', schema: { type: 'integer' } },
+          { in: 'query', name: 'claimed', schema: { type: 'string', enum: ['true', 'false'] }, description: 'false = log yang belum ada di klaim aktif (siap diklaim)' },
           { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
         ],
-        responses: { 200: { description: 'Paginated LaborLog (tanpa items) + meta.summary' } },
+        responses: { 200: { description: 'Paginated LaborLog (tanpa items) + meta.summary. Tiap log memuat `claim`: `{ id, claimCode, status }` klaim aktif yang memuatnya, atau null' } },
       },
       post: {
         tags: ['Log Tenaga Kerja'], summary: 'Catat log harian (header + semua pekerja sekaligus)',
@@ -2497,7 +2498,7 @@ const swaggerSpec = {
       },
       put: {
         tags: ['Log Tenaga Kerja'], summary: 'Ubah log — kirim DAFTAR LENGKAP pekerja',
-        description: 'Permission: labor-log:update (Lapangan). `items` (kalau dikirim) = daftar lengkap; server menyelaraskan per projectWorkerId: yang ada diubah (id baris tetap), yang baru dibuat, yang tidak dikirim dihapus (P9). Aturan baris sama dengan POST. `subProjectId` & `workDate` tidak bisa diubah (400) — salah tanggal = hapus lalu catat ulang (P8). Tahapan ditutup → 409. `updatedBy` dicatat. (Sesi klaim: log yang sudah diklaim akan ditolak 409.)',
+        description: 'Permission: labor-log:update (Lapangan). `items` (kalau dikirim) = daftar lengkap; server menyelaraskan per projectWorkerId: yang ada diubah (id baris tetap), yang baru dibuat, yang tidak dikirim dihapus (P9). Aturan baris sama dengan POST. `subProjectId` & `workDate` tidak bisa diubah (400) — salah tanggal = hapus lalu catat ulang (P8). Tahapan ditutup → 409. `updatedBy` dicatat. Log yang ada di klaim aktif → 409 (L6).',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: {
           notes: { type: 'string', nullable: true },
@@ -2506,45 +2507,208 @@ const swaggerSpec = {
             dailyWage: { type: 'number', minimum: 1 }, overtimeAmount: { type: 'number', minimum: 0 }, taskNotes: { type: 'string', nullable: true },
           } } },
         } } } } },
-        responses: { 200: { description: 'LaborLog dengan items' }, 400: { description: 'Validasi gagal' }, 409: { description: 'Tahapan ditutup / pekerja sudah tercatat di log lain tanggal itu' } },
+        responses: { 200: { description: 'LaborLog dengan items' }, 400: { description: 'Validasi gagal' }, 409: { description: 'Tahapan ditutup / pekerja sudah tercatat di log lain tanggal itu / log ada di klaim aktif (L6)' } },
       },
       delete: {
         tags: ['Log Tenaga Kerja'], summary: 'Hapus log beserta barisnya',
-        description: 'Permission: labor-log:delete (Lapangan). Tahapan ditutup → 409. (Sesi klaim: log yang sudah diklaim akan ditolak 409.)',
-        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Dihapus' }, 409: { description: 'Tahapan ditutup' } },
+        description: 'Permission: labor-log:delete (Lapangan). Tahapan ditutup → 409. Log yang ada di klaim aktif → 409 (L6).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Dihapus' }, 409: { description: 'Tahapan ditutup / log ada di klaim aktif' } },
       },
     },
 
     // ========================================
-    // 8. FINANCE FIELD & LABOR
+    // 8. DIVISI LAPANGAN — KAS LAPANGAN & UPAH PEKERJA
+    // Kontrak BEKU 26 Okt 2026 — docs/plan-divisi-lapangan.md L1–L9.
+    // Status pengajuan/klaim: submitted → waiting_finance_approval → approved
+    // (atau rejected / cancelled). Status laporan/bukti: submitted → validated
+    // (atau rejected / cancelled). Ditolak = final, ajukan ulang. Pengaju tidak
+    // boleh memutuskan dokumennya sendiri (403). Finance TIDAK mengubah nominal.
+    // Semua tulis ditolak 409 kalau tahapan sudah ditutup (L7a).
     // ========================================
-    '/finance-field/operational-requests': {
-      get: { tags: ['Finance Field'], summary: 'List operational requests', parameters: [{ $ref: '#/components/parameters/PageParam' }], responses: { 200: { description: 'Paginated list' } } },
-      post: { tags: ['Finance Field'], summary: 'Buat request operasional', description: 'Role: lapangan',
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['subProjectId', 'requestDate', 'requestCategory', 'items'], properties: { subProjectId: { type: 'integer' }, requestDate: { type: 'string', format: 'date' }, requestCategory: { type: 'string', enum: ['bbm','konsumsi','operasional','emergency','other'] }, items: { type: 'array', items: { type: 'object' } } } } } } },
-        responses: { 201: { description: 'Created' } } }
+    '/field-expense-categories': {
+      get: {
+        tags: ['Kas Lapangan'], summary: 'Daftar kategori biaya lapangan',
+        description: 'Permission: field-cash:read. Diisi seeder (L3), tanpa endpoint kelola. `activeOnly=false` ikut menampilkan kategori nonaktif (untuk membaca dokumen lama).',
+        parameters: [{ in: 'query', name: 'activeOnly', schema: { type: 'string', enum: ['true', 'false'], default: 'true' } }],
+        responses: { 200: { description: 'Array `{ id, categoryCode, categoryName, description, isActive }`' } },
+      },
     },
-    '/finance-field/operational-requests/{id}/approve': { put: { tags: ['Finance Field'], summary: 'Admin approve', description: 'Role: admin', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Approved' } } } },
-    '/finance-field/expense-reports': {
-      post: { tags: ['Finance Field'], summary: 'Submit expense report', description: 'Role: lapangan',
-        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', properties: { operationalRequestId: { type: 'integer' }, reportDate: { type: 'string', format: 'date' }, items: { type: 'string', description: 'JSON array' }, attachments: { type: 'array', items: { type: 'string', format: 'binary' } } } } } } },
-        responses: { 201: { description: 'Created' } } }
+    '/field-operational-requests': {
+      get: {
+        tags: ['Kas Lapangan'], summary: 'List pengajuan dana operasional',
+        description: 'Permission: field-cash:read. Tiap baris: kode, tahapan (+ project), tanggal, status, `requestedAmount` (dihitung dari item), `realizedAmount` (jumlah laporan `validated` yang merujuknya), pengaju.',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'waiting_finance_approval', 'approved', 'rejected', 'cancelled'] } },
+          { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } },
+          { $ref: '#/components/parameters/SearchParam' }],
+        responses: { 200: { description: 'Paginated' } },
+      },
+      post: {
+        tags: ['Kas Lapangan'], summary: 'Ajukan dana operasional (izin belanja)',
+        description: 'Permission: field-cash:create (Lapangan). Tahapan `active` & belum ditutup (409). Nominal = PERKIRAAN (L2); tidak membuat jurnal. Kode FOR-NNNNNN dibuat sistem. `requestedAmount`/status/kode ditolak kalau dikirim.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['subProjectId', 'requestDate', 'items'], properties: {
+          subProjectId: { type: 'integer' }, requestDate: { type: 'string', format: 'date', description: 'Tidak di masa depan' },
+          neededDate: { type: 'string', format: 'date', description: '≥ requestDate' }, notes: { type: 'string' },
+          items: { type: 'array', minItems: 1, maxItems: 50, items: { type: 'object', required: ['categoryId', 'itemName', 'quantity', 'unit', 'estimatedUnitPrice'], properties: {
+            categoryId: { type: 'integer' }, itemName: { type: 'string', maxLength: 150 },
+            quantity: { type: 'number', exclusiveMinimum: 0 }, unit: { type: 'string', maxLength: 30, example: 'liter' },
+            estimatedUnitPrice: { type: 'number', minimum: 0 }, notes: { type: 'string' },
+          } } },
+        } } } } },
+        responses: { 201: { description: 'Detail pengajuan' }, 400: { description: 'Validasi gagal' }, 404: { description: 'Tahapan/kategori tidak ditemukan' }, 409: { description: 'Tahapan tidak aktif / ditutup / kategori nonaktif' } },
+      },
     },
-    '/finance-field/expense-reports/{id}/validate': { put: { tags: ['Finance Field'], summary: 'Finance validate', description: 'Role: finance. Triggers GL journal.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Validated + journal' } } } },
-    '/finance-field/wage-claims': {
-      get: { tags: ['Daily Labor'], summary: 'List wage claims', parameters: [{ $ref: '#/components/parameters/PageParam' }], responses: { 200: { description: 'Paginated list' } } },
-      post: { tags: ['Daily Labor'], summary: 'Buat wage claim', description: 'Role: lapangan',
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['subProjectId', 'claimPeriodStart', 'claimPeriodEnd', 'dailyLaborLogIds'], properties: { subProjectId: { type: 'integer' }, claimPeriodStart: { type: 'string', format: 'date' }, claimPeriodEnd: { type: 'string', format: 'date' }, dailyLaborLogIds: { type: 'array', items: { type: 'integer' } } } } } } },
-        responses: { 201: { description: 'Created' } } }
+    '/field-operational-requests/{id}': {
+      get: {
+        tags: ['Kas Lapangan'], summary: 'Detail pengajuan',
+        description: 'Permission: field-cash:read. Header + `items` (dengan `estimatedAmount` = qty × harga) + keputusan Admin/Finance (`adminValidatedBy/At`, `adminNotes`, `financeReviewedBy/At`, `financeNotes`) + `reports` (laporan yang merujuknya, ringkas) + `requestedAmount`, `realizedAmount`, `difference` (dihitung).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } },
+      },
     },
-    '/finance-field/wage-claims/{id}/approve': { put: { tags: ['Daily Labor'], summary: 'Admin approve wage claim', description: 'Role: admin', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Approved' } } } },
-    '/finance-field/wage-claims/{claimId}/payment-proofs': {
-      post: { tags: ['Daily Labor'], summary: 'Submit bukti pembayaran upah', description: 'Role: lapangan',
-        parameters: [{ in: 'path', name: 'claimId', required: true, schema: { type: 'integer' } }],
-        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', properties: { proofDate: { type: 'string', format: 'date' }, totalPaidAmount: { type: 'number' }, attachments: { type: 'array', items: { type: 'string', format: 'binary' } } } } } } },
-        responses: { 201: { description: 'Created' } } }
+    '/field-operational-requests/{id}/cancel': {
+      put: { tags: ['Kas Lapangan'], summary: 'Batalkan pengajuan', description: 'Permission: field-cash:create, hanya pengaju, selama `submitted`/`waiting_finance_approval` (409 selainnya).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pengaju' }, 409: { description: 'Sudah diputuskan' } } },
     },
-    '/finance-field/payment-proofs/{id}/validate': { put: { tags: ['Daily Labor'], summary: 'Finance validate proof', description: 'Role: finance. Triggers GL journal.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Validated + journal' } } } },
+    '/field-operational-requests/{id}/validate': {
+      put: { tags: ['Kas Lapangan'], summary: 'Validasi Admin → teruskan ke Finance', description: 'Permission: field-cash:validate (Admin). `submitted` → `waiting_finance_approval`. Tanpa ubah nominal.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Diteruskan' }, 403: { description: 'Pengaju sendiri' }, 409: { description: 'Status bukan submitted' } } },
+    },
+    '/field-operational-requests/{id}/approve': {
+      put: { tags: ['Kas Lapangan'], summary: 'Setujui (Finance)', description: 'Permission: field-cash:approve (Finance). `waiting_finance_approval` → `approved`. Tidak mengubah nominal, TIDAK membuat jurnal (L2); pencairan di luar sistem.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Disetujui' }, 409: { description: 'Status bukan waiting_finance_approval' } } },
+    },
+    '/field-operational-requests/{id}/reject': {
+      put: { tags: ['Kas Lapangan'], summary: 'Tolak (Admin saat submitted, Finance saat menunggu Finance)', description: 'Permission: field-cash:validate ATAU field-cash:approve — yang berlaku ditentukan status (403 kalau tidak cocok). Alasan wajib. Final.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string', description: 'Alasan — wajib' } } } } } }, responses: { 200: { description: 'Ditolak' }, 403: { description: 'Bukan wewenang tahap ini / pengaju sendiri' }, 409: { description: 'Sudah final' } } },
+    },
+    '/field-expense-reports': {
+      get: {
+        tags: ['Kas Lapangan'], summary: 'List laporan realisasi',
+        description: 'Permission: field-cash:read. Tiap baris: kode, tahapan, tanggal, status, `totalAmount` (dihitung), `request` (kode pengajuan atau null), `isUrgent` (= tanpa pengajuan), pengaju.',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'fieldOperationalRequestId', schema: { type: 'integer' } },
+          { in: 'query', name: 'urgent', schema: { type: 'string', enum: ['true', 'false'] }, description: 'true = hanya laporan tanpa pengajuan' },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'validated', 'rejected', 'cancelled'] } },
+          { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } }],
+        responses: { 200: { description: 'Paginated' } },
+      },
+      post: {
+        tags: ['Kas Lapangan'], summary: 'Laporkan realisasi + unggah nota',
+        description: 'Permission: field-cash:create (Lapangan). Tahapan belum ditutup (409). Dua bentuk (L1): (1) merujuk pengajuan `approved` milik tahapan yang sama — satu pengajuan boleh beberapa laporan; (2) MENDESAK tanpa pengajuan — `urgentReason` WAJIB. Mengirim keduanya / tidak keduanya → 400. Harga = harga NYATA di nota; boleh melebihi pengajuan (L2). Nota WAJIB 1–10 file di `receipts` (PDF/JPG/PNG/WebP, maks 10 MB; HEIC ditolak). Kode FER-NNNNNN dibuat sistem.',
+        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['subProjectId', 'reportDate', 'items', 'receipts'], properties: {
+          subProjectId: { type: 'integer' }, reportDate: { type: 'string', format: 'date', description: 'Tidak di masa depan' },
+          fieldOperationalRequestId: { type: 'integer', description: 'Kosongkan untuk laporan mendesak' },
+          urgentReason: { type: 'string', description: 'Wajib kalau tanpa pengajuan; dilarang kalau ada pengajuan' },
+          notes: { type: 'string' },
+          items: { type: 'string', description: 'JSON array: `[{ categoryId, expenseDate, itemName, quantity, unit, unitPrice, vendorName?, fieldOperationalRequestItemId?, notes? }]` — 1–100 baris; `fieldOperationalRequestItemId` harus milik pengajuan yang dirujuk' },
+          receipts: { type: 'array', minItems: 1, maxItems: 10, items: { type: 'string', format: 'binary' } },
+        } } } } },
+        responses: { 201: { description: 'Detail laporan' }, 400: { description: 'Validasi / nota tidak sah / pengajuan & urgentReason bertentangan' }, 409: { description: 'Tahapan ditutup / pengajuan belum approved atau milik tahapan lain' } },
+      },
+    },
+    '/field-expense-reports/{id}': {
+      get: {
+        tags: ['Kas Lapangan'], summary: 'Detail laporan',
+        description: 'Permission: field-cash:read. Header + `items` (`totalPrice` = qty × harga, dihitung) + `receipts[]` (`fileId` untuk GET /files/{id}/url) + `request` (ringkas: kode, `requestedAmount`) + keputusan Finance (`validatedBy/At`, `financeNotes`).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } },
+      },
+    },
+    '/field-expense-reports/{id}/cancel': {
+      put: { tags: ['Kas Lapangan'], summary: 'Batalkan laporan', description: 'Permission: field-cash:create, hanya pelapor, selama `submitted`. Koreksi = batalkan lalu lapor ulang.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pelapor' }, 409: { description: 'Sudah diputuskan' } } },
+    },
+    '/field-expense-reports/{id}/validate': {
+      put: { tags: ['Kas Lapangan'], summary: 'Validasi laporan (Finance)', description: 'Permission: field-cash:approve (Finance). `submitted` → `validated`. Status ini = sumber jurnal Beban Operasional Lapangan (dibangun di modul GL).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Divalidasi' }, 403: { description: 'Pelapor sendiri' }, 409: { description: 'Status bukan submitted' } } },
+    },
+    '/field-expense-reports/{id}/reject': {
+      put: { tags: ['Kas Lapangan'], summary: 'Tolak laporan (Finance)', description: 'Permission: field-cash:approve. Alasan wajib (mis. nota tidak terbaca). Final — Lapangan melapor ulang.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string', description: 'Alasan — wajib' } } } } } }, responses: { 200: { description: 'Ditolak' }, 409: { description: 'Status bukan submitted' } } },
+    },
+    '/labor-wage-claims': {
+      get: {
+        tags: ['Upah Pekerja'], summary: 'List klaim upah',
+        description: 'Permission: labor-claim:read. Tiap baris: kode, tahapan, periode, status, `totalAmount`, `workerCount` (orang unik), `manDays` (dihitung dari baris), pengaju, `payment` (bukti aktif ringkas atau null).',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'waiting_finance_approval', 'approved', 'rejected', 'cancelled'] } },
+          { in: 'query', name: 'paid', schema: { type: 'string', enum: ['true', 'false'] }, description: 'true = punya bukti bayar validated' }],
+        responses: { 200: { description: 'Paginated' } },
+      },
+      post: {
+        tags: ['Upah Pekerja'], summary: 'Ajukan klaim upah satu periode',
+        description: 'Permission: labor-claim:create (Lapangan). Tahapan belum ditutup (409). Semua log tahapan itu dalam [periodStart, periodEnd] yang belum ada di klaim aktif ikut UTUH (L5); 0 log → 409. Baris di-snapshot (nama, kode pekerja, peran, jenis, upah, lembur) — perubahan master tidak mengubah klaim. Log yang masuk terkunci sampai klaim ditolak/dibatalkan (L6). Kode LWC-NNNNNN.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['subProjectId', 'periodStart', 'periodEnd'], properties: {
+          subProjectId: { type: 'integer' }, periodStart: { type: 'string', format: 'date' },
+          periodEnd: { type: 'string', format: 'date', description: '≥ periodStart, tidak di masa depan' }, notes: { type: 'string' },
+        } } } } },
+        responses: { 201: { description: 'Detail klaim' }, 400: { description: 'Validasi gagal' }, 409: { description: 'Tahapan ditutup / tidak ada log yang bisa diklaim' } },
+      },
+    },
+    '/labor-wage-claims/{id}': {
+      get: {
+        tags: ['Upah Pekerja'], summary: 'Detail klaim',
+        description: 'Permission: labor-claim:read. Header + keputusan Admin/Finance + `items[]` snapshot (`workDate`, `dailyLaborLogItemId`, `workerCode`, `workerName`, `workerRole`, `workerType`, `dailyWage`, `overtimeAmount`, `totalWage`) + `perWorker` (rekap per orang: hari, upah, lembur, total) + `paymentProofs[]` + `totalAmount`, `paidAmount`, `difference` (dihitung).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } },
+      },
+    },
+    '/labor-wage-claims/{id}/cancel': {
+      put: { tags: ['Upah Pekerja'], summary: 'Batalkan klaim', description: 'Permission: labor-claim:create, hanya pengaju, selama `submitted`/`waiting_finance_approval`. Log-nya terbuka lagi.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pengaju' }, 409: { description: 'Sudah diputuskan' } } },
+    },
+    '/labor-wage-claims/{id}/validate': {
+      put: { tags: ['Upah Pekerja'], summary: 'Validasi Admin → teruskan ke Finance', description: 'Permission: labor-claim:validate (Admin). `submitted` → `waiting_finance_approval`. Admin memeriksa kehadiran & upah per baris di sini (P1).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Diteruskan' }, 403: { description: 'Pengaju sendiri' }, 409: { description: 'Status bukan submitted' } } },
+    },
+    '/labor-wage-claims/{id}/approve': {
+      put: { tags: ['Upah Pekerja'], summary: 'Setujui (Finance)', description: 'Permission: labor-claim:approve (Finance). → `approved`. Tanpa ubah nominal, tanpa jurnal. Lapangan lalu membayar di luar sistem dan mengunggah bukti (L8).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Disetujui' }, 409: { description: 'Status bukan waiting_finance_approval' } } },
+    },
+    '/labor-wage-claims/{id}/reject': {
+      put: { tags: ['Upah Pekerja'], summary: 'Tolak (Admin saat submitted, Finance saat menunggu Finance)', description: 'Permission: labor-claim:validate ATAU labor-claim:approve sesuai status. Alasan wajib. Final; log-nya terbuka lagi untuk diperbaiki & diklaim ulang.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string', description: 'Alasan — wajib' } } } } } }, responses: { 200: { description: 'Ditolak' }, 403: { description: 'Bukan wewenang tahap ini / pengaju sendiri' }, 409: { description: 'Sudah final' } } },
+    },
+    '/labor-payment-proofs': {
+      get: {
+        tags: ['Upah Pekerja'], summary: 'List bukti bayar upah',
+        description: 'Permission: labor-claim:read.',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'laborWageClaimId', schema: { type: 'integer' } },
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'validated', 'rejected', 'cancelled'] } }],
+        responses: { 200: { description: 'Paginated' } },
+      },
+      post: {
+        tags: ['Upah Pekerja'], summary: 'Unggah bukti bayar upah',
+        description: 'Permission: labor-claim:create (Lapangan). Klaim harus `approved`; satu bukti AKTIF (submitted/validated) per klaim (409). `paidAmount` boleh ≠ total klaim — selisih ditampilkan (L8). File 1–10 di `proofs` (PDF/JPG/PNG/WebP, maks 10 MB). Kode LPP-NNNNNN.',
+        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['laborWageClaimId', 'paymentDate', 'paidAmount', 'proofs'], properties: {
+          laborWageClaimId: { type: 'integer' }, paymentDate: { type: 'string', format: 'date', description: 'Tidak di masa depan' },
+          paidAmount: { type: 'number', exclusiveMinimum: 0 }, receiverName: { type: 'string', description: 'Mis. mandor penerima' }, notes: { type: 'string' },
+          proofs: { type: 'array', minItems: 1, maxItems: 10, items: { type: 'string', format: 'binary' } },
+        } } } } },
+        responses: { 201: { description: 'Detail bukti' }, 400: { description: 'Validasi / file tidak sah' }, 409: { description: 'Klaim belum approved / sudah punya bukti aktif / tahapan ditutup' } },
+      },
+    },
+    '/labor-payment-proofs/{id}': {
+      get: { tags: ['Upah Pekerja'], summary: 'Detail bukti bayar', description: 'Permission: labor-claim:read. `files[].fileId` untuk GET /files/{id}/url; `claim` ringkas (kode, `totalAmount`) + `difference`.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
+    },
+    '/labor-payment-proofs/{id}/cancel': {
+      put: { tags: ['Upah Pekerja'], summary: 'Batalkan bukti', description: 'Permission: labor-claim:create, hanya pengunggah, selama `submitted`.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pengunggah' }, 409: { description: 'Sudah diputuskan' } } },
+    },
+    '/labor-payment-proofs/{id}/validate': {
+      put: { tags: ['Upah Pekerja'], summary: 'Validasi bukti (Finance)', description: 'Permission: labor-claim:approve (Finance). `submitted` → `validated` = klaim LUNAS; sumber jurnal Beban Upah Harian Project (modul GL).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Divalidasi' }, 403: { description: 'Pengunggah sendiri' }, 409: { description: 'Status bukan submitted' } } },
+    },
+    '/labor-payment-proofs/{id}/reject': {
+      put: { tags: ['Upah Pekerja'], summary: 'Tolak bukti (Finance)', description: 'Permission: labor-claim:approve. Alasan wajib. Final; Lapangan mengunggah bukti baru untuk klaim yang sama.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string', description: 'Alasan — wajib' } } } } } }, responses: { 200: { description: 'Ditolak' }, 409: { description: 'Status bukan submitted' } } },
+    },
 
     // ========================================
     // 9. FINANCE ACCOUNTING

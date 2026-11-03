@@ -46,13 +46,14 @@ app.use('/api/approval-queue',       require('./modules/approval-center/approval
 app.use('/api/workers',            require('./modules/labor/worker.routes.js'));
 app.use('/api/worker-assignments', require('./modules/labor/worker-assignment.routes.js'));
 app.use('/api/labor-logs',         require('./modules/labor/labor-log.routes.js'));
+app.use('/api/field-expense-categories',   require('./modules/finance-field/field-expense-category.routes.js'));
+app.use('/api/field-operational-requests', require('./modules/finance-field/field-operational-request.routes.js'));
 // Didaftarkan SEBELUM /api/equipment supaya jelas mana yang menangani
 // /purchase-requests — bukan bergantung pada fall-through router.
 app.use('/api/equipment/purchase-requests', require('./modules/divisi-alat/purchase-request.routes.js'));
 app.use('/api/equipment/cash',      require('./modules/divisi-alat/cash.routes.js'));
 app.use('/api/equipment',          require('./modules/divisi-alat/divisi-alat.routes.js'));
 // app.use('/api/income',             require('./modules/income/income.routes.js'));
-// app.use('/api/finance-field',      require('./modules/finance-field/finance-field.routes.js'));
 // app.use('/api/finance-accounting', require('./modules/finance-accounting/finance-accounting.routes.js'));
 // app.use('/api/payroll',            require('./modules/payroll/payroll.routes.js'));
 

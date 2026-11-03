@@ -71,6 +71,10 @@ model User {
   workerAssignmentsCreated        SubProjectWorkerAssignment[] @relation("WorkerAssignmentCreatedBy")
   laborLogsCreated                DailyLaborLog[]              @relation("LaborLogCreatedBy")
   laborLogsUpdated                DailyLaborLog[]              @relation("LaborLogUpdatedBy")
+  fieldRequestsCreated            FieldOperationalRequest[]    @relation("FieldRequestRequestedBy")
+  fieldRequestsAdminValidated     FieldOperationalRequest[]    @relation("FieldRequestAdminValidatedBy")
+  fieldRequestsFinanceReviewed    FieldOperationalRequest[]    @relation("FieldRequestFinanceReviewedBy")
+  fieldRequestsCancelled          FieldOperationalRequest[]    @relation("FieldRequestCancelledBy")
 
   @@map("users")
 }
@@ -1031,6 +1035,7 @@ model SubProject {
   stockMovements       MaterialStockMovement[]
   workerAssignments    SubProjectWorkerAssignment[]
   laborLogs            DailyLaborLog[]
+  fieldRequests        FieldOperationalRequest[]
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
@@ -1946,4 +1951,102 @@ model DailyLaborLogItem {
   @@unique([dailyLaborLogId, projectWorkerId])
   @@index([projectWorkerId])
   @@map("daily_labor_log_items")
+}
+
+// ============================================================
+// KAS LAPANGAN — pengajuan dana operasional (docs/plan-divisi-lapangan.md L1–L3).
+// Laporan realisasi + nota (field_expense_reports*) = T12, belum dibangun.
+// ============================================================
+
+/// Kategori biaya lapangan. Diisi SEEDER saja, tanpa endpoint kelola (L3).
+/// Tidak pernah dihapus — kategori yang tidak dipakai lagi dinonaktifkan, supaya
+/// dokumen lama tetap terbaca.
+model FieldExpenseCategory {
+  id           Int      @id @default(autoincrement())
+  categoryCode String   @unique @map("category_code") @db.VarChar(30)
+  categoryName String   @unique @map("category_name") @db.VarChar(100)
+  description  String?  @db.Text
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  requestItems FieldOperationalRequestItem[]
+
+  @@map("field_expense_categories")
+}
+
+/// 5 nilai, pola request material (R1): `waiting_admin_validation` ERD dinamai
+/// `submitted`; penolakan Admin/Finance disatukan jadi `rejected` — siapa yang
+/// menolak terbaca dari kolom keputusan yang terisi.
+enum FieldOperationalRequestStatus {
+  submitted
+  waiting_finance_approval
+  approved
+  rejected
+  cancelled
+
+  @@map("field_operational_request_status")
+}
+
+/// Izin belanja lapangan (L1). Nominal = PERKIRAAN (L2): `approved` tidak membuat
+/// jurnal, pencairan terjadi di luar sistem. Total TIDAK disimpan (ERD
+/// total_requested_amount dibuang) — dihitung dari item saat dibaca.
+/// Tanpa tabel status log (ERD field_operational_request_status_logs): alur
+/// linear, kolom aktor di header memuat seluruh riwayat.
+model FieldOperationalRequest {
+  id           Int                           @id @default(autoincrement())
+  requestCode  String                        @unique @map("request_code") @db.VarChar(50)
+  subProjectId Int                           @map("sub_project_id")
+  requestDate  DateTime                      @map("request_date") @db.Date
+  neededDate   DateTime?                     @map("needed_date") @db.Date
+  notes        String?                       @db.Text
+  status       FieldOperationalRequestStatus @default(submitted)
+
+  requestedBy       Int       @map("requested_by")
+  adminValidatedBy  Int?      @map("admin_validated_by")
+  adminValidatedAt  DateTime? @map("admin_validated_at")
+  adminNotes        String?   @map("admin_notes") @db.Text
+  financeReviewedBy Int?      @map("finance_reviewed_by")
+  financeReviewedAt DateTime? @map("finance_reviewed_at")
+  financeNotes      String?   @map("finance_notes") @db.Text
+  cancelledBy       Int?      @map("cancelled_by")
+  cancelledAt       DateTime? @map("cancelled_at")
+  cancelReason      String?   @map("cancel_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subProject            SubProject                    @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
+  requestedByUser       User                          @relation("FieldRequestRequestedBy", fields: [requestedBy], references: [id])
+  adminValidatedByUser  User?                         @relation("FieldRequestAdminValidatedBy", fields: [adminValidatedBy], references: [id], onDelete: Restrict)
+  financeReviewedByUser User?                         @relation("FieldRequestFinanceReviewedBy", fields: [financeReviewedBy], references: [id], onDelete: Restrict)
+  cancelledByUser       User?                         @relation("FieldRequestCancelledBy", fields: [cancelledBy], references: [id], onDelete: Restrict)
+  items                 FieldOperationalRequestItem[]
+
+  @@index([subProjectId, status])
+  @@index([requestedBy, requestDate])
+  @@map("field_operational_requests")
+}
+
+/// Baris pengajuan. Jumlah per baris = quantity × estimated_unit_price, dihitung
+/// saat dibaca (ERD requested_amount dibuang). Tanpa approved_amount: Finance
+/// tidak mengubah nominal.
+model FieldOperationalRequestItem {
+  id                        Int      @id @default(autoincrement())
+  fieldOperationalRequestId Int      @map("field_operational_request_id")
+  fieldExpenseCategoryId    Int      @map("field_expense_category_id")
+  itemName                  String   @map("item_name") @db.VarChar(150)
+  quantity                  Decimal  @db.Decimal(18, 2)
+  unit                      String   @db.VarChar(30)
+  estimatedUnitPrice        Decimal  @map("estimated_unit_price") @db.Decimal(18, 2)
+  notes                     String?  @db.Text
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  request  FieldOperationalRequest @relation(fields: [fieldOperationalRequestId], references: [id], onDelete: Cascade)
+  category FieldExpenseCategory    @relation(fields: [fieldExpenseCategoryId], references: [id], onDelete: Restrict)
+
+  @@index([fieldOperationalRequestId])
+  @@index([fieldExpenseCategoryId])
+  @@map("field_operational_request_items")
 }
