@@ -25,20 +25,20 @@ export const unitLabel = (unit) => UNIT_DISPLAY[unit] || unit || '';
 
 export const PROJECT_STATUS = {
   planned: { label: 'Planned', className: 'bg-slate-100 text-slate-700 border-slate-200' },
-  active: { label: 'Active', className: 'bg-teal-50 text-teal-700 border-teal-200' },
-  completed: { label: 'Completed', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  active: { label: 'Active', className: 'bg-brand-50 text-brand-700 border-brand-200' },
+  completed: { label: 'Completed', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   cancelled: { label: 'Cancelled', className: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 export const PROGRESS_STATUS = {
   submitted: { label: 'Menunggu Validasi', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  validated: { label: 'Tervalidasi', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  validated: { label: 'Tervalidasi', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   rejected: { label: 'Ditolak', className: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 export const ALLOCATION_STATUS = {
-  assigned: { label: 'Assigned', className: 'bg-teal-50 text-teal-700 border-teal-200' },
-  completed: { label: 'Completed', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  assigned: { label: 'Assigned', className: 'bg-brand-50 text-brand-700 border-brand-200' },
+  completed: { label: 'Completed', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   returned: { label: 'Returned', className: 'bg-slate-100 text-slate-700 border-slate-200' },
   cancelled: { label: 'Cancelled', className: 'bg-red-50 text-red-700 border-red-200' },
 };
@@ -157,16 +157,16 @@ export const actorName = (actor) => actor?.fullName || actor?.username || '-';
 
 export const POOL_STATUS = {
   draft: { label: 'Draft', className: 'bg-slate-100 text-slate-700 border-slate-200' },
-  active: { label: 'Active', className: 'bg-teal-50 text-teal-700 border-teal-200' },
-  closed: { label: 'Closed', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  active: { label: 'Active', className: 'bg-brand-50 text-brand-700 border-brand-200' },
+  closed: { label: 'Closed', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   cancelled: { label: 'Cancelled', className: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 export const POOL_ITEM_STATUS = {
   pending: { label: 'Pending', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  available: { label: 'Available', className: 'bg-teal-50 text-teal-700 border-teal-200' },
+  available: { label: 'Available', className: 'bg-brand-50 text-brand-700 border-brand-200' },
   assigned: { label: 'Assigned', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  completed: { label: 'Completed', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  completed: { label: 'Completed', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   rejected: { label: 'Rejected', className: 'bg-red-50 text-red-700 border-red-200' },
   cancelled: { label: 'Cancelled', className: 'bg-slate-100 text-slate-600 border-slate-200' },
 };

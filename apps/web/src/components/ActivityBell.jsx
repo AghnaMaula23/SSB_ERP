@@ -81,13 +81,13 @@ export default function ActivityBell({ align = 'right' }) {
               <p className="text-sm font-bold text-slate-900">Aktivitas Akun Ini</p>
               <p className="text-[11px] text-slate-500">Semua yang pernah kamu lakukan di sistem</p>
             </div>
-            <button type="button" onClick={() => { markAllRead(); setActivities(getActivities()); setUnread(0); }} className="text-[11px] font-semibold text-teal-700 hover:underline">
+            <button type="button" onClick={() => { markAllRead(); setActivities(getActivities()); setUnread(0); }} className="text-[11px] font-semibold text-brand-700 hover:underline">
               Tandai dibaca
             </button>
           </div>
           <div className="max-h-[70vh] overflow-y-auto overscroll-contain">
             {activities.length > 0 ? activities.map((entry) => (
-              <div key={entry.id} className={`flex gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 ${entry.read ? '' : 'bg-teal-50/40'}`}>
+              <div key={entry.id} className={`flex gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 ${entry.read ? '' : 'bg-brand-50/40'}`}>
                 <span className="mt-0.5 text-base" aria-hidden="true">{moduleIcon(entry.module)}</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold text-slate-900">{entry.action}</p>

@@ -38,15 +38,15 @@ export default function IncomeListPage({ initialNotice }) {
 
       <div className="mb-5 grid gap-3 md:grid-cols-3">
         {Object.entries(SOURCES).map(([value, source]) => (
-          <a key={value} href={`#/admin/income/new/${slugOf(value)}`} className="card-panel group flex items-center gap-4 p-4 transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-xl" aria-hidden="true">{source.icon}</span>
+          <a key={value} href={`#/admin/income/new/${slugOf(value)}`} className="card-panel group flex items-center gap-4 p-4 transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-xl" aria-hidden="true">{source.icon}</span>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-slate-900 group-hover:text-teal-800">+ Pendapatan {source.label}</span>
+              <span className="block text-sm font-bold text-slate-900 group-hover:text-brand-800">+ Pendapatan {source.label}</span>
               <span className="block truncate text-[11px] text-slate-500">
                 {value === 'construction_project' ? 'Progress kontrak, alat, dan material' : value === 'external_rental' ? 'Jam kerja unit sewa' : 'Volume ritase material'}
               </span>
             </span>
-            <span className="text-teal-700" aria-hidden="true">→</span>
+            <span className="text-brand-700" aria-hidden="true">→</span>
           </a>
         ))}
       </div>
@@ -79,7 +79,7 @@ export default function IncomeListPage({ initialNotice }) {
               key: 'reference',
               label: 'Reference',
               primary: true,
-              render: (row) => <a href={`#/admin/income/${row.id}`} className="font-mono text-xs font-bold text-teal-700 hover:underline">#{row.referenceCode}</a>,
+              render: (row) => <a href={`#/admin/income/${row.id}`} className="font-mono text-xs font-bold text-brand-700 hover:underline">#{row.referenceCode}</a>,
               sub: (row) => formatDate(row.createdAt),
               badge: (row) => <span className="whitespace-nowrap text-xs"><span aria-hidden="true">{SOURCES[row.projectSourceType].icon}</span> {SOURCES[row.projectSourceType].label}</span>,
             },

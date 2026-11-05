@@ -1,51 +1,23 @@
 import { apiRequest } from '../../../services/api.js';
+import { subProjectTypeLabel } from '../../admin/project/utils/projectFormat.js';
 
-const DUMMY_PROJECTS = [
-  {
-    id: 'PRJ-001',
-    name: 'Project Nickel Mining Morowali',
-    clientName: 'PT Halmahera Utama',
-    adminStatus: 'accepted',
-    subProjects: [
-      { id: 'SUB-001', name: 'Land Clearing Pit Alpha' },
-      { id: 'SUB-002', name: 'Access Road South Block' },
-    ],
-  },
-  {
-    id: 'PRJ-002',
-    name: 'Project Renovasi Gudang',
-    clientName: 'PT Sinar Utara',
-    adminStatus: 'accepted',
-    subProjects: [{ id: 'SUB-003', name: 'Warehouse Maintenance' }],
-  },
-  {
-    id: 'PRJ-003',
-    name: 'Project Nickel Mining Morowali',
-    clientName: 'PT Halmahera Utama',
-    adminStatus: 'pending',
-    subProjects: [{ id: 'SUB-004', name: 'Pending Validation Area' }],
-  },
-];
-
-function normalizeProject(project) {
-  return {
-    ...project,
-    id: project.id,
-    name: project.name || project.projectName || project.project_name,
-    clientName: project.clientName || project.client_name || '-',
-    adminStatus: project.adminStatus || project.admin_status || project.status,
-    subProjects: (project.subProjects || project.sub_projects || []).map((subProject, index) => ({ ...subProject, id: subProject.id || subProject.subProjectId || `SUB-${index + 1}`, name: subProject.name || subProject.subProjectName || `Activity ${index + 1}` })),
-  };
-}
-
+/**
+ * Project konstruksi aktif beserta tahapannya, untuk form klaim pendapatan.
+ * Divisi Alat punya `project:read` & `sub-project:read`. Kalau API gagal,
+ * errornya diteruskan ke layar — tidak ada lagi fallback ke project palsu (E9a).
+ */
 export async function getClaimableProjects() {
-  try {
-    const result = await apiRequest('/api/projects?status=accepted&limit=100');
-    const projects = (result.data || []).map(normalizeProject).filter((project) => project.adminStatus === 'accepted');
-    if (projects.length) return projects;
-  } catch (error) {
-    if (error?.status === 401) throw error;
-    // Project endpoint belum tersedia; gunakan dummy accepted projects.
-  }
-  return DUMMY_PROJECTS.filter((project) => project.adminStatus === 'accepted').map(normalizeProject);
+  const result = await apiRequest('/api/projects/construction?status=active&limit=100');
+  const projects = result.data || [];
+  return Promise.all(projects.map(async (project) => {
+    const stages = await apiRequest(`/api/projects/construction/${project.id}/sub-projects`);
+    return {
+      id: project.id,
+      name: project.projectName,
+      clientName: project.clientName || '-',
+      subProjects: (stages?.data || [])
+        .filter((stage) => stage.status === 'active')
+        .map((stage) => ({ id: stage.id, name: `${stage.sequenceOrder}. ${subProjectTypeLabel(stage.subProjectType)}${stage.contractNo ? ` · ${stage.contractNo}` : ''}` })),
+    };
+  }));
 }

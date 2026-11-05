@@ -32,7 +32,7 @@ export function clearSession() {
   localStorage.removeItem('admin_mock_income_records');
   localStorage.removeItem('admin_mock_field_cash');
   localStorage.removeItem('admin_mock_files');
-  // Isi berkas modul Files Admin disimpan di IndexedDB (lihat fileStore.js).
+  // Sisa penyimpanan lokal modul Files lama (sebelum /api/project-files).
   if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase('constructerp-files');
 }
 

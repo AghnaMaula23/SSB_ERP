@@ -84,7 +84,7 @@ export default function PurchaseRequestDetail({ recordId, onDone, listHref = '#/
       <div className="mb-5 mt-2 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-mono text-2xl font-bold text-emerald-800">{pr.requestCode}</h1>
+            <h1 className="font-mono text-2xl font-bold text-leaf-800">{pr.requestCode}</h1>
             <StatusBadge status={pr.status} map={PR_STATUS} />
             <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${priority.className}`}>{priority.label}</span>
           </div>
@@ -177,11 +177,11 @@ export default function PurchaseRequestDetail({ recordId, onDone, listHref = '#/
 
         <aside className="space-y-4">
           <div className="card-panel p-4">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700">Alur Persetujuan</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-brand-700">Alur Persetujuan</p>
             <ol className="mt-3 space-y-3">
               {timeline.map((step) => (
                 <li key={step.label} className="flex gap-3">
-                  <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${step.done ? (step.red ? 'bg-red-500' : 'bg-emerald-600') : 'bg-slate-300'}`}>{step.done ? (step.red ? '✕' : '✓') : ''}</span>
+                  <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${step.done ? (step.red ? 'bg-red-500' : 'bg-leaf-600') : 'bg-slate-300'}`}>{step.done ? (step.red ? '✕' : '✓') : ''}</span>
                   <div className="text-xs">
                     <p className={`font-semibold ${step.done ? 'text-slate-900' : 'text-slate-400'}`}>{step.label}</p>
                     {step.done && <p className="text-[11px] text-slate-500">{formatDateTime(step.at)}{step.by ? ` · ${step.by}` : ''}</p>}
@@ -193,7 +193,7 @@ export default function PurchaseRequestDetail({ recordId, onDone, listHref = '#/
           </div>
           {pr.balanceProjection && (
             <div className="card-panel p-4 text-xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700">Proyeksi Kas Alat</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-brand-700">Proyeksi Kas Alat</p>
               <p className="mt-2 flex justify-between"><span>Saldo saat ini</span><b>{formatCurrency(pr.balanceProjection.currentBalance)}</b></p>
               <p className="flex justify-between"><span>Setelah cair</span><b className={pr.balanceProjection.projectedBalance < 0 ? 'text-red-600' : ''}>{formatCurrency(pr.balanceProjection.projectedBalance)}</b></p>
             </div>

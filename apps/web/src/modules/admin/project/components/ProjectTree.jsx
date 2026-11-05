@@ -5,8 +5,8 @@ import { SUB_PAGES } from '../utils/projectRoute.js';
 
 const STATUS_DOT = {
   planned: 'bg-slate-300',
-  active: 'bg-teal-500',
-  completed: 'bg-emerald-500',
+  active: 'bg-brand-500',
+  completed: 'bg-leaf-500',
   cancelled: 'bg-red-400',
 };
 
@@ -53,13 +53,13 @@ export default function ProjectTree({ project, stagesEntry, selection, canCreate
   };
 
   const linkClass = (active) => `min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-[13px] transition ${
-    active ? 'bg-teal-50 font-semibold text-teal-800' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+    active ? 'bg-brand-50 font-semibold text-brand-800' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
   }`;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b border-slate-200 px-4 py-4">
-        <a href="#/admin/projects" className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-teal-700">
+        <a href="#/admin/projects" className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-brand-700">
           ← Semua Project
         </a>
         <p className="mt-3 font-mono text-[11px] font-semibold text-slate-400">{project.projectCode}</p>
@@ -111,7 +111,7 @@ export default function ProjectTree({ project, stagesEntry, selection, canCreate
                         <li key={page.key}>
                           <a
                             href={`#/admin/projects/${project.id}/sub/${stage.id}/${page.key}`}
-                            className={`flex items-center gap-2 border-l-2 ${active ? 'border-teal-600' : 'border-transparent'} ${linkClass(active)}`}
+                            className={`flex items-center gap-2 border-l-2 ${active ? 'border-brand-600' : 'border-transparent'} ${linkClass(active)}`}
                             aria-current={active ? 'page' : undefined}
                           >
                             <span className="text-xs" aria-hidden="true">{page.icon}</span>
@@ -132,7 +132,7 @@ export default function ProjectTree({ project, stagesEntry, selection, canCreate
               <a
                 href={`#/admin/projects/${project.id}/sub/new`}
                 className={`flex items-center gap-1 rounded-md px-1 py-1.5 text-[13px] font-medium transition ${
-                  selection.form === 'sub-new' ? 'bg-teal-50 text-teal-800' : 'text-teal-700 hover:bg-teal-50'
+                  selection.form === 'sub-new' ? 'bg-brand-50 text-brand-800' : 'text-brand-700 hover:bg-brand-50'
                 }`}
               >
                 <span className="flex h-6 w-6 items-center justify-center font-bold">+</span>

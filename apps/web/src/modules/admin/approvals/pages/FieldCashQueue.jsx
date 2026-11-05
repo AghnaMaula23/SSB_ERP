@@ -78,7 +78,7 @@ export default function FieldCashQueue({ initialNotice }) {
       <Notice tone={notice.tone} onDismiss={() => setNotice({ tone: 'success', text: '' })}>{notice.text}</Notice>
 
       <section className="card-panel overflow-hidden" aria-label="Antrean klaim kas lapangan">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-emerald-50/60 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-leaf-50/60 px-5 py-4">
           <h2 className="text-lg font-bold text-slate-900">Data Antrean Klaim Kas</h2>
           <div className="flex flex-wrap gap-2">
             <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} className="input-control h-9 w-52 text-xs" placeholder="Cari kode, proyek, pemohon..." aria-label="Cari klaim" />
@@ -107,7 +107,7 @@ export default function FieldCashQueue({ initialNotice }) {
               key: 'project',
               label: 'Proyek',
               primary: true,
-              render: (row) => <a href={`#/admin/approvals/kas/${row.id}`} className="font-semibold text-emerald-800 hover:underline">{row.projectName}</a>,
+              render: (row) => <a href={`#/admin/approvals/kas/${row.id}`} className="font-semibold text-leaf-800 hover:underline">{row.projectName}</a>,
               sub: (row) => `${row.subProjectLabel} · ${row.requestCode}`,
             },
             { key: 'date', label: 'Tanggal', render: (row) => <span className="whitespace-nowrap text-xs">{formatDate(row.requestDate)}</span> },
@@ -122,7 +122,7 @@ export default function FieldCashQueue({ initialNotice }) {
               ),
             },
             { key: 'amount', label: 'Nominal', align: 'right', render: (row) => <span className="font-mono font-semibold text-slate-900">{formatCurrency(row.amount)}</span> },
-            { key: 'nota', label: 'Nota', render: (row) => <a href={`#/admin/approvals/kas/${row.id}`} className="whitespace-nowrap text-xs font-semibold text-emerald-700 hover:underline">📎 View Nota ({row.attachments.length})</a> },
+            { key: 'nota', label: 'Nota', render: (row) => <a href={`#/admin/approvals/kas/${row.id}`} className="whitespace-nowrap text-xs font-semibold text-leaf-700 hover:underline">📎 View Nota ({row.attachments.length})</a> },
             {
               key: 'action',
               label: 'Aksi',

@@ -42,7 +42,7 @@ export default function ProjectListView({ projects, loading, error, canCreate, o
             aria-selected={statusFilter === status}
             onClick={() => setStatusFilter(status)}
             className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-              statusFilter === status ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+              statusFilter === status ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
             }`}
           >
             {status ? PROJECT_STATUS[status].label : 'Semua'} <span className="ml-0.5 text-slate-400">{status ? counts[status] || 0 : projects.length}</span>
@@ -70,13 +70,13 @@ export default function ProjectListView({ projects, loading, error, canCreate, o
               <a
                 key={project.id}
                 href={`#/admin/projects/${project.id}`}
-                className="card-panel group flex flex-col p-5 transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"
+                className="card-panel group flex flex-col p-5 transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">
                   <span className="font-mono text-[11px] font-semibold text-slate-400">{project.projectCode}</span>
                   <StatusBadge status={project.status} map={PROJECT_STATUS} />
                 </div>
-                <h2 className="mt-2 line-clamp-2 text-base font-bold text-slate-900 group-hover:text-teal-800">{project.projectName}</h2>
+                <h2 className="mt-2 line-clamp-2 text-base font-bold text-slate-900 group-hover:text-brand-800">{project.projectName}</h2>
                 <p className="mt-1 truncate text-xs text-slate-500">📍 {project.location || 'Lokasi belum diisi'}</p>
                 <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-xs">
                   <div>
@@ -92,7 +92,7 @@ export default function ProjectListView({ projects, loading, error, canCreate, o
                     <p className="mt-0.5 font-medium text-slate-700">
                       {schedule ? `${formatDate(project.startDate)} – ${formatDate(project.endDate)}` : 'Belum dijadwalkan'}
                       {schedule && project.status === 'active' && (
-                        <span className={`ml-1.5 ${schedule.overdue ? 'text-red-600' : 'text-teal-700'}`}>
+                        <span className={`ml-1.5 ${schedule.overdue ? 'text-red-600' : 'text-brand-700'}`}>
                           · {schedule.overdue ? 'lewat target' : `${schedule.remainingDays} hari lagi`}
                         </span>
                       )}

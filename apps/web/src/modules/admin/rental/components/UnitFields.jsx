@@ -56,7 +56,7 @@ export default function UnitFields({ form, errors = {}, onChange, idPrefix = 'un
           {Object.entries(PACKETS).map(([value, packet]) => {
             const active = form.packet === value;
             return (
-              <label key={value} className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-center transition ${active ? 'bg-white text-teal-800 shadow-sm ring-2 ring-teal-600' : 'text-slate-500 hover:text-slate-800'}`}>
+              <label key={value} className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-center transition ${active ? 'bg-white text-brand-800 shadow-sm ring-2 ring-brand-600' : 'text-slate-500 hover:text-slate-800'}`}>
                 <input type="radio" name={id('packet')} value={value} checked={active} onChange={set('packet')} className="sr-only" />
                 <span aria-hidden="true">{packet.icon}</span>
                 <span>

@@ -154,14 +154,14 @@ export default function MaterialRequestReview({ recordId, onDone }) {
       <Breadcrumb items={[{ label: 'Pusat Approval', href: '#/admin/approvals/material' }, { label: 'Request Material' }, { label: request.requestCode }]} />
       <div className="mb-5 mt-2">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-mono text-2xl font-bold text-emerald-800">{request.requestCode}</h1>
+          <h1 className="font-mono text-2xl font-bold text-leaf-800">{request.requestCode}</h1>
           <StatusBadge status={request.status} map={MATERIAL_REQUEST_STATUS} />
           {request.rejectedBy && <span className="text-xs text-red-600">oleh {request.rejectedBy === 'admin' ? 'Admin' : 'Finance'}</span>}
         </div>
         <p className="mt-1 text-xs text-slate-500">
           Diajukan {formatDate(request.requestDate)} oleh {actorName(request.requestedBy)}
-          {stage && <> · <a href={`#/admin/projects/${stage.constructionProjectId}/sub/${stage.id}/inventory`} className="font-semibold text-teal-700 hover:underline">{subProjectTypeLabel(stage.subProjectType)}</a></>}
-          {supply && <> · <a href={`#/admin/supply/${supply.id}`} className="font-semibold text-teal-700 hover:underline">{supply.supplyProjectCode} {supply.supplyProjectName}</a></>}
+          {stage && <> · <a href={`#/admin/projects/${stage.constructionProjectId}/sub/${stage.id}/inventory`} className="font-semibold text-brand-700 hover:underline">{subProjectTypeLabel(stage.subProjectType)}</a></>}
+          {supply && <> · <a href={`#/admin/supply/${supply.id}`} className="font-semibold text-brand-700 hover:underline">{supply.supplyProjectCode} {supply.supplyProjectName}</a></>}
           {request.neededDate && ` · dibutuhkan ${formatDate(request.neededDate)}`}
         </p>
         {request.requestNotes && <p className="mt-2 max-w-3xl whitespace-pre-line rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">{request.requestNotes}</p>}
@@ -229,7 +229,7 @@ export default function MaterialRequestReview({ recordId, onDone }) {
       <section className="card-panel mb-5 p-5" aria-label="Biaya lain">
         <div className="mb-3 flex items-center justify-between gap-2">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Biaya Lain</p>
-          {editable && <button type="button" onClick={() => setDraft((current) => ({ ...current, others: [...current.others, newOtherCost()] }))} className="text-xs font-bold text-teal-700 hover:underline">+ Tambah Biaya</button>}
+          {editable && <button type="button" onClick={() => setDraft((current) => ({ ...current, others: [...current.others, newOtherCost()] }))} className="text-xs font-bold text-brand-700 hover:underline">+ Tambah Biaya</button>}
         </div>
         {draft.others.length === 0 ? (
           <p className="text-xs text-slate-500">Tidak ada biaya selain harga material.</p>

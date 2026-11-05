@@ -5,7 +5,7 @@ export default function ItemInfoForm({ item, form, equipmentTypes = [], saving, 
   return (
     <section className="card-panel" aria-labelledby="item-information-title">
       <div className="flex items-center gap-3 border-b border-slate-200 px-6 py-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-teal-700 font-bold">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700 font-bold">
           ⓘ
         </div>
         <h2 id="item-information-title" className="text-base font-bold text-slate-900">Equipment Specifications</h2>

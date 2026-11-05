@@ -113,7 +113,7 @@ export default function ItemsPage({ onBackToModules, onSignOut, onViewDetails })
             <StatCard label="Available for Dispatch" value={items.filter((item) => item.status === 'operational').length} tone="green" />
           </div>
 
-          {successMessage && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700" role="status">{successMessage}</div>}
+          {successMessage && <div className="mb-4 rounded-lg border border-leaf-200 bg-leaf-50 p-3 text-xs text-leaf-700" role="status">{successMessage}</div>}
           {loadError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">{loadError}</div>}
 
           <section className="card-panel mb-6 p-4" aria-label="Inventory Filters">

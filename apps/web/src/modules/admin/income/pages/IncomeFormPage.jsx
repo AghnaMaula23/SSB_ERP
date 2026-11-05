@@ -26,7 +26,7 @@ function Select({ id, label, value, onChange, options, placeholder, disabled, er
 function HeroStat({ label, value }) {
   return (
     <div className="min-w-0 border-white/20 pr-5 [&:not(:first-child)]:border-l [&:not(:first-child)]:pl-5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-teal-100/80">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-100/80">{label}</p>
       <p className="mt-0.5 truncate text-sm font-bold text-white">{value}</p>
     </div>
   );
@@ -211,17 +211,17 @@ export default function IncomeFormPage({ sourceType, onNavigate, onSaved }) {
       <Breadcrumb items={[{ label: 'Income', href: '#/admin/income' }, { label: 'Pendapatan Baru' }]} />
 
       {/* Ringkasan total — selalu terlihat saat menggulir isian panjang. */}
-      <section className="sticky top-16 z-10 -mx-1 mt-3 rounded-2xl bg-gradient-to-br from-teal-800 via-teal-700 to-teal-600 p-5 text-white shadow-lg sm:p-6" aria-label="Estimasi total pendapatan">
+      <section className="sticky top-16 z-10 -mx-1 mt-3 rounded-2xl bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 p-5 text-white shadow-lg sm:p-6" aria-label="Estimasi total pendapatan">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-100">Estimasi Total Pendapatan</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-100">Estimasi Total Pendapatan</p>
             <p className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">{formatCurrency(grandTotal)}</p>
           </div>
-          <span className="rounded-lg bg-white/10 px-2.5 py-1 font-mono text-[11px] text-teal-50">{reference || '...'}</span>
+          <span className="rounded-lg bg-white/10 px-2.5 py-1 font-mono text-[11px] text-brand-50">{reference || '...'}</span>
         </div>
         <div className="mt-4 flex flex-wrap items-end justify-between gap-4 border-t border-white/20 pt-4">
           <div className="flex flex-wrap gap-y-2">{heroStats.map(([label, value]) => <HeroStat key={label} label={label} value={value} />)}</div>
-          <button type="button" onClick={handleSubmit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-teal-800 shadow-sm transition hover:bg-teal-50 disabled:opacity-60">
+          <button type="button" onClick={handleSubmit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-brand-800 shadow-sm transition hover:bg-brand-50 disabled:opacity-60">
             {busy ? 'Mengajukan...' : 'Submit Pendapatan ➤'}
           </button>
         </div>
@@ -243,7 +243,7 @@ export default function IncomeFormPage({ sourceType, onNavigate, onSaved }) {
                 role="tab"
                 aria-selected={active}
                 onClick={() => !active && onNavigate(`admin/income/new/${slugOf(value)}`)}
-                className={`flex items-center justify-center gap-2 rounded-lg px-2 py-2.5 text-xs font-bold uppercase tracking-wider transition sm:text-sm ${active ? 'bg-teal-700 text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900'}`}
+                className={`flex items-center justify-center gap-2 rounded-lg px-2 py-2.5 text-xs font-bold uppercase tracking-wider transition sm:text-sm ${active ? 'bg-brand-700 text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900'}`}
               >
                 <span aria-hidden="true" className="hidden sm:inline">{item.icon}</span>{item.label}
               </button>
@@ -296,27 +296,27 @@ export default function IncomeFormPage({ sourceType, onNavigate, onSaved }) {
             </Field>
           </div>
 
-          {fillNotice && <p className="rounded-lg bg-teal-50 px-3 py-2 text-xs text-teal-800">{fillNotice}</p>}
+          {fillNotice && <p className="rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800">{fillNotice}</p>}
           {errors.items && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{errors.items}</p>}
 
           {isConstruction && stage && (
-            <section className="rounded-xl border border-teal-200 bg-teal-50/40 p-4" aria-label="Progress kontrak">
+            <section className="rounded-xl border border-brand-200 bg-brand-50/40 p-4" aria-label="Progress kontrak">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-teal-800">📈 Progress Kontrak · {subProjectTypeLabel(stage.subProjectType)}</p>
+                  <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-brand-800">📈 Progress Kontrak · {subProjectTypeLabel(stage.subProjectType)}</p>
                   <p className="mt-1 text-xs text-slate-600">
                     Tervalidasi <b>{formatNumber(progress.billableProgress)}%</b> dari nilai kontrak {formatCurrency(stage.contractValue)} · sudah diajukan <b>{formatNumber(billed.percent)}%</b>
                   </p>
                 </div>
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                  <input type="checkbox" checked={includeProgress} onChange={(event) => setIncludeProgress(event.target.checked)} disabled={progressDelta <= 0} className="accent-teal-700" />
+                  <input type="checkbox" checked={includeProgress} onChange={(event) => setIncludeProgress(event.target.checked)} disabled={progressDelta <= 0} className="accent-brand-700" />
                   Tagihkan progress
                 </label>
               </div>
               <div className="mt-3"><ProgressBar value={billed.percent} secondary={progressDelta} label="Progress ditagih" /></div>
               <p className="mt-2 text-sm">
                 {progressDelta > 0
-                  ? <>Selisih belum ditagih <b>{formatNumber(progressDelta)}%</b> = <b className="text-teal-800">{formatCurrency(progressTotal || (progressDelta * (stage.contractValue || 0)) / 100)}</b></>
+                  ? <>Selisih belum ditagih <b>{formatNumber(progressDelta)}%</b> = <b className="text-brand-800">{formatCurrency(progressTotal || (progressDelta * (stage.contractValue || 0)) / 100)}</b></>
                   : <span className="text-slate-500">Tidak ada progress tervalidasi baru yang bisa ditagih.</span>}
               </p>
             </section>

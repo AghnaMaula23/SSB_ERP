@@ -17,7 +17,7 @@ const STATUS_TABS = [
 ];
 
 const VALIDATION_ACTIONS = {
-  validated: { label: 'Validasi', tone: 'text-emerald-700 hover:bg-emerald-50', confirm: 'Validasi progress ini? Volumenya akan menjadi dasar tagihan klien.' },
+  validated: { label: 'Validasi', tone: 'text-leaf-700 hover:bg-leaf-50', confirm: 'Validasi progress ini? Volumenya akan menjadi dasar tagihan klien.' },
   // Tolak tidak memakai confirm: isian alasan (wajib) sudah menjadi konfirmasinya.
   rejected: { label: 'Tolak', tone: 'text-red-600 hover:bg-red-50' },
   submitted: { label: 'Buka Kembali', tone: 'text-slate-600 hover:bg-slate-100', confirm: 'Kembalikan catatan ini ke "menunggu validasi"? Untuk baris tervalidasi, nilai tagihannya akan berkurang sampai divalidasi ulang.' },
@@ -53,7 +53,7 @@ function SummaryCard({ stage }) {
           </div>
           <div>
             <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Target Harian</dt>
-            <dd className="mt-0.5 text-base font-bold text-teal-700">{stage.dailyTargetVolume ? formatVolume(stage.dailyTargetVolume, unit) : '-'}</dd>
+            <dd className="mt-0.5 text-base font-bold text-brand-700">{stage.dailyTargetVolume ? formatVolume(stage.dailyTargetVolume, unit) : '-'}</dd>
           </div>
           <div>
             <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Nilai Kontrak</dt>
@@ -64,16 +64,16 @@ function SummaryCard({ stage }) {
 
       <ul className="space-y-3 border-t border-slate-200 pt-4 text-sm lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
         <li className="flex items-start gap-2">
-          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-          <div><p className="font-bold text-emerald-700">{formatVolume(progress.validatedVolume, unit)}</p><p className="text-xs text-slate-500">Realized</p></div>
+          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-leaf-500" />
+          <div><p className="font-bold text-leaf-700">{formatVolume(progress.validatedVolume, unit)}</p><p className="text-xs text-slate-500">Realized</p></div>
         </li>
         <li className="flex items-start gap-2">
           <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-400" />
           <div><p className="font-bold text-slate-900">{formatVolume(progress.remainingVolume, unit)}</p><p className="text-xs text-slate-500">Remaining</p></div>
         </li>
         <li className="flex items-start gap-2">
-          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-teal-600" />
-          <div><p className="font-bold text-teal-700">{formatCurrency(progress.billableAmount)}</p><p className="text-xs text-slate-500">Siap ditagih</p></div>
+          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-600" />
+          <div><p className="font-bold text-brand-700">{formatCurrency(progress.billableAmount)}</p><p className="text-xs text-slate-500">Siap ditagih</p></div>
         </li>
       </ul>
     </section>
@@ -192,7 +192,7 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
                 role="tab"
                 aria-selected={statusFilter === tab.value}
                 onClick={() => changeFilter(tab.value)}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${statusFilter === tab.value ? 'bg-white text-teal-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${statusFilter === tab.value ? 'bg-white text-brand-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 {tab.label}
               </button>
@@ -238,7 +238,7 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
                       ) : (
                         <>
                           <div className="mb-1 flex justify-between text-[11px]">
-                            <span className={`font-bold ${dailyPct >= 100 ? 'text-emerald-700' : 'text-teal-700'}`}>{dailyPct.toFixed(0)}%</span>
+                            <span className={`font-bold ${dailyPct >= 100 ? 'text-leaf-700' : 'text-brand-700'}`}>{dailyPct.toFixed(0)}%</span>
                             <span className="text-slate-500">{formatNumber(log.realizedVolume)} / {formatNumber(stage.dailyTargetVolume)}</span>
                           </div>
                           <ProgressBar value={dailyPct} tone={dailyPct >= 100 ? 'emerald' : 'teal'} label="Capaian terhadap target harian" />
@@ -246,13 +246,13 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
                       )}
                     </td>
                     <td className="whitespace-nowrap">
-                      <span className={`text-sm font-bold ${isZero ? 'text-amber-700' : 'text-teal-700'}`}>
+                      <span className={`text-sm font-bold ${isZero ? 'text-amber-700' : 'text-brand-700'}`}>
                         {isZero ? '⚠ 0' : `+${formatNumber(log.realizedVolume)}`} {unitLabel(unit)}
                       </span>
                     </td>
                     <td>
                       {log.fieldCondition || log.notes ? (
-                        <button type="button" onClick={() => setConditionLog(log)} className="text-xs font-semibold text-teal-700 hover:underline">Lihat Catatan</button>
+                        <button type="button" onClick={() => setConditionLog(log)} className="text-xs font-semibold text-brand-700 hover:underline">Lihat Catatan</button>
                       ) : (
                         <span className="text-[11px] text-slate-400">Tidak ada catatan</span>
                       )}

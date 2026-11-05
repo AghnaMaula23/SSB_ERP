@@ -95,18 +95,18 @@ export default function FieldCashDetail({ recordId, onDone }) {
         <aside className="space-y-4">
           {row.status === 'submitted' ? (
             <div className="card-panel p-4">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700">Keputusan</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-brand-700">Keputusan</p>
               <label htmlFor="decision-notes" className="mt-3 block text-[11px] font-semibold text-slate-600">Catatan / alasan penolakan</label>
               <textarea id="decision-notes" rows={3} value={notes} onChange={(event) => { setNotes(event.target.value); setError(''); }} className="input-control mt-1 h-auto resize-y text-sm" placeholder="Wajib bila menolak" />
               {error && <div className="mt-2"><Notice tone="error">{error}</Notice></div>}
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button type="button" disabled={busy} onClick={() => decide('rejected')} className="btn btn-secondary text-xs text-red-600">Reject</button>
-                <button type="button" disabled={busy} onClick={() => decide('approved')} className="btn bg-emerald-700 text-xs text-white hover:bg-emerald-800">Approve</button>
+                <button type="button" disabled={busy} onClick={() => decide('approved')} className="btn bg-leaf-700 text-xs text-white hover:bg-leaf-800">Approve</button>
               </div>
             </div>
           ) : (
             <div className="card-panel p-4 text-xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700">Keputusan</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-brand-700">Keputusan</p>
               <p className="mt-2 text-slate-700"><b>{KAS_STATUS[row.status].label}</b> oleh {row.decidedBy?.fullName} · {formatDateTime(row.decidedAt)}</p>
               {row.decisionNotes && <p className="mt-2 rounded bg-slate-50 p-2 text-slate-600">{row.decisionNotes}</p>}
             </div>

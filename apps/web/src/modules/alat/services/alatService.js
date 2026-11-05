@@ -135,19 +135,3 @@ export function updateItemStatus(itemId, status, notes, metadata = {}) {
 export function archiveItem(itemId) {
   return apiRequest(`${ALAT_API_PREFIX}/items/${itemId}`, { method: 'DELETE' });
 }
-
-export function resolveDamageIssue(issueId, payload) {
-  if (!payload?.actionDescription?.trim()) {
-    return Promise.reject(new Error('Deskripsi tindakan wajib diisi.'));
-  }
-  return apiRequest(`${ALAT_API_PREFIX}/damage-logs/${issueId}/resolve`, {
-    method: 'PUT',
-    body: JSON.stringify({
-      maintenanceType: payload.maintenanceType,
-      actionDescription: payload.actionDescription.trim(),
-      performedBy: payload.performedBy?.trim() || undefined,
-      maintenanceDate: payload.maintenanceDate,
-      maintenanceSettingId: payload.maintenanceSettingId,
-    }),
-  });
-}

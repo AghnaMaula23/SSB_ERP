@@ -136,11 +136,11 @@ export default function DamageLogModal({ isOpen, onClose, onSaved, log = null })
             <div>
               <span className="block text-xs font-semibold text-slate-600 mb-1">Spare Part Source</span>
               <div className="grid grid-cols-2 gap-2">
-                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.sparePartSource === 'warehouse' ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>
+                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.sparePartSource === 'warehouse' ? 'border-brand-500 bg-brand-50 text-brand-800' : 'border-slate-200 text-slate-600'}`}>
                   <input type="radio" name="sparePartSource" value="warehouse" checked={form.sparePartSource === 'warehouse'} onChange={update} className="sr-only" />
                   Warehouse
                 </label>
-                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.sparePartSource === 'supplier' ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>
+                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.sparePartSource === 'supplier' ? 'border-brand-500 bg-brand-50 text-brand-800' : 'border-slate-200 text-slate-600'}`}>
                   <input type="radio" name="sparePartSource" value="supplier" checked={form.sparePartSource === 'supplier'} onChange={update} className="sr-only" />
                   Supplier
                 </label>
@@ -150,11 +150,11 @@ export default function DamageLogModal({ isOpen, onClose, onSaved, log = null })
             <div>
               <span className="block text-xs font-semibold text-slate-600 mb-1">Mechanic Team</span>
               <div className="grid grid-cols-2 gap-2">
-                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.mechanicTeam === 'internal' ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>
+                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.mechanicTeam === 'internal' ? 'border-brand-500 bg-brand-50 text-brand-800' : 'border-slate-200 text-slate-600'}`}>
                   <input type="radio" name="mechanicTeam" value="internal" checked={form.mechanicTeam === 'internal'} onChange={update} className="sr-only" />
                   Internal
                 </label>
-                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.mechanicTeam === 'external' ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>
+                <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-2 text-xs font-semibold transition ${form.mechanicTeam === 'external' ? 'border-brand-500 bg-brand-50 text-brand-800' : 'border-slate-200 text-slate-600'}`}>
                   <input type="radio" name="mechanicTeam" value="external" checked={form.mechanicTeam === 'external'} onChange={update} className="sr-only" />
                   External
                 </label>
@@ -169,7 +169,7 @@ export default function DamageLogModal({ isOpen, onClose, onSaved, log = null })
               checked={form.stopsOperation}
               onChange={update}
               disabled={loading}
-              className="rounded border-slate-300 accent-teal-700"
+              className="rounded border-slate-300 accent-brand-700"
             />
             <span>Critical issue: Machine operation halted</span>
           </label>

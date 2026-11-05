@@ -44,51 +44,74 @@ export default function Login({ onLoginSuccess }) {
   };
 
   return (
-    <main className="page-enter flex min-h-screen flex-col items-center justify-between bg-slate-50 px-4 py-12 text-slate-800">
-      <div className="my-auto flex w-full max-w-md flex-col items-center">
-        <header className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-teal-700 text-2xl font-bold text-white shadow-md">
-            ⚒
+    <main className="page-enter grid min-h-screen bg-slate-50 text-slate-800 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      {/* Panel brand — hanya desktop. Warna mengikuti logo: biru SS + hijau daun. */}
+      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-brand-800 via-brand-700 to-brand-500 p-12 text-white lg:flex lg:flex-col lg:justify-between">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-brand-400/30 blur-3xl" aria-hidden="true" />
+        <div className="pointer-events-none absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-leaf-500/25 blur-3xl" aria-hidden="true" />
+        <div className="relative flex items-center gap-3">
+          <img src="/logo-ssb.png" alt="" aria-hidden="true" className="h-12 w-12 rounded-xl bg-white object-contain p-1 shadow-lg" />
+          <div>
+            <p className="text-lg font-bold leading-tight">Sinar Selatan Banten</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-brand-100">ERP Portal</p>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">SINAR SELATAN BANTEN</h1>
-          <p className="mt-2 text-sm text-slate-500">Enterprise Resource Planning Portal</p>
-        </header>
-
-        <section className="w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm" aria-labelledby="login-heading">
-          <h2 id="login-heading" className="text-lg font-semibold text-slate-900">Sign in to your account</h2>
-          <p className="mt-1 text-xs text-slate-500">Enter your credentials to access your workspace.</p>
-
-          {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">{error}</div>}
-
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div>
-              <label htmlFor="login" className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Username or Email</label>
-              <input id="login" name="login" type="text" value={loginField} onChange={(event) => setLoginField(event.target.value)} placeholder="name@ssb.co.id" required autoComplete="username" disabled={loading} className="input-control mt-1.5" />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Password</label>
-              <div className="relative mt-1.5">
-                <input id="password" name="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" required autoComplete="current-password" disabled={loading} className="input-control pr-10" />
-                <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label={showPassword ? 'Hide password' : 'Show password'}>
-                  <EyeIcon hidden={showPassword} />
-                </button>
-              </div>
-            </div>
-
-            <button type="submit" disabled={loading} className="btn btn-primary w-full py-2.5 text-sm font-semibold">
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
-        </section>
-
-        <div className="mt-6 flex items-center gap-2 text-xs text-slate-500">
-          <span className={`h-2 w-2 rounded-full ${health.status === 'online' ? 'bg-emerald-500' : health.status === 'offline' ? 'bg-red-500' : 'bg-amber-500'}`} aria-hidden="true" />
-          <span>{health.label}</span>
         </div>
-      </div>
+        <div className="relative max-w-md">
+          <h2 className="text-4xl font-bold leading-tight tracking-tight">Satu portal untuk proyek, alat, dan keuangan.</h2>
+          <p className="mt-4 text-sm leading-6 text-brand-100">Pantau progres lapangan, kondisi alat, persetujuan, dan arus kas dalam satu tempat.</p>
+          <div className="mt-8 flex flex-wrap gap-2 text-xs font-semibold">
+            {['Proyek', 'Divisi Alat', 'Approval', 'Pendapatan'].map((tag) => (
+              <span key={tag} className="rounded-full border border-white/25 bg-white/10 px-3 py-1 backdrop-blur">{tag}</span>
+            ))}
+          </div>
+        </div>
+        <p className="relative text-xs text-brand-100/80">© 2026 Sinar Selatan Banten · Akses terbatas.</p>
+      </aside>
 
-      <footer className="mt-8 text-center text-xs text-slate-400">© 2026 ConstructERP Technical Infrastructure. Restricted access.</footer>
+      <div className="flex flex-col items-center justify-between px-4 py-10 sm:py-12">
+        <div className="my-auto flex w-full max-w-md flex-col items-center">
+          <header className="mb-8 text-center lg:hidden">
+            <img src="/logo-ssb.png" alt="Logo Sinar Selatan Banten" className="mx-auto mb-3 h-16 w-16 rounded-2xl bg-white object-contain p-1 shadow-md ring-1 ring-slate-200" />
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">SINAR SELATAN BANTEN</h1>
+            <p className="mt-2 text-sm text-slate-500">Enterprise Resource Planning Portal</p>
+          </header>
+
+          <section className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8" aria-labelledby="login-heading">
+            <h2 id="login-heading" className="text-lg font-semibold text-slate-900">Sign in to your account</h2>
+            <p className="mt-1 text-xs text-slate-500">Enter your credentials to access your workspace.</p>
+
+            {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">{error}</div>}
+
+            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+              <div>
+                <label htmlFor="login" className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Username or Email</label>
+                <input id="login" name="login" type="text" value={loginField} onChange={(event) => setLoginField(event.target.value)} placeholder="name@ssb.co.id" required autoComplete="username" disabled={loading} className="input-control mt-1.5" />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Password</label>
+                <div className="relative mt-1.5">
+                  <input id="password" name="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" required autoComplete="current-password" disabled={loading} className="input-control pr-10" />
+                  <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                    <EyeIcon hidden={showPassword} />
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" disabled={loading} className="btn btn-primary w-full py-2.5 text-sm font-semibold">
+                {loading ? 'Signing in...' : 'Sign In'}
+              </button>
+            </form>
+          </section>
+
+          <div className="mt-6 flex items-center gap-2 text-xs text-slate-500">
+            <span className={`h-2 w-2 rounded-full ${health.status === 'online' ? 'bg-leaf-500' : health.status === 'offline' ? 'bg-red-500' : 'bg-amber-500'}`} aria-hidden="true" />
+            <span>{health.label}</span>
+          </div>
+        </div>
+
+        <footer className="mt-8 text-center text-xs text-slate-400 lg:hidden">© 2026 Sinar Selatan Banten · Akses terbatas.</footer>
+      </div>
     </main>
   );
 }

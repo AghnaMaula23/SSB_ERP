@@ -2,8 +2,8 @@
 // "Operational" sesuai istilah di lapangan supply.
 export const SUPPLY_STATUS = {
   planned: { label: 'Planned', className: 'bg-slate-100 text-slate-700 border-slate-200' },
-  active: { label: 'Operational', className: 'bg-teal-50 text-teal-700 border-teal-200' },
-  completed: { label: 'Selesai', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  active: { label: 'Operational', className: 'bg-brand-50 text-brand-700 border-brand-200' },
+  completed: { label: 'Selesai', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   cancelled: { label: 'Cancelled', className: 'bg-red-50 text-red-700 border-red-200' },
 };
 

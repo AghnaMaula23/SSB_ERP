@@ -106,7 +106,7 @@ export default function ComboboxSelect({
           onKeyDown={handleKeyDown}
           className={`input-control pl-8 pr-9 text-sm ${disabled ? 'cursor-not-allowed bg-slate-100 text-slate-500' : ''} ${invalid ? 'border-red-300' : ''}`}
         />
-        {selected && !open && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-emerald-600">✓</span>}
+        {selected && !open && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-leaf-600">✓</span>}
       </div>
       {open && !disabled && (
         <ul id={`${id}-listbox`} role="listbox" className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
@@ -116,7 +116,7 @@ export default function ComboboxSelect({
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => handleSelect(option)}
-                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-teal-50 ${index === activeIndex ? 'bg-teal-50' : ''}`}
+                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-brand-50 ${index === activeIndex ? 'bg-brand-50' : ''}`}
               >
                 <span className="truncate font-semibold text-slate-900">{option.label}</span>
                 {option.meta && <span className="shrink-0 truncate text-[11px] text-slate-500">{option.meta}</span>}

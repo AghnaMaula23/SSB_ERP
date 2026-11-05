@@ -23,8 +23,8 @@ function stepState(status, index) {
 }
 
 const flowStates = {
-  done: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  current: 'border-teal-300 bg-teal-50 text-teal-800',
+  done: 'border-leaf-200 bg-leaf-50 text-leaf-700',
+  current: 'border-brand-300 bg-brand-50 text-brand-800',
   pending: 'border-slate-200 bg-white text-slate-500',
 };
 
@@ -172,7 +172,7 @@ export default function PurchaseOrderDetailPage({ orderId, onBack, onBackToModul
                   <button type="button" onClick={() => removeSparepartRow(index)} className="text-xs text-red-600" aria-label="Hapus sparepart">✕</button>
                 </div>
               ))}
-              <button type="button" onClick={addSparepartRow} className="text-xs font-semibold text-teal-700 hover:text-teal-900">+ Tambah sparepart</button>
+              <button type="button" onClick={addSparepartRow} className="text-xs font-semibold text-brand-700 hover:text-brand-900">+ Tambah sparepart</button>
             </div>
           </div>
           <p className="text-[11px] text-slate-400">Baris sparepart yang dikosongkan akan dihapus saat disimpan.</p>
@@ -277,11 +277,11 @@ export default function PurchaseOrderDetailPage({ orderId, onBack, onBackToModul
                     const completedIndex = order.status === 'approved' ? 3 : order.status === 'rejected_by_finance' ? 2 : 1;
                     return (
                       <div key={step.key} className="relative flex flex-1 flex-col items-center text-center">
-                        <div className={`relative z-10 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold sm:h-8 sm:w-8 sm:text-sm ${state === 'done' ? 'bg-teal-600 text-white' : state === 'rejected' ? 'bg-red-600 text-white' : state === 'cancelled' ? 'bg-slate-400 text-white' : state === 'current' ? 'border-2 border-teal-600 bg-white text-teal-700' : 'border-2 border-slate-200 bg-white text-slate-400'}`}>
+                        <div className={`relative z-10 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold sm:h-8 sm:w-8 sm:text-sm ${state === 'done' ? 'bg-brand-600 text-white' : state === 'rejected' ? 'bg-red-600 text-white' : state === 'cancelled' ? 'bg-slate-400 text-white' : state === 'current' ? 'border-2 border-brand-600 bg-white text-brand-700' : 'border-2 border-slate-200 bg-white text-slate-400'}`}>
                           {state === 'done' ? '✓' : state === 'rejected' ? '!' : state === 'cancelled' ? '✕' : index + 1}
                         </div>
                         <span className={`mt-2 px-1 text-[10px] font-semibold leading-tight sm:text-xs ${state === 'pending' ? 'text-slate-400' : 'text-slate-800'}`}>{step.label}</span>
-                        {index < steps.length - 1 && <span className={`absolute left-1/2 top-3.5 h-0.5 w-full sm:top-4 ${index < completedIndex ? 'bg-teal-500' : 'bg-slate-200'}`} />}
+                        {index < steps.length - 1 && <span className={`absolute left-1/2 top-3.5 h-0.5 w-full sm:top-4 ${index < completedIndex ? 'bg-brand-500' : 'bg-slate-200'}`} />}
                       </div>
                     );
                   })}
@@ -382,7 +382,7 @@ export default function PurchaseOrderDetailPage({ orderId, onBack, onBackToModul
                   <p className="mt-3 text-xs text-slate-600">
                     {order.adminValidatedBy ? `Divalidasi ${order.adminValidatedBy}${order.adminValidatedAt ? ` · ${formatDate(order.adminValidatedAt)}` : ''}` : 'Menunggu validasi Admin.'}
                   </p>
-                  <span className="mt-3 inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{order.adminValidatedBy ? 'Sudah divalidasi' : 'Menunggu validasi'}</span>
+                  <span className="mt-3 inline-flex rounded-full bg-leaf-50 px-2.5 py-1 text-xs font-semibold text-leaf-700">{order.adminValidatedBy ? 'Sudah divalidasi' : 'Menunggu validasi'}</span>
                 </section>
                 <section className="card-panel p-5">
                   <h2 className="text-sm font-bold text-slate-900">🟧 Approval Finance</h2>

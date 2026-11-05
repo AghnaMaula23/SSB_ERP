@@ -157,13 +157,13 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
                     <td className="text-center text-xs text-slate-500">{index + 1}</td>
                     <td className="whitespace-nowrap font-medium text-slate-900">{formatDate(log.workDate)}</td>
                     <td>
-                      <p className="font-mono text-xs font-bold text-teal-700">{log.assetCode}</p>
+                      <p className="font-mono text-xs font-bold text-brand-700">{log.assetCode}</p>
                       <p className="text-[11px] text-slate-400">{log.typeName}</p>
                     </td>
                     <td className="text-center font-mono text-xs">{formatTime(log.startedAt)}</td>
                     <td className="text-center font-mono text-xs">{formatTime(log.stoppedAt)}</td>
                     <td className="text-center text-xs text-slate-500">{log.pausedDurationMinutes ? `${log.pausedDurationMinutes} mnt` : '-'}</td>
-                    <td className="text-right"><span className="rounded-md bg-teal-50 px-2 py-0.5 font-mono text-sm font-bold text-teal-800">{formatNumber(log.totalWorkhour)}</span></td>
+                    <td className="text-right"><span className="rounded-md bg-brand-50 px-2 py-0.5 font-mono text-sm font-bold text-brand-800">{formatNumber(log.totalWorkhour)}</span></td>
                     <td className="max-w-56 text-xs text-slate-600">
                       <p className="truncate" title={log.description || ''}>{log.description || '-'}</p>
                       <p className="text-[11px] text-slate-400">{actorName(log.createdBy)}</p>
@@ -175,7 +175,7 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
                 <tfoot>
                   <tr className="bg-slate-100">
                     <td colSpan={6} className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-slate-600">Jumlah Total</td>
-                    <td className="px-4 py-3 text-right"><span className="rounded-md bg-teal-700 px-2.5 py-1 font-mono text-sm font-bold text-white">{formatNumber(totalHours)} Jam</span></td>
+                    <td className="px-4 py-3 text-right"><span className="rounded-md bg-brand-700 px-2.5 py-1 font-mono text-sm font-bold text-white">{formatNumber(totalHours)} Jam</span></td>
                     <td />
                   </tr>
                 </tfoot>
@@ -185,7 +185,7 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
         </section>
 
         <aside className="card-panel h-fit p-4" aria-label="Rekap per unit">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-teal-700">Rekap per Unit</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-brand-700">Rekap per Unit</p>
           {perUnit.length === 0 ? (
             <p className="mt-3 text-xs text-slate-500">Belum ada data.</p>
           ) : (
@@ -194,11 +194,11 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
                 <li key={entry.assetCode}>
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="font-mono text-xs font-bold text-slate-900">{entry.assetCode}</span>
-                    <span className="text-xs font-bold text-teal-700">{formatNumber(entry.hours)} jam</span>
+                    <span className="text-xs font-bold text-brand-700">{formatNumber(entry.hours)} jam</span>
                   </div>
                   <p className="text-[11px] text-slate-500">{entry.typeName} · {entry.days.size} hari</p>
                   <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full rounded-full bg-teal-600" style={{ width: `${totalHours ? (entry.hours / totalHours) * 100 : 0}%` }} />
+                    <div className="h-full rounded-full bg-brand-600" style={{ width: `${totalHours ? (entry.hours / totalHours) * 100 : 0}%` }} />
                   </div>
                 </li>
               ))}

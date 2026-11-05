@@ -110,7 +110,7 @@ export default function LineItemsEditor({ component, rows, onChange, units = ['j
       )}
 
       {!readOnly && (
-        <button type="button" onClick={() => onChange([...rows, emptyLine(component, { unit: units[0] })])} className="mt-2 inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-xs font-bold text-teal-700 hover:bg-teal-50">
+        <button type="button" onClick={() => onChange([...rows, emptyLine(component, { unit: units[0] })])} className="mt-2 inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-xs font-bold text-brand-700 hover:bg-brand-50">
           ⊕ Tambah baris {component === 'equipment_income' ? 'alat' : 'material'}
         </button>
       )}

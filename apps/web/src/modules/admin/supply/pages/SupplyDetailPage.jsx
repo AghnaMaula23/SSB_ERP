@@ -44,7 +44,7 @@ function ColumnsMenu({ hidden, onChange }) {
                 type="checkbox"
                 checked={!hidden.includes(column.key)}
                 onChange={(event) => onChange(event.target.checked ? hidden.filter((key) => key !== column.key) : [...hidden, column.key])}
-                className="accent-teal-700"
+                className="accent-brand-700"
               />
               {column.label}
             </label>
@@ -162,7 +162,7 @@ export default function SupplyDetailPage({ project, projects, permissions, initi
       return (
         <span className="whitespace-nowrap">
           {row.fileId
-            ? <button type="button" onClick={() => openNote(row)} className="font-mono text-xs font-semibold text-teal-700 hover:underline" title="Buka file surat jalan">📎 {row.deliveryNoteNo}</button>
+            ? <button type="button" onClick={() => openNote(row)} className="font-mono text-xs font-semibold text-brand-700 hover:underline" title="Buka file surat jalan">📎 {row.deliveryNoteNo}</button>
             : <span className="font-mono text-xs font-semibold text-slate-800">{row.deliveryNoteNo}</span>}
           {row.isCancelled && <span className="ml-1.5 rounded bg-red-50 px-1 py-0.5 text-[10px] font-bold uppercase text-red-600" title={row.cancelReason || undefined}>Batal</span>}
         </span>
@@ -172,7 +172,7 @@ export default function SupplyDetailPage({ project, projects, permissions, initi
     if (key === 'received') {
       if (row.isCancelled) return <span className="text-[11px] text-slate-400">-</span>;
       return row.received
-        ? <span className="whitespace-nowrap text-[11px] font-semibold text-emerald-700">✓ Diterima</span>
+        ? <span className="whitespace-nowrap text-[11px] font-semibold text-leaf-700">✓ Diterima</span>
         : <span className="whitespace-nowrap text-[11px] font-semibold text-amber-700">Belum</span>;
     }
     if (key === 'volume') return <span className="whitespace-nowrap font-mono font-bold text-slate-900">{formatNumber(row.volume)} <span className="text-[11px] font-medium text-slate-500">{row.unit}</span></span>;
@@ -263,7 +263,7 @@ export default function SupplyDetailPage({ project, projects, permissions, initi
         </div>
         {cancelledCount > 0 && (
           <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
-            <input type="checkbox" checked={showCancelled} onChange={(event) => setShowCancelled(event.target.checked)} className="accent-teal-700" />
+            <input type="checkbox" checked={showCancelled} onChange={(event) => setShowCancelled(event.target.checked)} className="accent-brand-700" />
             Tampilkan {cancelledCount} ritase yang dibatalkan
           </label>
         )}

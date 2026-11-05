@@ -86,7 +86,7 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
                 <section className="card-panel p-6">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div><h2 className="text-sm font-bold text-slate-900">Alur Perbaikan Equipment</h2><p className="mt-1 text-xs text-slate-500">Damage log → Purchase Order Perbaikan Alat → Perbaikan. Setelah PO approved, selesaikan damage log dengan memilih PO tersebut.</p></div>
-                    <ActionButton kind="add" label="Buat purchase order" tone="primary" showLabel className="border border-teal-200" onClick={startPurchaseOrder} />
+                    <ActionButton kind="add" label="Buat purchase order" tone="primary" showLabel className="border border-brand-200" onClick={startPurchaseOrder} />
                   </div>
                   <ol className="mt-5 grid gap-3 md:grid-cols-3">
                     <FlowStep index={1} label="Damage Log" description="Dilaporkan" state="done" />
@@ -95,15 +95,15 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
                   </ol>
                   {approvedOrder && canUpdate && (
                     <div className="mt-4 flex justify-end">
-                      <ActionButton kind="resolve" label="Selesaikan perbaikan" tone="success" showLabel className="border border-emerald-200" onClick={() => setActionType('resolve')} />
+                      <ActionButton kind="resolve" label="Selesaikan perbaikan" tone="success" showLabel className="border border-leaf-200" onClick={() => setActionType('resolve')} />
                     </div>
                   )}
                 </section>
               )}
               <section className="card-panel p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div><span className="font-mono text-xs font-semibold text-teal-700">{log.damageCode}</span><h2 className="mt-1 text-xl font-bold text-slate-900">{log.description}</h2><p className="mt-1 text-xs text-slate-500">{log.equipmentItem?.assetCode || 'Equipment'} · {formatDate(log.damageDate)}</p></div>
-                  <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase ${log.status === 'resolved' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : log.status === 'cancelled' ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>{log.status}</span>
+                  <div><span className="font-mono text-xs font-semibold text-brand-700">{log.damageCode}</span><h2 className="mt-1 text-xl font-bold text-slate-900">{log.description}</h2><p className="mt-1 text-xs text-slate-500">{log.equipmentItem?.assetCode || 'Equipment'} · {formatDate(log.damageDate)}</p></div>
+                  <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase ${log.status === 'resolved' ? 'border-leaf-200 bg-leaf-50 text-leaf-700' : log.status === 'cancelled' ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>{log.status}</span>
                 </div>
                 <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                   <Detail label="Level" value={log.level || (log.stopsOperation ? 'critical' : 'minor')} />
@@ -121,7 +121,7 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
                 {records.length > 0 ? (
                   <div className="table-container rounded-none border-0">
                     <table className="table-modern">
-                      <thead><tr><th className="w-32">Tanggal</th><th className="w-32">Jenis</th><th>Deskripsi</th><th className="w-40">Pelaksana</th><th className="w-28 text-center">Status</th><th className="w-24 text-center">Action</th></tr></thead>
+                      <thead><tr><th className="w-32">Tanggal</th><th className="w-32">Jenis</th><th>Deskripsi</th><th className="w-28 text-center">Status</th><th className="w-24 text-center">Action</th></tr></thead>
                       <tbody>
                         {records.map((record) => {
                           const done = record.status === 'cancelled' ? false : isDone(record.id);
@@ -130,9 +130,8 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
                               <td className="text-xs text-slate-600">{formatDate(record.maintenanceDate)}</td>
                               <td className="text-xs capitalize text-slate-700">{String(record.maintenanceType || '-').replace(/_/g, ' ')}</td>
                               <td className="text-xs text-slate-700">{record.actionDescription || '-'}</td>
-                              <td className="text-xs text-slate-600">{record.performedBy || '-'}</td>
                               <td className="text-center">
-                                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold capitalize ${record.status === 'cancelled' ? 'border-slate-200 bg-slate-100 text-slate-500' : done ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold capitalize ${record.status === 'cancelled' ? 'border-slate-200 bg-slate-100 text-slate-500' : done ? 'border-leaf-200 bg-leaf-50 text-leaf-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
                                   {record.status === 'cancelled' ? 'cancelled' : done ? 'selesai' : 'berjalan'}
                                 </span>
                               </td>
@@ -153,7 +152,7 @@ export default function DamageLogDetailPage({ logId, onBack, onBackToModules, on
                   </div>
                 )}
               </section>
-              {canUpdate && log.status === 'reported' && <div className="flex justify-end gap-2"><ActionButton kind="cancel" tone="danger" showLabel className="border border-red-200" label="Batalkan damage log" onClick={() => setActionType('cancel')} /><ActionButton kind="resolve" tone="success" showLabel className="border border-emerald-200" label="Tandai selesai" onClick={() => setActionType('resolve')} /></div>}
+              {canUpdate && log.status === 'reported' && <div className="flex justify-end gap-2"><ActionButton kind="cancel" tone="danger" showLabel className="border border-red-200" label="Batalkan damage log" onClick={() => setActionType('cancel')} /><ActionButton kind="resolve" tone="success" showLabel className="border border-leaf-200" label="Tandai selesai" onClick={() => setActionType('resolve')} /></div>}
             </>
           )}
         </div>
@@ -184,8 +183,8 @@ function Detail({ label, value }) {
 }
 
 const flowStates = {
-  done: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  current: 'border-teal-300 bg-teal-50 text-teal-800',
+  done: 'border-leaf-200 bg-leaf-50 text-leaf-700',
+  current: 'border-brand-300 bg-brand-50 text-brand-800',
   pending: 'border-slate-200 bg-white text-slate-500',
 };
 

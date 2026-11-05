@@ -126,17 +126,17 @@ export default function SheetFormPage({ project, unit, onCancel, onSaved }) {
             return (
               <div key={session.key} className={`grid grid-cols-[7rem_1fr_1fr_4.5rem] items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 ${value.enabled ? 'bg-white' : 'bg-slate-50'}`}>
                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <input type="checkbox" checked={value.enabled} onChange={(event) => setSession(session.key, { enabled: event.target.checked })} className="accent-teal-700" />
+                  <input type="checkbox" checked={value.enabled} onChange={(event) => setSession(session.key, { enabled: event.target.checked })} className="accent-brand-700" />
                   {session.label}
                 </label>
                 <input type="time" aria-label={`${session.label} awal`} value={value.start} disabled={!value.enabled} onChange={(event) => setSession(session.key, { start: event.target.value })} className="input-control h-9 font-mono text-sm disabled:bg-slate-100" />
                 <input type="time" aria-label={`${session.label} akhir`} value={value.end} disabled={!value.enabled} onChange={(event) => setSession(session.key, { end: event.target.value })} className="input-control h-9 font-mono text-sm disabled:bg-slate-100" />
-                <span className={`text-right font-mono text-sm font-bold ${hours ? 'text-teal-700' : 'text-slate-300'}`}>{hours ? `${formatNumber(hours)} j` : '-'}</span>
+                <span className={`text-right font-mono text-sm font-bold ${hours ? 'text-brand-700' : 'text-slate-300'}`}>{hours ? `${formatNumber(hours)} j` : '-'}</span>
                 {errors[session.key] && <p className="col-span-4 text-[11px] font-medium text-red-600">{errors[session.key]}</p>}
               </div>
             );
           })}
-          <div className="flex items-center justify-between bg-teal-700 px-4 py-2.5 text-white">
+          <div className="flex items-center justify-between bg-brand-700 px-4 py-2.5 text-white">
             <span className="text-[11px] font-bold uppercase tracking-wider">Total Jam</span>
             <span className="font-mono text-lg font-bold">{formatNumber(total)} Jam</span>
           </div>

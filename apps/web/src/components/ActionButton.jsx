@@ -16,9 +16,9 @@ const SYMBOLS = {
 
 const TONES = {
   default: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-  success: 'text-emerald-600 hover:bg-emerald-50',
+  success: 'text-leaf-600 hover:bg-leaf-50',
   danger: 'text-red-600 hover:bg-red-50',
-  primary: 'text-teal-700 hover:bg-teal-50',
+  primary: 'text-brand-700 hover:bg-brand-50',
 };
 
 /**

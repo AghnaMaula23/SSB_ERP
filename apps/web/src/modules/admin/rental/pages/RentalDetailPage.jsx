@@ -28,13 +28,13 @@ function UnitCard({ project, unit, selected }) {
     <a
       href={`#/admin/rental/${project.id}/unit/${unit.key}`}
       aria-current={selected ? 'page' : undefined}
-      className={`flex w-60 shrink-0 flex-col rounded-xl border bg-white p-3.5 text-left transition ${selected ? 'border-teal-600 ring-2 ring-teal-600/20' : 'border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
+      className={`flex w-60 shrink-0 flex-col rounded-xl border bg-white p-3.5 text-left transition ${selected ? 'border-brand-600 ring-2 ring-brand-600/20' : 'border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
     >
       <div className="flex items-start justify-between gap-2">
         <span className="truncate text-sm font-bold text-slate-900">{unit.typeName}{unit.quantity > 1 ? ` ×${unit.quantity}` : ''}</span>
         <StatusBadge status={unit.status} map={UNIT_STATUS} className="shrink-0" />
       </div>
-      <span className="mt-1 font-mono text-xs font-semibold text-teal-700">{unit.assetCode || unit.requestCode || '-'}</span>
+      <span className="mt-1 font-mono text-xs font-semibold text-brand-700">{unit.assetCode || unit.requestCode || '-'}</span>
       <span className="mt-1 truncate text-[11px] text-slate-500">
         👷 {unit.meta?.operator || 'Operator belum diisi'}
         {unit.meta?.packet && PACKETS[unit.meta.packet] ? ` · ${PACKETS[unit.meta.packet].label}` : ''}
@@ -124,7 +124,7 @@ export default function RentalDetailPage({ project, projects, unitsEntry, select
           {unitsEntry?.error && <div className="w-72 shrink-0 rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700">{unitsEntry.error}</div>}
           {units.map((row) => <UnitCard key={row.key} project={project} unit={row} selected={unit?.key === row.key} />)}
           {!isFinal && (permissions.requestUnit || project.isDemo) && (
-            <a href={`#/admin/rental/${project.id}/unit/new`} className="flex w-44 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 p-3.5 text-sm font-semibold text-teal-700 transition hover:border-teal-500 hover:bg-teal-50">
+            <a href={`#/admin/rental/${project.id}/unit/new`} className="flex w-44 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 p-3.5 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50">
               <span className="text-xl">+</span>
               Unit Baru
             </a>

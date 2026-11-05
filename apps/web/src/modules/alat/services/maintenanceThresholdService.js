@@ -1,47 +1,24 @@
+import { apiRequest } from '../../../services/api.js';
+
 /**
- * Threshold default per (equipment type × maintenance aspect).
- *
- * Endpoint untuk threshold per TIPE belum ada di backend — yang tersedia baru
- * `POST /items/:itemId/maintenance-settings` (threshold per unit). Karena itu
- * konfigurasi per tipe ini masih disimpan di browser, sementara enactment per
- * unit tetap lewat endpoint maintenance settings.
+ * Ambang servis per (jenis alat × aspek maintenance). Backend menerapkan nilai
+ * ini ke semua unit jenis itu sekaligus, jadi setting per unit tidak diubah
+ * manual lagi (E4d).
  */
-const STORAGE_KEY = 'maintenance_type_thresholds';
+const API_PREFIX = import.meta.env.VITE_ALAT_API_PREFIX || '/api/equipment';
 
-function readAll() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
+export async function getTypeThresholds() {
+  return (await apiRequest(`${API_PREFIX}/maintenance-thresholds`)) || [];
 }
 
-function writeAll(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-export function getTypeThresholds() {
-  return Object.values(readAll());
-}
-
-export function getTypeThreshold(equipmentTypeId, maintenanceAspectId) {
-  return readAll()[`${equipmentTypeId}:${maintenanceAspectId}`] || null;
-}
-
+/** Tambah atau ubah (upsert). */
 export function saveTypeThreshold({ equipmentTypeId, maintenanceAspectId, thresholdValue }) {
-  const data = readAll();
-  const key = `${equipmentTypeId}:${maintenanceAspectId}`;
-  const record = { id: key, equipmentTypeId: Number(equipmentTypeId), maintenanceAspectId: Number(maintenanceAspectId), thresholdValue: Number(thresholdValue), updatedAt: new Date().toISOString() };
-  data[key] = record;
-  writeAll(data);
-  return record;
+  return apiRequest(`${API_PREFIX}/types/${equipmentTypeId}/maintenance-thresholds/${maintenanceAspectId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ thresholdValue: Number(thresholdValue) }),
+  });
 }
 
 export function deleteTypeThreshold(equipmentTypeId, maintenanceAspectId) {
-  const data = readAll();
-  delete data[`${equipmentTypeId}:${maintenanceAspectId}`];
-  writeAll(data);
+  return apiRequest(`${API_PREFIX}/types/${equipmentTypeId}/maintenance-thresholds/${maintenanceAspectId}`, { method: 'DELETE' });
 }
-
-export const MAINTENANCE_THRESHOLD_STORAGE_KEY = STORAGE_KEY;

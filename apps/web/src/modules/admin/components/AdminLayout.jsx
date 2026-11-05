@@ -13,7 +13,7 @@ const RAIL_ITEMS = [
   { key: 'files', label: 'Files', icon: '📁', route: 'admin/files' },
 ];
 
-const BRAND = { mark: '▦', title: 'Divisi Admin', subtitle: 'Admin Workspace' };
+const BRAND = { title: 'Divisi Admin', subtitle: 'Admin Workspace' };
 
 function useMediaQuery(query) {
   const [matches, setMatches] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);

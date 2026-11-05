@@ -27,9 +27,9 @@ export const RATE_SOURCES = {
 export const INCOME_STATUS = {
   draft: { label: 'Draft', className: 'bg-slate-100 text-slate-700 border-slate-200' },
   submitted: { label: 'Menunggu Finance', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  verified: { label: 'Terverifikasi', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  verified: { label: 'Terverifikasi', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
   partially_paid: { label: 'Dibayar Sebagian', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  paid: { label: 'Lunas', className: 'bg-teal-50 text-teal-700 border-teal-200' },
+  paid: { label: 'Lunas', className: 'bg-brand-50 text-brand-700 border-brand-200' },
   rejected: { label: 'Ditolak Finance', className: 'bg-red-50 text-red-700 border-red-200' },
 };
 

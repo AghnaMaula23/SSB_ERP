@@ -127,7 +127,7 @@ export default function PurchaseRequestQueue({ initialNotice }) {
               key: 'orderCode',
               label: 'Order Code',
               primary: true,
-              render: (pr) => <a href={`#/admin/approvals/pr/${pr.id}`} className="font-mono text-sm font-bold text-emerald-700 hover:underline">{pr.requestCode}</a>,
+              render: (pr) => <a href={`#/admin/approvals/pr/${pr.id}`} className="font-mono text-sm font-bold text-leaf-700 hover:underline">{pr.requestCode}</a>,
               sub: (pr) => `${formatDate(pr.requestDate)} · ${PR_CATEGORY[pr.orderCategory]}`,
               badge: (pr) => <span className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${priorityClass(pr)}`}>{priorityLabel(pr)}</span>,
             },

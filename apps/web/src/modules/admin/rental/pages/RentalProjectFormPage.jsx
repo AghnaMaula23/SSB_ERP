@@ -125,7 +125,7 @@ export default function RentalProjectFormPage({ project, onSubmitForm, onCancel,
         <>
           <SectionDivider>Unit Pertama</SectionDivider>
           <label className="-mt-2 flex items-center gap-2 text-xs text-slate-600">
-            <input type="checkbox" checked={withUnit} onChange={(event) => setWithUnit(event.target.checked)} className="accent-teal-700" />
+            <input type="checkbox" checked={withUnit} onChange={(event) => setWithUnit(event.target.checked)} className="accent-brand-700" />
             Langsung ajukan unit untuk kontrak ini (bisa juga ditambah nanti lewat “Unit Baru”)
           </label>
           {withUnit && (

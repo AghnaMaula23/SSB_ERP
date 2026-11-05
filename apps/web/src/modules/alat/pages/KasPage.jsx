@@ -167,7 +167,7 @@ export default function KasPage({ onBackToModules, onSignOut }) {
       <td className="text-center font-mono text-xs font-semibold text-slate-400">{String((page - 1) * PAGE_SIZE + idx + 1).padStart(2, '0')}</td>
       <td>
         <div className="flex items-start gap-2.5">
-          <span className={`mt-0.5 h-8 w-1 shrink-0 rounded-full ${row.type === 'masuk' ? 'bg-emerald-400' : 'bg-orange-400'}`} aria-hidden="true" />
+          <span className={`mt-0.5 h-8 w-1 shrink-0 rounded-full ${row.type === 'masuk' ? 'bg-leaf-400' : 'bg-orange-400'}`} aria-hidden="true" />
           <div className="min-w-0 max-w-[13rem]">
             <p className="truncate text-xs font-semibold text-slate-900">{row.description}</p>
             <p className="mt-0.5 truncate text-[11px] text-slate-500">{formatDate(row.date)} · {row.category}</p>
@@ -176,7 +176,7 @@ export default function KasPage({ onBackToModules, onSignOut }) {
           </div>
         </div>
       </td>
-      <td className={`whitespace-nowrap text-right text-xs font-semibold ${row.type === 'masuk' ? 'text-emerald-600' : 'text-red-600'}`}>
+      <td className={`whitespace-nowrap text-right text-xs font-semibold ${row.type === 'masuk' ? 'text-leaf-600' : 'text-red-600'}`}>
         {row.type === 'masuk' ? '+' : '-'} {formatRupiah(row.nominal)}
       </td>
       <td className="text-center">
@@ -196,7 +196,7 @@ export default function KasPage({ onBackToModules, onSignOut }) {
         {row.isSystemGenerated && <span className="mt-0.5 inline-block rounded bg-slate-100 px-1.5 text-[10px] font-semibold text-slate-500">otomatis</span>}
       </td>
       <td className="text-center">
-        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${row.type === 'masuk' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+        <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${row.type === 'masuk' ? 'bg-leaf-100 text-leaf-700' : 'bg-orange-100 text-orange-700'}`}>
           {row.type === 'masuk' ? 'MASUK' : 'KELUAR'}
         </span>
       </td>
@@ -205,7 +205,7 @@ export default function KasPage({ onBackToModules, onSignOut }) {
         {row.description}
         {row.isVoided && <span className="mt-0.5 block text-[10px] font-semibold text-slate-500">VOID — {row.voidReason}</span>}
       </td>
-      <td className={`text-right text-xs font-semibold ${row.type === 'masuk' ? 'text-emerald-600' : 'text-red-600'}`}>
+      <td className={`text-right text-xs font-semibold ${row.type === 'masuk' ? 'text-leaf-600' : 'text-red-600'}`}>
         {row.type === 'masuk' ? '+' : '-'} {formatRupiah(row.nominal)}
       </td>
       <td className="text-center">
@@ -247,9 +247,9 @@ export default function KasPage({ onBackToModules, onSignOut }) {
           </div>
 
           <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-            <article className="col-span-2 flex items-center justify-between rounded-xl bg-gradient-to-br from-teal-800 to-teal-900 p-4 text-white shadow-md sm:col-span-1 sm:p-5">
+            <article className="col-span-2 flex items-center justify-between rounded-xl bg-gradient-to-br from-brand-800 to-brand-900 p-4 text-white shadow-md sm:col-span-1 sm:p-5">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wider text-teal-200">Saldo Kas Alat</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-brand-200">Saldo Kas Alat</p>
                 <p className="mt-1.5 break-words text-2xl font-bold tracking-tight">Rp {formatRupiah(summary.balance)}</p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15 text-lg">💰</div>
@@ -257,10 +257,10 @@ export default function KasPage({ onBackToModules, onSignOut }) {
             <article className="card-panel flex items-center justify-between gap-2 p-3 sm:p-5">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold text-slate-500 sm:text-xs">Total Pemasukan</p>
-                <p className="mt-1.5 break-words text-base font-bold tracking-tight text-emerald-600 sm:text-2xl">+ Rp {formatRupiah(summary.totalIn)}</p>
-                <div className="mt-2 h-1 w-16 rounded-full bg-emerald-500" />
+                <p className="mt-1.5 break-words text-base font-bold tracking-tight text-leaf-600 sm:text-2xl">+ Rp {formatRupiah(summary.totalIn)}</p>
+                <div className="mt-2 h-1 w-16 rounded-full bg-leaf-500" />
               </div>
-              <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-lg sm:flex">📈</div>
+              <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-leaf-200 bg-leaf-50 text-lg sm:flex">📈</div>
             </article>
             <article className="card-panel flex items-center justify-between gap-2 p-3 sm:p-5">
               <div className="min-w-0">
@@ -272,7 +272,7 @@ export default function KasPage({ onBackToModules, onSignOut }) {
             </article>
           </div>
 
-          {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{notice}</div>}
+          {notice && <div className="mb-4 rounded-lg border border-leaf-200 bg-leaf-50 p-3 text-xs text-leaf-700">{notice}</div>}
           {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">{error}</div>}
 
           <section className="card-panel mb-6 p-5" aria-label="Input Kas Manual">

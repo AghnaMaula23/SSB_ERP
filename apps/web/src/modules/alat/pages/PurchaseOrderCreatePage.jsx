@@ -26,7 +26,7 @@ const PO_CATEGORIES = [
 const SERVICEABLE_STATUSES = ['warning', 'due', 'overdue'];
 
 const metricStatusStyles = {
-  normal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  normal: 'bg-leaf-50 text-leaf-700 border-leaf-200',
   warning: 'bg-amber-50 text-amber-700 border-amber-200',
   due: 'bg-orange-50 text-orange-700 border-orange-200',
   overdue: 'bg-red-50 text-red-700 border-red-200',
@@ -298,7 +298,7 @@ export default function PurchaseOrderCreatePage({ onBackToModules, onBackToPurch
               <div><label htmlFor="po-request-date" className="block text-xs font-semibold uppercase tracking-wide text-slate-600">Tanggal Pengajuan</label><input id="po-request-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} className="input-control mt-1 max-w-xs" /></div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Kategori Purchase Order <span className="text-red-500">*</span></p>
-                <div className="mt-2 grid gap-2 sm:grid-cols-3">{PO_CATEGORIES.map((option) => <button key={option.value} type="button" onClick={() => handleCategoryChange(option.value)} aria-pressed={category === option.value} className={`rounded-lg border px-3 py-3 text-left transition ${category === option.value ? 'border-teal-500 bg-teal-50 ring-1 ring-teal-500' : 'border-slate-200 hover:border-slate-300'}`}><span className={`block text-xs font-bold ${category === option.value ? 'text-teal-800' : 'text-slate-700'}`}>{option.icon} {option.label}</span><span className="mt-1 block text-[11px] leading-snug text-slate-500">{option.description}</span></button>)}</div>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">{PO_CATEGORIES.map((option) => <button key={option.value} type="button" onClick={() => handleCategoryChange(option.value)} aria-pressed={category === option.value} className={`rounded-lg border px-3 py-3 text-left transition ${category === option.value ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500' : 'border-slate-200 hover:border-slate-300'}`}><span className={`block text-xs font-bold ${category === option.value ? 'text-brand-800' : 'text-slate-700'}`}>{option.icon} {option.label}</span><span className="mt-1 block text-[11px] leading-snug text-slate-500">{option.description}</span></button>)}</div>
               </div>
             </section>
 
@@ -314,7 +314,7 @@ export default function PurchaseOrderCreatePage({ onBackToModules, onBackToPurch
                   <section key={line.id} className="card-panel space-y-4 p-5">
                     <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded bg-teal-700 px-2 py-0.5 text-[10px] font-bold text-white">ITEM {index + 1}</span>
+                        <span className="rounded bg-brand-700 px-2 py-0.5 text-[10px] font-bold text-white">ITEM {index + 1}</span>
                         <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{categoryLabel(category)}</span>
                         {line.equipmentAssetCode && <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-500">{line.equipmentAssetCode}</span>}
                       </div>
@@ -371,7 +371,7 @@ export default function PurchaseOrderCreatePage({ onBackToModules, onBackToPurch
                                     <button type="button" onClick={() => removeSparepart(line, sp.id)} className="text-xs text-red-600" aria-label="Hapus sparepart">✕</button>
                                   </div>
                                 ))}
-                                <button type="button" onClick={() => addSparepart(line)} className="text-xs font-semibold text-teal-700 hover:text-teal-900">+ Tambah sparepart lain</button>
+                                <button type="button" onClick={() => addSparepart(line)} className="text-xs font-semibold text-brand-700 hover:text-brand-900">+ Tambah sparepart lain</button>
                               </div>
                             )}
                           </div>
@@ -401,7 +401,7 @@ export default function PurchaseOrderCreatePage({ onBackToModules, onBackToPurch
                           <div>
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <p className="text-xs font-semibold text-slate-600">Aspek Maintenance <span className="text-red-500">*</span> <span className="font-normal text-slate-400">({line.maintenanceSettingIds.length} dipilih)</span></p>
-                              {lineServiceable.length > 0 && <button type="button" onClick={() => toggleAllLineAspects(line)} className="text-xs font-semibold text-teal-700 hover:text-teal-900">{line.maintenanceSettingIds.length === lineServiceable.length ? 'Batalkan semua' : 'Pilih semua yang bisa dilayani'}</button>}
+                              {lineServiceable.length > 0 && <button type="button" onClick={() => toggleAllLineAspects(line)} className="text-xs font-semibold text-brand-700 hover:text-brand-900">{line.maintenanceSettingIds.length === lineServiceable.length ? 'Batalkan semua' : 'Pilih semua yang bisa dilayani'}</button>}
                             </div>
                             <p className="mt-1 text-[11px] text-slate-400">Tiap aspek punya estimasi harganya sendiri.</p>
                             {lineAspects.length === 0 ? <div className="mt-2 rounded-lg border border-dashed border-slate-200 p-4 text-center text-xs text-slate-500">Unit ini belum memiliki aspek maintenance aktif.</div> : (
@@ -413,10 +413,10 @@ export default function PurchaseOrderCreatePage({ onBackToModules, onBackToPurch
                                 const disabled = !serviceable || (alreadyUsed && !checked);
                                 const status = metric.status || 'normal';
                                 return (
-                                  <div key={settingId} className={`rounded-lg border p-3 transition ${disabled ? 'border-slate-200 bg-slate-50 opacity-60' : checked ? 'border-teal-500 bg-teal-50/50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                                  <div key={settingId} className={`rounded-lg border p-3 transition ${disabled ? 'border-slate-200 bg-slate-50 opacity-60' : checked ? 'border-brand-500 bg-brand-50/50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
                                     <div className="flex items-center justify-between gap-3">
                                       <label className={`flex items-center gap-3 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                                        <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleLineAspect(line, settingId)} className="h-4 w-4 rounded border-slate-300 text-teal-600" />
+                                        <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleLineAspect(line, settingId)} className="h-4 w-4 rounded border-slate-300 text-brand-600" />
                                         <span>
                                           <span className="block text-xs font-bold text-slate-900">{metric.name}</span>
                                           <span className="block font-mono text-[11px] text-slate-500">{metric.current} / {metric.threshold} hrs</span>
@@ -426,7 +426,7 @@ export default function PurchaseOrderCreatePage({ onBackToModules, onBackToPurch
                                       <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${metricStatusStyles[status] || metricStatusStyles.normal}`}>{metricStatusLabels[status] || status}</span>
                                     </div>
                                     {checked && (
-                                      <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-teal-200/70 pt-3">
+                                      <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-brand-200/70 pt-3">
                                         <div className="w-full max-w-[14rem]">
                                           <label htmlFor={`po-aspect-price-${line.id}-${settingId}`} className="block text-[11px] font-semibold text-slate-600">Estimasi Harga — {metric.name}</label>
                                           <div className="relative mt-1">
@@ -471,7 +471,7 @@ export default function PurchaseOrderCreatePage({ onBackToModules, onBackToPurch
                 );
               })}
               <button type="button" onClick={addLine} className="btn btn-secondary w-full text-xs">+ Tambah Item ({categoryLabel(category)})</button>
-              <section className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-xs text-emerald-800">
+              <section className="rounded-xl border border-leaf-300 bg-leaf-50 p-4 text-xs text-leaf-800">
                 <p className="font-bold">✓ Kas Alat: otomatis cash-out setelah Finance approve</p>
                 <p className="mt-1">Kategori kas ditentukan otomatis dari kategori order ini, jadi tidak perlu dipilih manual.</p>
                 <p className="mt-2 font-bold">Total estimasi: Rp {estimatedTotal.toLocaleString('id-ID')} · {buildItems().length} item · {categoryLabel(category)}</p>

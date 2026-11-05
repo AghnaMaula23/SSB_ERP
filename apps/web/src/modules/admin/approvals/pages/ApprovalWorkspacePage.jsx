@@ -133,13 +133,13 @@ export default function ApprovalWorkspacePage({ route, onNavigate, onBackToModul
                   aria-current={active ? 'page' : undefined}
                   className={`relative flex min-w-[10rem] shrink-0 items-center gap-2.5 rounded-xl border px-3 py-3 text-left transition sm:min-w-0 ${
                     active
-                      ? 'border-teal-600 bg-teal-50 shadow-xs ring-1 ring-teal-600'
+                      ? 'border-brand-600 bg-brand-50 shadow-xs ring-1 ring-brand-600'
                       : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
                   <span className="text-lg leading-none" aria-hidden="true">{tab.icon}</span>
                   <span className="min-w-0 flex-1">
-                    <span className={`block text-sm font-semibold leading-tight ${active ? 'text-teal-900' : 'text-slate-800'}`}>{tab.label}</span>
+                    <span className={`block text-sm font-semibold leading-tight ${active ? 'text-brand-900' : 'text-slate-800'}`}>{tab.label}</span>
                   </span>
                   {tab.status === 'pending' ? (
                     <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-400">Soon</span>
