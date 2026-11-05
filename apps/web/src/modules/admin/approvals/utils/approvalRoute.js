@@ -3,9 +3,8 @@ const isId = (value) => /^\d+$/.test(value || '');
 /** Enam antrean Pusat Approval, urut sesuai alur (lihat ApprovalWorkspacePage). */
 export const APPROVAL_TABS = ['pr', 'material', 'alat', 'progress', 'kas', 'upah'];
 
-// Tab yang punya layar detail dengan satu id. Progress memakai dua id
-// (tahapan + log); klaim upah belum punya backend jadi belum ada detail.
-const SINGLE_ID_DETAIL = ['pr', 'material', 'alat', 'kas'];
+// Tab yang punya layar detail dengan satu id. Progress memakai dua id (tahapan + log).
+const SINGLE_ID_DETAIL = ['pr', 'material', 'alat', 'kas', 'upah'];
 
 // Rute lama (sebelum dipecah per antrean) tetap dikenali supaya tautan &
 // bookmark lama tidak berakhir di halaman 404.
@@ -19,8 +18,8 @@ const LEGACY_DETAIL = { po: 'pr', alat: 'alat', material: 'material', progress: 
  *   admin/approvals/material[/:id]           Request Material — kuantitas, biaya, teruskan / tolak
  *   admin/approvals/alat[/:id]               Request Alat internal — teruskan / tolak
  *   admin/approvals/progress[/:subId/:logId] Validasi progress harian — validasi / tolak / cabut
- *   admin/approvals/kas[/:id]                Kas lapangan (data contoh — backend belum ada)
- *   admin/approvals/upah                     Klaim upah pekerja harian (backend belum ada)
+ *   admin/approvals/kas[/:id]                Pengajuan dana lapangan — teruskan / tolak
+ *   admin/approvals/upah[/:id]               Klaim upah pekerja harian — teruskan / tolak
  * Rute lama: antrean[/<po|alat|material|progress>/...] dan po[/:id].
  * Balikan `{ tab, detail, recordId, subProjectId }` atau null.
  */

@@ -1,7 +1,7 @@
 // Jenis project di API berkas project (Swagger tag Project Files).
 export const PROJECT_TYPES = ['construction', 'rental', 'supply'];
 
-const SYSTEM_KEYS = ['delivery-notes', 'receipt-proofs', 'closing-archive'];
+const SYSTEM_KEYS = ['delivery-notes', 'receipt-proofs', 'field-expense-receipts', 'labor-payment-proofs', 'closing-archive'];
 
 /**
  * Rute menu Files Divisi Admin (susunan L8: Project → Tahapan → Folder → Berkas):

@@ -3,6 +3,7 @@ import ResponsiveTable from '../../../../components/ResponsiveTable.jsx';
 import { Breadcrumb, EmptyPanel, LoadingPanel, MetricCard, Notice, PageHeader, StatusBadge } from '../components/ProjectUi.jsx';
 import { bindPoolItemUnit, changePoolStatus, closePoolItem, createPool, listProjectPoolsWithItems } from '../services/projectService.js';
 import { POOL_ITEM_STATUS, POOL_STATUS, actorName, formatDate } from '../utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { getItems } from '../../../alat/services/alatService.js';
 
 /** Pilih unit fisik untuk pool item yang belum terikat — tampil di baris tabel. */
@@ -79,7 +80,7 @@ export default function EquipmentPoolPage({ project, permissions, initialNotice 
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Project', href: '#/admin/projects' }, { label: project.projectName, href: `#/admin/projects/${project.id}` }, { label: 'Equipment Pool' }]} />
+      <Breadcrumb items={[{ label: 'Project', href: `#/${divisionPrefix()}/projects` }, { label: project.projectName, href: `#/${divisionPrefix()}/projects/${project.id}` }, { label: 'Equipment Pool' }]} />
       <PageHeader
         title="Equipment Pool"
         subtitle="Unit alat yang disediakan untuk project ini sebelum dialokasikan ke tahapan."
@@ -127,7 +128,7 @@ export default function EquipmentPoolPage({ project, permissions, initialNotice 
                   {live && (
                     <div className="flex flex-wrap gap-1">
                       {permissions.updatePool && (
-                        <a href={`#/admin/projects/${project.id}/pool/${pool.id}/item/new`} className="btn btn-secondary px-2.5 py-1 text-[11px]">+ Tambah Item</a>
+                        <a href={`#/${divisionPrefix()}/projects/${project.id}/pool/${pool.id}/item/new`} className="btn btn-secondary px-2.5 py-1 text-[11px]">+ Tambah Item</a>
                       )}
                       {permissions.updatePool && (
                         <>

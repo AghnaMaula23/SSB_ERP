@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import FormPage, { Field, FormError, InfoCard, SectionDivider } from '../components/FormPage.jsx';
 import { EmptyPanel, LoadingPanel } from '../components/ProjectUi.jsx';
 import { createWorkhourLog, listAllocations } from '../services/projectService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { fieldErrorsFrom, stageCrumbs, subProjectTypeLabel, todayIso } from '../utils/projectFormat.js';
 
 const toMinutes = (time) => {
@@ -80,7 +81,7 @@ export default function WorkhourFormPage({ project, stage, onCancel, onSaved }) 
   if (!allocations) return <LoadingPanel>Memuat alat di tahapan ini...</LoadingPanel>;
   if (allocations.length === 0) {
     return (
-      <EmptyPanel icon="🚜" title="Belum ada alat aktif" action={<a href={`#/admin/projects/${project.id}/sub/${stage.id}/alat`} className="btn btn-secondary text-xs">Ke halaman Alat →</a>}>
+      <EmptyPanel icon="🚜" title="Belum ada alat aktif" action={<a href={`#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/alat`} className="btn btn-secondary text-xs">Ke halaman Alat →</a>}>
         Jam kerja dicatat lewat alokasi yang masih berjalan. Alokasikan alat ke tahapan ini dulu.
       </EmptyPanel>
     );
@@ -88,7 +89,7 @@ export default function WorkhourFormPage({ project, stage, onCancel, onSaved }) 
 
   return (
     <FormPage
-      breadcrumb={stageCrumbs(project, stage, { label: 'Timesheet Alat', href: `#/admin/projects/${project.id}/sub/${stage.id}/timesheet` }, { label: 'Input Jam Kerja' })}
+      breadcrumb={stageCrumbs(project, stage, { label: 'Timesheet Alat', href: `#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/timesheet` }, { label: 'Input Jam Kerja' })}
       icon="⏱️"
       title="Input Jam Kerja Alat"
       subtitle={`Tahapan ${subProjectTypeLabel(stage.subProjectType)} · ${project.projectName}`}

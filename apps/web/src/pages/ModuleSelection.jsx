@@ -1,7 +1,7 @@
 const modules = [
   { id: 'admin/projects', title: 'Admin Division', description: 'Manage construction projects, sub-project contracts, and progress validation.', icon: '▦', tone: 'brand' },
   { id: 'alat/items', title: 'Divisi Alat', description: 'Manage equipment inventory, active issues, and maintenance.', icon: '⚒', tone: 'leaf' },
-  { id: 'lapangan', title: 'Divisi Lapangan', description: 'Coordinate field construction operations and project logs.', icon: '⌖', tone: 'amber' },
+  { id: 'lapangan/projects', title: 'Divisi Lapangan', description: 'Daily progress, labor logs, material and equipment requests, field cash, and wage claims.', icon: '⌖', tone: 'amber' },
   { id: 'finance', title: 'Divisi Finance', description: 'Track financial transactions, invoicing, and budget reports.', icon: '▤', tone: 'violet' },
 ];
 
@@ -18,8 +18,13 @@ export default function ModuleSelection({ user = {}, onSelectModule, onSignOut }
   // Tanpa bypass super_admin (backlog E3): permission dari /api/auth/me sudah
   // mencerminkan hak akses sebenarnya, termasuk `*:read` milik super_admin.
   const canAccessEquipment = currentUser.permissions?.includes('equipment:read') || false;
-  const canAccessAdmin = currentUser.permissions?.includes('project:read') || false;
-  const moduleAccess = { 'alat/items': canAccessEquipment, 'admin/projects': canAccessAdmin };
+  const permissions = currentUser.permissions || [];
+  // Lapangan memegang project:read untuk mencatat realisasi, tapi punya workspace sendiri.
+  const isFieldOnly = permissions.includes('progress:create') && !permissions.includes('project:create');
+  const canAccessAdmin = permissions.includes('project:read') && !isFieldOnly;
+  // user:create hanya dipegang super_admin, yang boleh masuk untuk memantau (E3).
+  const canAccessField = permissions.includes('progress:create') || permissions.includes('user:create');
+  const moduleAccess = { 'alat/items': canAccessEquipment, 'admin/projects': canAccessAdmin, 'lapangan/projects': canAccessField };
 
   return (
     <main className="page-enter min-h-screen bg-slate-50 px-4 py-8 text-slate-800 sm:px-8 sm:py-12">
@@ -51,6 +56,8 @@ export default function ModuleSelection({ user = {}, onSelectModule, onSignOut }
             {modules.map((module) => {
               const isModuleAvailable = moduleAccess[module.id] || false;
               const isActive = isModuleAvailable;
+              // Modul yang punya aturan akses sudah jadi: nonaktif berarti akun ini tidak berwenang.
+              const isBuilt = module.id in moduleAccess;
               return (
                 <button
                   key={module.id}
@@ -70,7 +77,7 @@ export default function ModuleSelection({ user = {}, onSelectModule, onSignOut }
                       {isActive ? (
                         <span className="inline-flex items-center rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">Active</span>
                       ) : (
-                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">Upcoming</span>
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{isBuilt ? 'Tidak ada akses' : 'Upcoming'}</span>
                       )}
                     </div>
                     <p className="mt-1 text-xs leading-5 text-slate-500">{module.description}</p>

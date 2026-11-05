@@ -1,3 +1,5 @@
+import { divisionPrefix } from '../../utils/divisionRoute.js';
+
 // Label dan format tampilan modul Project. Nilai enum mengikuti backend
 // (project.routes.js) — jangan menambah nilai yang tidak dikenal API.
 
@@ -133,9 +135,9 @@ export function fieldErrorsFrom(error) {
 /** Breadcrumb standar halaman di dalam satu tahapan. */
 export function stageCrumbs(project, stage, ...tail) {
   return [
-    { label: 'Project', href: '#/admin/projects' },
-    { label: project.projectName, href: `#/admin/projects/${project.id}` },
-    { label: subProjectTypeLabel(stage.subProjectType), href: `#/admin/projects/${project.id}/sub/${stage.id}/volume` },
+    { label: 'Project', href: `#/${divisionPrefix()}/projects` },
+    { label: project.projectName, href: `#/${divisionPrefix()}/projects/${project.id}` },
+    { label: subProjectTypeLabel(stage.subProjectType), href: `#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/volume` },
     ...tail,
   ];
 }

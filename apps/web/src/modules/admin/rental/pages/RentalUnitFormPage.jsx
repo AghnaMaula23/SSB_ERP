@@ -3,6 +3,7 @@ import FormPage, { FormError, InfoCard } from '../../project/components/FormPage
 import { MockBanner } from '../../project/components/ProjectUi.jsx';
 import UnitFields from '../components/UnitFields.jsx';
 import { fieldErrorsFrom } from '../../project/utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { emptyUnitForm, validateUnitForm } from '../utils/unitForm.js';
 
 /** "Unit Baru" — ajukan unit tambahan untuk kontrak rental (Request Alat). */
@@ -30,7 +31,7 @@ export default function RentalUnitFormPage({ project, onSubmitForm, onCancel, on
 
   return (
     <FormPage
-      breadcrumb={[{ label: 'Rental', href: '#/admin/rental' }, { label: project.projectName, href: `#/admin/rental/${project.id}` }, { label: 'Unit Baru' }]}
+      breadcrumb={[{ label: 'Rental', href: `#/${divisionPrefix()}/rental` }, { label: project.projectName, href: `#/${divisionPrefix()}/rental/${project.id}` }, { label: 'Unit Baru' }]}
       icon="🚜"
       title="Unit Baru"
       subtitle={`${project.clientName ? `${project.clientName} · ` : ''}${project.projectName}`}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Breadcrumb, EmptyPanel, LoadingPanel, MetricCard, StatusBadge } from '../components/ProjectUi.jsx';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { PROJECT_STATUS, formatDate, projectSchedule } from '../utils/projectFormat.js';
 
 const STATUS_FILTERS = ['', 'planned', 'active', 'completed', 'cancelled'];
@@ -69,7 +70,7 @@ export default function ProjectListView({ projects, loading, error, canCreate, o
             return (
               <a
                 key={project.id}
-                href={`#/admin/projects/${project.id}`}
+                href={`#/${divisionPrefix()}/projects/${project.id}`}
                 className="card-panel group flex flex-col p-5 transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">

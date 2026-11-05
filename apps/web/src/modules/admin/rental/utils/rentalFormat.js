@@ -79,14 +79,6 @@ export const SESSIONS = [
   { key: 'overtime', label: 'Overtime', defaultStart: '17:30', defaultEnd: '19:30' },
 ];
 
-const sessionOf = (startedAt) => {
-  if (!startedAt) return null;
-  const hour = new Date(startedAt).getHours();
-  if (hour < 12) return 'pagi';
-  if (hour < 17) return 'siang';
-  return 'overtime';
-};
-
 const toHm = (value) => (value ? new Date(value).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':') : '');
 
 /** logs → baris per tanggal { date, sessions: {pagi,siang,overtime}, untimed, total, notes } */
@@ -94,7 +86,8 @@ export function groupTimesheet(logs) {
   const byDate = new Map();
   logs.forEach((log) => {
     const row = byDate.get(log.workDate) || { date: log.workDate, sessions: {}, untimed: 0, total: 0, notes: [], logIds: [] };
-    const key = sessionOf(log.startedAt);
+    // Log lama tanpa workSession masuk kolom "tanpa sesi" — jam tidak ditebak jadi sesi (E23).
+    const key = log.workSession || null;
     const hours = Number(log.totalWorkhour) || 0;
     if (key) {
       const current = row.sessions[key];

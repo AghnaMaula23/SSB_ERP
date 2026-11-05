@@ -846,3 +846,26 @@ Divisi Lapangan kini lengkap.
   Upah` (klaim ditolak ikut, dibatalkan tidak; footer total klaim aktif) dan `Bukti Bayar`
   (yang ditolak ikut beserta alasannya).
 
+
+---
+
+# Modul Lapangan (5 November 2026)
+
+## E29. Layar Divisi Lapangan & sinkronisasi Admin
+
+**Modul baru `modules/lapangan`, rute `#/lapangan/*`:** Request Material (+ surat jalan &
+penerimaan), Request Alat internal, Kas Lapangan (pengajuan + laporan realisasi/mendesak),
+Upah Pekerja (klaim + bukti bayar).
+
+**Dipakai bersama Admin:** halaman Project & Rental dibuka lewat `lapangan/projects` dan
+`lapangan/rental`; tombolnya sudah disaring `hasPermission`, yang berbeda hanya awalan rute
+(`modules/admin/utils/divisionRoute.js`) dan menu (`DivisionLayout`, `FieldLayout`). Tab baru
+**Log Harian** di tiap tahapan: Lapangan menulis, Admin hanya membaca (E26).
+
+**Admin:** tab Kas Lapangan & Klaim Upah di Pusat Approval memakai antrean sungguhan;
+`fieldCashMockService` dihapus. Folder sistem Nota Kas & Bukti Bayar tampil di Files.
+Sheet rental memakai `rental-sheet` dan kolom `workSession` (E23 bagian 1–2).
+`ModuleSelection`: Lapangan tidak lagi masuk workspace Admin.
+
+**Masih terbuka:** layar Finance (approve dana/klaim, validasi laporan & bukti) belum ada, jadi
+alur berhenti di antrean Finance sampai modulnya dibuat; batalkan log & operator rental (E23 3–4).

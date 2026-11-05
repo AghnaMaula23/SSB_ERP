@@ -20,6 +20,8 @@ export const PROJECT_STATUS = {
 export const SYSTEM_FOLDERS = {
   'delivery-notes': { label: 'Surat Jalan', icon: '🧾', hint: 'Dari pencatatan pengiriman material (Divisi Lapangan)' },
   'receipt-proofs': { label: 'Bukti Penerimaan', icon: '📦', hint: 'Foto/dokumen saat material diterima di lokasi' },
+  'field-expense-receipts': { label: 'Nota Kas Lapangan', icon: '💵', hint: 'Nota dari laporan realisasi kas lapangan' },
+  'labor-payment-proofs': { label: 'Bukti Bayar Upah', icon: '👷', hint: 'Bukti pembayaran klaim upah pekerja' },
   'closing-archive': { label: 'Arsip Penutupan', icon: '🗄️', hint: 'Rekap XLSX yang dibuat otomatis saat tahapan/project ditutup' },
 };
 

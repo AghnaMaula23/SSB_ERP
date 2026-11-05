@@ -1,35 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout.jsx';
-import { Breadcrumb, EmptyPanel, PageHeader } from '../../project/components/ProjectUi.jsx';
+import { Breadcrumb, PageHeader } from '../../project/components/ProjectUi.jsx';
 import ApprovalQueue from './ApprovalQueue.jsx';
 import EquipmentRequestReview from './EquipmentRequestReview.jsx';
 import MaterialRequestReview from './MaterialRequestReview.jsx';
 import ProgressLogReview from './ProgressLogReview.jsx';
 import PurchaseRequestQueue from './PurchaseRequestQueue.jsx';
 import PurchaseRequestDetail from './PurchaseRequestDetail.jsx';
-import FieldCashQueue from './FieldCashQueue.jsx';
-import FieldCashDetail from './FieldCashDetail.jsx';
+import FieldCashReview from './FieldCashReview.jsx';
+import WageClaimReview from './WageClaimReview.jsx';
 import { getApprovalSummary } from '../services/approvalService.js';
-import { listFieldCash } from '../services/fieldCashMockService.js';
 import { parseApprovalRoute } from '../utils/approvalRoute.js';
 
 /**
- * Enam antrean Admin, urut sesuai alur. `sourceType` = sumber di
- * /api/approval-queue (null = antrean belum ada di backend). `status`:
- *   live    — backend ada, data asli
- *   mock    — backend belum ada (Build Order 7), layar memakai data contoh
- *   pending — backend & layar belum ada
+ * Enam antrean Admin, urut sesuai alur. `sourceType` = sumber di /api/approval-queue.
  */
 const TABS = [
-  { key: 'pr', label: 'PR Divisi Alat', icon: '🔧', sourceType: 'purchase_request', status: 'live' },
-  { key: 'material', label: 'Request Material', icon: '🧱', sourceType: 'material_request', status: 'live' },
-  { key: 'alat', label: 'Request Alat', icon: '🚜', sourceType: 'equipment_request', status: 'live' },
-  { key: 'progress', label: 'Progress Harian', icon: '📈', sourceType: 'progress_log', status: 'live' },
-  { key: 'kas', label: 'Kas Lapangan', icon: '💵', sourceType: null, status: 'mock' },
-  { key: 'upah', label: 'Klaim Upah Harian', icon: '👷', sourceType: null, status: 'pending' },
+  { key: 'pr', label: 'PR Divisi Alat', icon: '🔧', sourceType: 'purchase_request' },
+  { key: 'material', label: 'Request Material', icon: '🧱', sourceType: 'material_request' },
+  { key: 'alat', label: 'Request Alat', icon: '🚜', sourceType: 'equipment_request' },
+  { key: 'progress', label: 'Progress Harian', icon: '📈', sourceType: 'progress_log' },
+  { key: 'kas', label: 'Kas Lapangan', icon: '💵', sourceType: 'field_operational_request' },
+  { key: 'upah', label: 'Klaim Upah Harian', icon: '👷', sourceType: 'labor_wage_claim' },
 ];
 
-/** Jumlah yang menunggu Admin per tab — dari summary backend (+ data contoh kas). */
+/** Jumlah yang menunggu Admin per tab — dari summary backend. */
 function useTabCounts(refreshKey) {
   const [counts, setCounts] = useState({});
   useEffect(() => {
@@ -45,22 +40,9 @@ function useTabCounts(refreshKey) {
         setCounts((previous) => ({ ...previous, ...next }));
       })
       .catch(() => {});
-    listFieldCash()
-      .then((rows) => { if (!cancelled) setCounts((previous) => ({ ...previous, kas: rows.filter((row) => row.status === 'submitted').length })); })
-      .catch(() => {});
     return () => { cancelled = true; };
   }, [refreshKey]);
   return counts;
-}
-
-function WageClaimPlaceholder() {
-  return (
-    <EmptyPanel icon="👷" title="Klaim upah pekerja harian belum tersedia">
-      Admin nantinya memvalidasi atau menolak klaim upah yang diajukan Lapangan di sini. Backend-nya
-      (<code className="font-mono">/api/finance-field/wage-claims</code>) masih masuk Build Order 7, jadi
-      antrean ini akan aktif setelah endpoint tersebut dibuat.
-    </EmptyPanel>
-  );
 }
 
 /**
@@ -102,12 +84,13 @@ export default function ApprovalWorkspacePage({ route, onNavigate, onBackToModul
       content = <ProgressLogReview key={route} subProjectId={selection.subProjectId} recordId={selection.recordId} onDone={backWithNotice} />;
       break;
     case 'kas':
-      content = <FieldCashDetail key={route} recordId={selection.recordId} onDone={backWithNotice} />;
+      content = <FieldCashReview key={route} recordId={selection.recordId} onDone={backWithNotice} />;
+      break;
+    case 'upah':
+      content = <WageClaimReview key={route} recordId={selection.recordId} onDone={backWithNotice} />;
       break;
     default:
       if (selection.tab === 'pr') content = <PurchaseRequestQueue key={route} initialNotice={flashFor(listRoute)} />;
-      else if (selection.tab === 'kas') content = <FieldCashQueue key={route} initialNotice={flashFor(listRoute)} />;
-      else if (selection.tab === 'upah') content = <WageClaimPlaceholder />;
       else content = <ApprovalQueue key={route} sourceType={activeTab.sourceType} initialNotice={flashFor(listRoute)} />;
   }
 
@@ -141,9 +124,7 @@ export default function ApprovalWorkspacePage({ route, onNavigate, onBackToModul
                   <span className="min-w-0 flex-1">
                     <span className={`block text-sm font-semibold leading-tight ${active ? 'text-brand-900' : 'text-slate-800'}`}>{tab.label}</span>
                   </span>
-                  {tab.status === 'pending' ? (
-                    <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-400">Soon</span>
-                  ) : count > 0 ? (
+                  {count > 0 ? (
                     <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white" aria-label={`${count} menunggu`}>{count}</span>
                   ) : null}
                 </a>

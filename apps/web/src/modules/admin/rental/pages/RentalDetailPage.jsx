@@ -4,6 +4,7 @@ import { STATUS_TRANSITIONS, formatDate } from '../../project/utils/projectForma
 import { BILLING_METHODS, PACKETS, RENTAL_STATUS, UNIT_STATUS } from '../utils/rentalFormat.js';
 import { cancelRentalUnitRequest, changeRentalProjectStatus } from '../services/rentalService.js';
 import { changeDemoRentalStatus } from '../services/rentalDemoService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import UnitTimesheet from '../components/UnitTimesheet.jsx';
 
 const STATUS_ACTIONS = {
@@ -26,7 +27,7 @@ function InfoTile({ label, value, sub }) {
 function UnitCard({ project, unit, selected }) {
   return (
     <a
-      href={`#/admin/rental/${project.id}/unit/${unit.key}`}
+      href={`#/${divisionPrefix()}/rental/${project.id}/unit/${unit.key}`}
       aria-current={selected ? 'page' : undefined}
       className={`flex w-60 shrink-0 flex-col rounded-xl border bg-white p-3.5 text-left transition ${selected ? 'border-brand-600 ring-2 ring-brand-600/20' : 'border-slate-200 hover:border-slate-300 hover:shadow-sm'}`}
     >
@@ -80,10 +81,10 @@ export default function RentalDetailPage({ project, projects, unitsEntry, select
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Breadcrumb items={[{ label: 'Rental', href: '#/admin/rental' }, { label: project.clientName || 'Kontrak' }, { label: 'Timesheet Detail' }]} />
+        <Breadcrumb items={[{ label: 'Rental', href: `#/${divisionPrefix()}/rental` }, { label: project.clientName || 'Kontrak' }, { label: 'Timesheet Detail' }]} />
         <label className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
           Kontrak
-          <select value={project.id} onChange={(event) => onNavigate(`admin/rental/${event.target.value}`)} className="input-control h-9 w-full max-w-sm text-xs normal-case tracking-normal sm:w-80" aria-label="Ganti kontrak rental">
+          <select value={project.id} onChange={(event) => onNavigate(`${divisionPrefix()}/rental/${event.target.value}`)} className="input-control h-9 w-full max-w-sm text-xs normal-case tracking-normal sm:w-80" aria-label="Ganti kontrak rental">
             {projects.map((option) => <option key={option.id} value={option.id}>{option.clientName ? `${option.clientName} — ` : ''}{option.projectName}{option.isDemo ? ' (contoh)' : ''}</option>)}
             {!projects.some((option) => option.id === project.id) && <option value={project.id}>{project.projectName}</option>}
           </select>
@@ -105,7 +106,7 @@ export default function RentalDetailPage({ project, projects, unitsEntry, select
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {permissions.updateProject && !isFinal && <a href={`#/admin/rental/${project.id}/edit`} className="btn btn-secondary text-xs">✎ Ubah</a>}
+          {permissions.updateProject && !isFinal && <a href={`#/${divisionPrefix()}/rental/${project.id}/edit`} className="btn btn-secondary text-xs">✎ Ubah</a>}
           {['planned', 'cancelled', 'active', 'completed'].filter((status) => transitions.includes(status)).map((status) => (
             <button key={status} type="button" disabled={busy} onClick={() => changeStatus(status)} className={STATUS_ACTIONS[status].className}>{STATUS_ACTIONS[status].label}</button>
           ))}
@@ -124,7 +125,7 @@ export default function RentalDetailPage({ project, projects, unitsEntry, select
           {unitsEntry?.error && <div className="w-72 shrink-0 rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700">{unitsEntry.error}</div>}
           {units.map((row) => <UnitCard key={row.key} project={project} unit={row} selected={unit?.key === row.key} />)}
           {!isFinal && (permissions.requestUnit || project.isDemo) && (
-            <a href={`#/admin/rental/${project.id}/unit/new`} className="flex w-44 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 p-3.5 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50">
+            <a href={`#/${divisionPrefix()}/rental/${project.id}/unit/new`} className="flex w-44 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 p-3.5 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50">
               <span className="text-xl">+</span>
               Unit Baru
             </a>

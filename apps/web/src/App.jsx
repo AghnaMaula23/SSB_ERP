@@ -27,6 +27,9 @@ import ApprovalWorkspacePage from './modules/admin/approvals/pages/ApprovalWorks
 import { parseApprovalRoute } from './modules/admin/approvals/utils/approvalRoute.js';
 import FilesWorkspacePage from './modules/admin/files/pages/FilesWorkspacePage.jsx';
 import { parseFilesRoute } from './modules/admin/files/utils/filesRoute.js';
+import FieldWorkspacePage from './modules/lapangan/pages/FieldWorkspacePage.jsx';
+import FieldLayout from './modules/lapangan/components/FieldLayout.jsx';
+import { parseFieldRoute } from './modules/lapangan/utils/fieldRoute.js';
 import { clearSession, getCurrentUser } from './services/auth.js';
 
 function getInitialRoute() {
@@ -66,7 +69,8 @@ function isKnownRoute(route) {
     parseRentalRoute(route) !== null ||
     parseIncomeRoute(route) !== null ||
     parseApprovalRoute(route) !== null ||
-    parseFilesRoute(route) !== null;
+    parseFilesRoute(route) !== null ||
+    parseFieldRoute(route) !== null;
 }
 
 function AppLoading() {
@@ -212,16 +216,20 @@ export default function App() {
     return <KasPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   // Satu instance untuk seluruh rute admin/projects/* supaya pohon project dan
   // cache tahapan tidak dimuat ulang setiap kali pindah halaman.
+  // Divisi Lapangan memakai halaman Project & Rental yang sama, dengan menu sendiri.
+  const layoutProps = route.startsWith('lapangan/') ? { Layout: FieldLayout } : {};
   if (parseProjectRoute(route))
-    return <ProjectWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+    return <ProjectWorkspacePage {...layoutProps} route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseSupplyRoute(route))
     return <SupplyWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseRentalRoute(route))
-    return <RentalWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+    return <RentalWorkspacePage {...layoutProps} route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseIncomeRoute(route))
     return <IncomeWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseApprovalRoute(route))
     return <ApprovalWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (parseFieldRoute(route))
+    return <FieldWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseFilesRoute(route))
     return <FilesWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (route === 'alat/kas/claim-pendapatan' || route === 'alat/kas/request-pendapatan')

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Breadcrumb, MetricCard, Notice, ProgressBar, ProgressRing, StatusBadge } from '../components/ProjectUi.jsx';
 import { changeProjectStatus, changeSubProjectStatus } from '../services/projectService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import {
   PROJECT_STATUS, STATUS_TRANSITIONS, formatCurrency, formatDate, formatVolume,
   overallProgress, projectSchedule, subProjectTypeLabel,
@@ -65,7 +66,7 @@ function StageRow({ project, stage, canUpdate, busy, onChangeStatus, onEdit }) {
   const progress = stage.progress || {};
   const transitions = canUpdate && !['completed', 'cancelled'].includes(project.status) ? STATUS_TRANSITIONS[stage.status] || [] : [];
   const canEdit = canUpdate && !['completed', 'cancelled'].includes(stage.status);
-  const volumeHref = `#/admin/projects/${project.id}/sub/${stage.id}/volume`;
+  const volumeHref = `#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/volume`;
   const actionClass = 'rounded px-1.5 py-0.5 text-[11px] font-semibold transition disabled:opacity-40';
 
   return (
@@ -169,7 +170,7 @@ export default function ProjectOverview({ project, stagesEntry, permissions, onP
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Project', href: '#/admin/projects' }, { label: project.projectName }]} />
+      <Breadcrumb items={[{ label: 'Project', href: `#/${divisionPrefix()}/projects` }, { label: project.projectName }]} />
 
       <div className="mb-6 mt-2 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">

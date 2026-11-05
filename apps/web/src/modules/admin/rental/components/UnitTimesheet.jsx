@@ -4,6 +4,7 @@ import { formatDate, formatNumber, todayIso } from '../../project/utils/projectF
 import { SESSIONS, groupTimesheet, monthRange } from '../utils/rentalFormat.js';
 import { listRentalWorkhours } from '../services/rentalService.js';
 import { listDemoLogs } from '../services/rentalDemoService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { downloadCsv } from '../../../../utils/csv.js';
 
 const fmtHours = (value) => (value ? formatNumber(value) : '-');
@@ -55,7 +56,7 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
   const sum = (key) => grouped.reduce((total, row) => total + (row.sessions[key]?.hours || 0), 0);
   const totalHours = grouped.reduce((total, row) => total + row.total, 0);
   const workDays = grouped.filter((row) => row.total > 0).length;
-  const sheetHref = `#/admin/rental/${project.id}/unit/${unit.key}/sheet/new`;
+  const sheetHref = `#/${divisionPrefix()}/rental/${project.id}/unit/${unit.key}/sheet/new`;
 
   const exportCsv = () => downloadCsv(`timesheet-${project.projectCode}-${unit.assetCode || unit.key}-${month}.csv`, grouped, [
     { label: 'Tanggal', value: (row) => row.date },

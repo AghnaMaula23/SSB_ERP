@@ -3,6 +3,7 @@ import FormPage, { FormError, InfoCard } from '../components/FormPage.jsx';
 import { EmptyPanel, LoadingPanel } from '../components/ProjectUi.jsx';
 import { createAllocation, listProjectPoolsWithItems } from '../services/projectService.js';
 import { stageCrumbs, subProjectTypeLabel } from '../utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { equipmentStatusLabel } from '../../../alat/services/alatService.js';
 
 /**
@@ -48,11 +49,11 @@ export default function AllocationFormPage({ project, stage, onCancel, onSaved }
     }
   };
 
-  const poolHref = `#/admin/projects/${project.id}/pool`;
+  const poolHref = `#/${divisionPrefix()}/projects/${project.id}/pool`;
 
   if (stage.status !== 'active') {
     return (
-      <EmptyPanel icon="⏸️" title="Tahapan belum aktif" action={<a href={`#/admin/projects/${project.id}`} className="btn btn-secondary text-xs">← Ke ringkasan project</a>}>
+      <EmptyPanel icon="⏸️" title="Tahapan belum aktif" action={<a href={`#/${divisionPrefix()}/projects/${project.id}`} className="btn btn-secondary text-xs">← Ke ringkasan project</a>}>
         Alat hanya bisa dialokasikan ke tahapan berstatus Active.
       </EmptyPanel>
     );
@@ -62,7 +63,7 @@ export default function AllocationFormPage({ project, stage, onCancel, onSaved }
 
   return (
     <FormPage
-      breadcrumb={stageCrumbs(project, stage, { label: 'Alat', href: `#/admin/projects/${project.id}/sub/${stage.id}/alat` }, { label: 'Alokasikan' })}
+      breadcrumb={stageCrumbs(project, stage, { label: 'Alat', href: `#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/alat` }, { label: 'Alokasikan' })}
       icon="🚜"
       title="Alokasikan Alat"
       subtitle={`Tempatkan unit dari equipment pool ke tahapan ${subProjectTypeLabel(stage.subProjectType)}`}

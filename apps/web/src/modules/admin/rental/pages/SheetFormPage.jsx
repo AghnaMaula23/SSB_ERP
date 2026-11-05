@@ -3,7 +3,8 @@ import FormPage, { Field, FormError, InfoCard } from '../../project/components/F
 import { MockBanner } from '../../project/components/ProjectUi.jsx';
 import { formatNumber, todayIso } from '../../project/utils/projectFormat.js';
 import { SESSIONS, minutesBetween } from '../utils/rentalFormat.js';
-import { createRentalWorkhour } from '../services/rentalService.js';
+import { createRentalSheet } from '../services/rentalService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { addDemoLogs } from '../services/rentalDemoService.js';
 
 const initialSessions = () => Object.fromEntries(SESSIONS.map((session) => [session.key, {
@@ -52,6 +53,7 @@ export default function SheetFormPage({ project, unit, onCancel, onSaved }) {
 
     const payloads = filled.map((session) => ({
       workDate,
+      workSession: session.key,
       startedAt: new Date(`${workDate}T${sessions[session.key].start}:00`).toISOString(),
       stoppedAt: new Date(`${workDate}T${sessions[session.key].end}:00`).toISOString(),
       totalWorkhour: hoursOf(sessions[session.key]),
@@ -72,27 +74,23 @@ export default function SheetFormPage({ project, unit, onCancel, onSaved }) {
       return;
     }
 
-    // Backend menerima satu sesi per request. Kirim berurutan supaya kalau ada
-    // yang ditolak (mis. melewati 24 jam), sesi yang sudah masuk diketahui.
-    const saved = [];
-    for (const [index, payload] of payloads.entries()) {
-      try {
-        await createRentalWorkhour(unit.poolItemId, payload);
-        saved.push(filled[index].label);
-      } catch (error) {
-        setFormError(saved.length
-          ? `Sesi ${saved.join(', ')} tersimpan, tetapi sesi ${filled[index].label} gagal: ${error.message}`
-          : error.message);
-        setBusy(false);
-        return;
-      }
+    try {
+      await createRentalSheet(unit.poolItemId, workDate, payloads.map((payload) => ({
+        workSession: payload.workSession,
+        startedAt: payload.startedAt,
+        stoppedAt: payload.stoppedAt,
+        ...(payload.description && { description: payload.description }),
+      })));
+      onSaved({ workDate, total });
+    } catch (error) {
+      setFormError(error.message);
+      setBusy(false);
     }
-    onSaved({ workDate, total });
   };
 
   return (
     <FormPage
-      breadcrumb={[{ label: 'Rental', href: '#/admin/rental' }, { label: project.projectName, href: `#/admin/rental/${project.id}/unit/${unit.key}` }, { label: unit.assetCode || unit.typeName }, { label: 'Input Sheet' }]}
+      breadcrumb={[{ label: 'Rental', href: `#/${divisionPrefix()}/rental` }, { label: project.projectName, href: `#/${divisionPrefix()}/rental/${project.id}/unit/${unit.key}` }, { label: unit.assetCode || unit.typeName }, { label: 'Input Sheet' }]}
       icon="📝"
       title="Input Sheet"
       subtitle={`${unit.typeName} · ${unit.assetCode || '-'}${unit.meta?.operator ? ` · Operator ${unit.meta.operator}` : ''}`}
@@ -104,6 +102,7 @@ export default function SheetFormPage({ project, unit, onCancel, onSaved }) {
       aside={(
         <InfoCard title="Ketentuan">
           <p>Setiap sesi tersimpan sebagai satu catatan jam kerja dan ikut menggerakkan counter maintenance unit.</p>
+          <p>Satu sesi sekali per tanggal. Salah input? Batalkan log lamanya dulu, lalu catat ulang.</p>
           <p>Total jam per unit per hari maksimal 24 jam, termasuk catatan lain di tanggal yang sama.</p>
           <p>Hari libur cukup tidak diisi — tabel rekap menandainya otomatis.</p>
         </InfoCard>

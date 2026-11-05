@@ -109,19 +109,13 @@ export async function listRentalWorkhours(equipmentItemId, { startDate, endDate 
   return apiRequest(`/api/equipment/items/${equipmentItemId}/workhour-logs${query({ sourceType: 'external_rental', startDate, endDate, limit: 100 })}`);
 }
 
-/** Satu sesi kerja (pagi/siang/overtime) = satu workhour log. */
-export async function createRentalWorkhour(poolItemId, session) {
-  return apiRequest('/api/equipment/workhour-logs', {
+/**
+ * Satu lembar timesheet: semua sesi masuk atau tidak sama sekali. totalWorkhour
+ * dihitung backend dari jam mulai/selesai, jadi tidak dikirim (E23).
+ */
+export async function createRentalSheet(poolItemId, workDate, sessions) {
+  return apiRequest('/api/equipment/workhour-logs/rental-sheet', {
     method: 'POST',
-    body: JSON.stringify({
-      sourceType: 'external_rental',
-      equipmentPoolItemId: Number(poolItemId),
-      workDate: session.workDate,
-      startedAt: session.startedAt,
-      stoppedAt: session.stoppedAt,
-      pausedDurationMinutes: 0,
-      totalWorkhour: session.totalWorkhour,
-      description: nullIfBlank(session.description),
-    }),
+    body: JSON.stringify({ equipmentPoolItemId: Number(poolItemId), workDate, sessions }),
   });
 }

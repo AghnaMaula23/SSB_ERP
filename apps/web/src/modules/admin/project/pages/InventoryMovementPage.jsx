@@ -3,6 +3,7 @@ import FormPage, { Field, FormError, InfoCard } from '../components/FormPage.jsx
 import { EmptyPanel, LoadingPanel } from '../components/ProjectUi.jsx';
 import { createStockMovement, getStageStock, listActiveMaterialTypes } from '../services/materialStockService.js';
 import { fieldErrorsFrom, formatNumber, stageCrumbs, todayIso } from '../utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { MOVEMENT_TYPES } from '../utils/stockFormat.js';
 
 /**
@@ -69,7 +70,7 @@ export default function InventoryMovementPage({ project, stage, materialTypeId, 
 
   return (
     <FormPage
-      breadcrumb={stageCrumbs(project, stage, { label: 'Inventory', href: `#/admin/projects/${project.id}/sub/${stage.id}/inventory` }, { label: 'Catat Mutasi' })}
+      breadcrumb={stageCrumbs(project, stage, { label: 'Inventory', href: `#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/inventory` }, { label: 'Catat Mutasi' })}
       icon="🔁"
       title="Catat Mutasi Stok"
       subtitle={material ? `${material.materialName} · saldo ${formatNumber(balance)} ${unit}` : 'Pemakaian atau koreksi stok material tahapan'}

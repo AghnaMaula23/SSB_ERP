@@ -18,10 +18,13 @@ import InventoryPage from './InventoryPage.jsx';
 import InventoryMovementPage from './InventoryMovementPage.jsx';
 import WorkersPage from './WorkersPage.jsx';
 import WorkerFormPage from './WorkerFormPage.jsx';
+import LaborLogPage from './LaborLogPage.jsx';
+import LaborLogFormPage from './LaborLogFormPage.jsx';
 import { getProject, listProjects, listSubProjects } from '../services/projectService.js';
 import { hasPermission } from '../../../../services/permissions.js';
 import { parseProjectRoute } from '../utils/projectRoute.js';
 import { formatDate, formatNumber, subProjectTypeLabel } from '../utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { MOVEMENT_TYPES } from '../utils/stockFormat.js';
 
 const FINAL_STATUSES = ['completed', 'cancelled'];
@@ -39,7 +42,7 @@ function NoAccess({ children, backHref, backLabel }) {
  * panel samping — project dipilih dulu di sana, baru panelnya menampilkan
  * isi project tersebut.
  */
-export default function ProjectWorkspacePage({ route, onNavigate, onBackToModules, onSignOut }) {
+export default function ProjectWorkspacePage({ route, onNavigate, onBackToModules, onSignOut, Layout = AdminLayout }) {
   const selection = parseProjectRoute(route) || { projectId: null, projectPage: null, subProjectId: null, subPage: null, form: null, recordId: null, poolId: null };
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -146,30 +149,30 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
     if (stages) {
       setProjects((current) => current.map((row) => (row.id === project.id ? { ...row, subProjectCount: stages.length } : row)));
     }
-    onNavigate(`admin/projects/${project.id}/sub/${saved.id}/volume`);
+    onNavigate(`${divisionPrefix()}/projects/${project.id}/sub/${saved.id}/volume`);
   };
 
-  const projectHref = project ? `#/admin/projects/${project.id}` : '#/admin/projects';
+  const projectHref = project ? `#/${divisionPrefix()}/projects/${project.id}` : `#/${divisionPrefix()}/projects`;
 
   const renderContent = () => {
     if (selection.form === 'project-new') {
-      if (!permissions.createProject) return <NoAccess backHref="#/admin/projects" backLabel="← Kembali ke dashboard">Anda tidak memiliki izin membuat project.</NoAccess>;
+      if (!permissions.createProject) return <NoAccess backHref={`#/${divisionPrefix()}/projects`} backLabel="← Kembali ke dashboard">Anda tidak memiliki izin membuat project.</NoAccess>;
       return (
         <ProjectFormPage
           key={route}
-          onCancel={() => onNavigate('admin/projects')}
-          onSaved={(saved) => { upsertProject(saved); onNavigate(`admin/projects/${saved.id}`); }}
+          onCancel={() => onNavigate(`${divisionPrefix()}/projects`)}
+          onSaved={(saved) => { upsertProject(saved); onNavigate(`${divisionPrefix()}/projects/${saved.id}`); }}
         />
       );
     }
 
     if (!selection.projectId) {
-      return <ProjectListView projects={projects} loading={loading} error={loadError} canCreate={permissions.createProject} onCreate={() => onNavigate('admin/projects/new')} />;
+      return <ProjectListView projects={projects} loading={loading} error={loadError} canCreate={permissions.createProject} onCreate={() => onNavigate(`${divisionPrefix()}/projects/new`)} />;
     }
     if (!project) {
       if (loading || !(extraProject.id === selection.projectId && extraProject.missing)) return <LoadingPanel>Memuat project...</LoadingPanel>;
       return (
-        <EmptyPanel icon="🔎" title="Project tidak ditemukan" action={<a href="#/admin/projects" className="btn btn-secondary text-xs">← Kembali ke dashboard</a>}>
+        <EmptyPanel icon="🔎" title="Project tidak ditemukan" action={<a href={`#/${divisionPrefix()}/projects`} className="btn btn-secondary text-xs">← Kembali ke dashboard</a>}>
           Project ini mungkin tidak ada atau Anda tidak punya akses. Pilih project lain dari dashboard.
         </EmptyPanel>
       );
@@ -184,22 +187,22 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
           key={route}
           project={project}
           contractSummary={stagesEntry?.summary}
-          onCancel={() => onNavigate(`admin/projects/${project.id}`)}
-          onSaved={(saved) => { upsertProject(saved); onNavigate(`admin/projects/${saved.id}`); }}
+          onCancel={() => onNavigate(`${divisionPrefix()}/projects/${project.id}`)}
+          onSaved={(saved) => { upsertProject(saved); onNavigate(`${divisionPrefix()}/projects/${saved.id}`); }}
         />
       );
     }
 
     if (selection.projectPage === 'pool') {
       if (selection.form === 'pool-item-new') {
-        if (!permissions.updatePool) return <NoAccess backHref={`#/admin/projects/${project.id}/pool`} backLabel="← Kembali">Mengubah equipment pool milik Divisi Alat (equipment-pool:update).</NoAccess>;
+        if (!permissions.updatePool) return <NoAccess backHref={`#/${divisionPrefix()}/projects/${project.id}/pool`} backLabel="← Kembali">Mengubah equipment pool milik Divisi Alat (equipment-pool:update).</NoAccess>;
         return (
           <PoolItemFormPage
             key={route}
             project={project}
             poolId={selection.poolId}
-            onCancel={() => onNavigate(`admin/projects/${project.id}/pool`)}
-            onSaved={(saved) => goWithNotice(`admin/projects/${project.id}/pool`, `${saved.equipmentType?.typeName || 'Item'} ditambahkan ke pool.`)}
+            onCancel={() => onNavigate(`${divisionPrefix()}/projects/${project.id}/pool`)}
+            onSaved={(saved) => goWithNotice(`${divisionPrefix()}/projects/${project.id}/pool`, `${saved.equipmentType?.typeName || 'Item'} ditambahkan ke pool.`)}
           />
         );
       }
@@ -215,9 +218,9 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
           permissions={permissions}
           onProjectChanged={upsertProject}
           onReloadStages={() => loadStages(project.id, { force: true })}
-          onEditProject={() => onNavigate(`admin/projects/${project.id}/edit`)}
-          onCreateSubProject={() => onNavigate(`admin/projects/${project.id}/sub/new`)}
-          onEditSubProject={(row) => onNavigate(`admin/projects/${project.id}/sub/${row.id}/edit`)}
+          onEditProject={() => onNavigate(`${divisionPrefix()}/projects/${project.id}/edit`)}
+          onCreateSubProject={() => onNavigate(`${divisionPrefix()}/projects/${project.id}/sub/new`)}
+          onEditSubProject={(row) => onNavigate(`${divisionPrefix()}/projects/${project.id}/sub/${row.id}/edit`)}
         />
       );
     }
@@ -239,7 +242,7 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
           key={route}
           project={project}
           usedTypes={usedTypes}
-          onCancel={() => onNavigate(`admin/projects/${project.id}`)}
+          onCancel={() => onNavigate(`${divisionPrefix()}/projects/${project.id}`)}
           onSaved={handleStageCreated}
         />
       );
@@ -253,7 +256,7 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
       );
     }
 
-    const stageBase = `admin/projects/${project.id}/sub/${stage.id}`;
+    const stageBase = `${divisionPrefix()}/projects/${project.id}/sub/${stage.id}`;
     const backTo = (page) => () => onNavigate(`${stageBase}/${page}`);
 
     switch (selection.form) {
@@ -266,8 +269,8 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
             key={route}
             project={project}
             subProject={stage}
-            onCancel={() => onNavigate(`admin/projects/${project.id}`)}
-            onSaved={(saved) => { replaceStage(saved); onNavigate(`admin/projects/${project.id}`); }}
+            onCancel={() => onNavigate(`${divisionPrefix()}/projects/${project.id}`)}
+            onSaved={(saved) => { replaceStage(saved); onNavigate(`${divisionPrefix()}/projects/${project.id}`); }}
           />
         );
       case 'progress-new':
@@ -324,6 +327,10 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
       case 'worker-new':
       case 'worker-edit':
         return <WorkerFormPage key={route} project={project} stage={stage} workerId={selection.recordId} onCancel={backTo('pekerja')} onSaved={(saved) => goWithNotice(`${stageBase}/pekerja`, `Penugasan ${saved.worker?.fullName || 'pekerja'} tersimpan.`)} />;
+      case 'labor-new':
+      case 'labor-edit':
+        if (!hasPermission('labor-log:create')) return <NoAccess backHref={`#/${stageBase}/log`} backLabel="← Kembali">Log harian ditulis Divisi Lapangan (labor-log:create). Admin memeriksanya di klaim upah.</NoAccess>;
+        return <LaborLogFormPage key={route} project={project} stage={stage} logId={selection.recordId} onCancel={backTo('log')} onSaved={(text) => goWithNotice(`${stageBase}/log`, text)} />;
       default:
         break;
     }
@@ -337,6 +344,8 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
         return <InventoryPage key={route} project={project} stage={stage} canRecord={permissions.createStockMovement} initialNotice={flashFor(route)} />;
       case 'pekerja':
         return <WorkersPage key={route} project={project} stage={stage} initialNotice={flashFor(route)} />;
+      case 'log':
+        return <LaborLogPage key={route} project={project} stage={stage} initialNotice={flashFor(route)} />;
       default:
         return (
           <SubProjectVolumePage
@@ -353,7 +362,7 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
   };
 
   return (
-    <AdminLayout
+    <Layout
       active="project"
       panelTitle="Navigasi project"
       onNavigate={onNavigate}
@@ -370,6 +379,6 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
       ) : null}
     >
       {renderContent()}
-    </AdminLayout>
+    </Layout>
   );
 }

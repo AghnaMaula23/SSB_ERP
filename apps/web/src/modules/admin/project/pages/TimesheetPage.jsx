@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Breadcrumb, GuardedLink, MetricCard, Notice, PageHeader } from '../components/ProjectUi.jsx';
 import { listAllocations, listItemWorkhours } from '../services/projectService.js';
 import { actorName, formatDate, formatNumber, formatTime, stageCrumbs, subProjectTypeLabel, todayIso } from '../utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { downloadCsv } from '../../../../utils/csv.js';
 
 const monthRange = (month) => {
@@ -89,7 +90,7 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
           <>
             <button type="button" onClick={exportCsv} disabled={loading || visible.length === 0} className="btn btn-secondary text-xs">↓ Export CSV</button>
             <GuardedLink
-              href={`#/admin/projects/${project.id}/sub/${stage.id}/timesheet/new`}
+              href={`#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/timesheet/new`}
               allowed={canRecord && hasActiveAllocation}
               reason={!canRecord ? 'Pencatatan jam kerja milik Lapangan / Divisi Alat (workhour:create).' : 'Belum ada alat yang sedang dialokasikan ke tahapan ini.'}
             >

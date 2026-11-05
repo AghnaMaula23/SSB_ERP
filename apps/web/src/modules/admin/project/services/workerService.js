@@ -94,3 +94,37 @@ export const endAssignment = (assignmentId, endDate = todayIso()) => apiRequest(
 
 /** Hapus penugasan yang salah input. Backend menolak (409) kalau sudah ada log harian. */
 export const deleteAssignment = (assignmentId) => apiRequest(`/api/worker-assignments/${assignmentId}`, { method: 'DELETE' });
+
+// ---------------- Log tenaga kerja harian (P1–P10) ----------------
+
+/** Daftar berhalaman + `summary` seluruh periode. `claim` terisi = log terkunci di klaim aktif (L6). */
+export const listLaborLogs = (subProjectId, { page = 1, limit = 20, startDate, endDate } = {}) => {
+  const params = new URLSearchParams({ subProjectId: String(subProjectId), page: String(page), limit: String(limit) });
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
+  return apiRequest(`/api/labor-logs?${params}`);
+};
+
+export const getLaborLog = (logId) => apiRequest(`/api/labor-logs/${logId}`);
+
+/** Penugasan yang berlaku pada satu tanggal — isi awal form log. */
+export async function listAssignmentsOn(subProjectId, date) {
+  const result = await apiRequest(`/api/worker-assignments?subProjectId=${subProjectId}&activeOn=${date}`);
+  return result?.data || [];
+}
+
+export const createLaborLog = (subProjectId, workDate, notes, items) => apiRequest('/api/labor-logs', {
+  method: 'POST',
+  body: JSON.stringify({ subProjectId: Number(subProjectId), workDate, notes: nullable(notes), items }),
+});
+
+/** Simpan ulang selalu mengirim daftar LENGKAP. Tanggal tidak bisa diubah. */
+export const updateLaborLog = (logId, notes, items) => apiRequest(`/api/labor-logs/${logId}`, {
+  method: 'PUT',
+  body: JSON.stringify({ notes: nullable(notes), items }),
+});
+
+export const deleteLaborLog = (logId) => apiRequest(`/api/labor-logs/${logId}`, { method: 'DELETE' });
+
+/** Pekerja sekali-datang (P6): cukup nama, tanpa keluar dari form log. */
+export const quickCreateWorker = (fullName) => apiRequest('/api/workers', { method: 'POST', body: JSON.stringify({ fullName: fullName.trim() }) });

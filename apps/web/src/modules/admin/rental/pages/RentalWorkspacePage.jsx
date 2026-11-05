@@ -13,9 +13,10 @@ import { addDemoUnit, isDemoId, listDemoRentalProjects, listDemoUnits, updateDem
 import { buildUnits } from '../utils/rentalFormat.js';
 import { formatDate, formatNumber } from '../../project/utils/projectFormat.js';
 import { hasPermission } from '../../../../services/permissions.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { parseRentalRoute } from '../utils/rentalRoute.js';
 
-function BackPanel({ icon = '🔒', title, children, href = '#/admin/rental' }) {
+function BackPanel({ icon = '🔒', title, children, href = `#/${divisionPrefix()}/rental` }) {
   return <EmptyPanel icon={icon} title={title} action={<a href={href} className="btn btn-secondary text-xs">← Kembali</a>}>{children}</EmptyPanel>;
 }
 
@@ -23,7 +24,7 @@ function BackPanel({ icon = '🔒', title, children, href = '#/admin/rental' }) 
  * Menu Rental Divisi Admin. Tanpa panel samping: kontrak dipilih di halaman
  * awal, unit dipilih lewat kartu di halaman kontrak.
  */
-export default function RentalWorkspacePage({ route, onNavigate, onBackToModules, onSignOut }) {
+export default function RentalWorkspacePage({ route, onNavigate, onBackToModules, onSignOut, Layout = AdminLayout }) {
   const selection = parseRentalRoute(route) || { projectId: null, form: null, unitKey: null };
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -114,8 +115,8 @@ export default function RentalWorkspacePage({ route, onNavigate, onBackToModules
         <RentalProjectFormPage
           key={route}
           onSubmitForm={createWithFirstUnit}
-          onCancel={() => onNavigate('admin/rental')}
-          onSaved={({ saved, text }) => goWithNotice(`admin/rental/${saved.id}`, text)}
+          onCancel={() => onNavigate(`${divisionPrefix()}/rental`)}
+          onSaved={({ saved, text }) => goWithNotice(`${divisionPrefix()}/rental/${saved.id}`, text)}
         />
       );
     }
@@ -127,7 +128,7 @@ export default function RentalWorkspacePage({ route, onNavigate, onBackToModules
       return <BackPanel icon="🔎" title="Kontrak tidak ditemukan">Kontrak ini mungkin tidak ada atau Anda tidak punya akses.</BackPanel>;
     }
 
-    const detail = `admin/rental/${project.id}`;
+    const detail = `${divisionPrefix()}/rental/${project.id}`;
     const isFinal = ['completed', 'cancelled'].includes(project.status);
 
     if (selection.form === 'project-edit') {
@@ -199,8 +200,8 @@ export default function RentalWorkspacePage({ route, onNavigate, onBackToModules
   };
 
   return (
-    <AdminLayout active="rental" onNavigate={onNavigate} onBackToModules={onBackToModules} onSignOut={onSignOut}>
+    <Layout active="rental" onNavigate={onNavigate} onBackToModules={onBackToModules} onSignOut={onSignOut}>
       {renderContent()}
-    </AdminLayout>
+    </Layout>
   );
 }
