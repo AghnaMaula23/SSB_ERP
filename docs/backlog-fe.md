@@ -759,3 +759,90 @@ horizontal halaman maupun elemen terpotong di luar wadah gulir.
 membalas 500 `Cannot read properties of undefined (reading 'findMany')`.
 
 **Tetap mock (backend belum ada):** income, klaim pendapatan alat, kas lapangan, log aktivitas.
+## E27. Kontrak Divisi Lapangan BEKU — kas lapangan & upah pekerja (26 Okt 2026)
+
+Rencana & fase: `docs/plan-divisi-lapangan.md`. Kontrak: Swagger tag *Kas Lapangan* dan
+*Upah Pekerja*. **API belum dibangun** (fase F2/F4) — jangan buat mock/localStorage untuk
+endpoint ini; layar menunggu API + data seeder.
+
+- `fieldCashMockService.js` diganti di F3. Bentuknya berubah: bukan satu "klaim kas"
+  yang diputuskan Admin, tapi **pengajuan** (Admin → Finance, nominal perkiraan) lalu
+  **laporan realisasi + nota** (Finance validasi). Laporan boleh tanpa pengajuan dengan
+  `urgentReason` wajib — tampilkan penanda "tanpa pengajuan" di antrean Finance.
+- Kategori biaya dari `GET /field-expense-categories` (seeder), bukan daftar di kode.
+- Antrean Approval Center bertambah 4 `sourceType`: `field_operational_request`,
+  `field_expense_report`, `labor_wage_claim`, `labor_payment_proof`.
+- `GET /labor-logs` mendapat `?claimed=` dan field `claim` per log; ubah/hapus log yang
+  ada di klaim aktif → 409.
+- Menutup tahapan kini juga 409 selama urusan upah/kas belum tuntas (L7a).
+
+**Update 3 Nov 2026 — API pengajuan dana SUDAH ADA (T11)**, persis kontrak swagger:
+`GET /field-expense-categories[?activeOnly=false]`, `GET/POST /field-operational-requests`,
+`GET /:id`, `PUT /:id/cancel` (`{ reason }` wajib), `/validate`, `/approve`, `/reject`
+(`{ notes }` wajib). Seeder membuat 8 kategori + 6 pengajuan demo (satu per status, dua
+penolakan: Admin & Finance). Field tambahan opsional di response: `rejectedBy`
+(`admin`/`finance`), `itemCount` (list), `cancelledBy`/`cancelledAt`/`cancelReason` (detail).
+Yang **masih kosong sampai laporan realisasi dibangun (T12)**: `realizedAmount` selalu `0`,
+`difference` = `requestedAmount`, `reports` = `[]` — tampilkan apa adanya, jangan dihitung
+di FE. Belum ada juga: antrean Approval Center untuk pengajuan ini (T15.3) dan syarat
+penutupan tahapan (T16.3) — sampai itu, layar Admin/Finance membaca langsung
+`GET /field-operational-requests?status=submitted|waiting_finance_approval`.
+
+**Update 3 Nov 2026 — API laporan realisasi + nota SUDAH ADA (T12)**, persis kontrak:
+`GET /field-expense-reports` (filter `subProjectId`, `fieldOperationalRequestId`,
+`urgent`, `status`, `startDate`/`endDate`), `GET /:id`, `POST` multipart (`items` = string
+JSON, nota di field `receipts` 1–10 file), `PUT /:id/cancel` (`{ reason }`), `/validate`,
+`/reject` (`{ notes }` wajib) — keduanya Finance saja. Nota dibuka lewat
+`GET /files/{fileId}/url`. Folder sistem `field-expense-receipts` ("Nota Kas Lapangan")
+muncul di tiap tahapan konstruksi di halaman Files. Pengajuan kini memuat angka sungguhan:
+`realizedAmount` (laporan `validated`), `difference` (boleh negatif = realisasi melebihi
+pengajuan), `reports[]` (semua laporan, ringkas). Field tambahan opsional: `itemCount`,
+`receiptCount` (list laporan), `request.status` (detail laporan). Seeder: 3 laporan demo
+(validated merujuk pengajuan, mendesak menunggu Finance, ditolak).
+
+**Update 3 Nov 2026 — Approval Center & penutupan kas (T15.3, T16.3, T16.4).**
+`GET /approval-queue` kini memuat `field_operational_request` (tahap `admin` dan `finance`,
+aksi validate/reject lalu approve/reject) dan `field_expense_report` (tahap `finance`, aksi
+validate/reject). `amount` = total perkiraan/nota. `summary` laporan diawali
+`Mendesak · tanpa pengajuan` atau `Realisasi FOR-xxxxxx` — itulah penanda "tanpa pengajuan"
+untuk 15.5. Menutup tahapan kini 409 selama ada pengajuan dana menunggu keputusan atau
+laporan menunggu validasi (pesannya menyebut jumlah masing-masing); pengajuan `approved`
+tanpa laporan tidak menahan. Penutupan menulis arsip ke-5 `stage-field-cash` (sheet
+Pengajuan, Item Pengajuan, Laporan Realisasi, Item Laporan) di folder Arsip Penutupan.
+
+**Update 3 Nov 2026 — API klaim upah + bukti bayar SUDAH ADA (T13, T14)**, persis kontrak:
+`GET/POST /labor-wage-claims` (`{ subProjectId, periodStart, periodEnd, notes }` — log
+TIDAK dipilih FE: semua log tahapan dalam rentang yang belum di klaim aktif ikut; 0 log →
+409), `GET /:id`, `PUT /:id/cancel` (`{ reason }`), `/validate`, `/approve`, `/reject`
+(`{ notes }` wajib). `GET/POST /labor-payment-proofs` (multipart, berkas di field `proofs`
+1–10 file), `GET /:id`, `PUT /:id/cancel`, `/validate`, `/reject` (Finance). Kode
+`LWC-NNNNNN` / `LPP-NNNNNN`. Yang perlu diketahui layar:
+- `GET /labor-logs?claimed=true|false` + field `claim` (`{ id, claimCode, status }` atau
+  null) di list DAN detail log. Log dengan `claim` ≠ null: sembunyikan tombol ubah/hapus
+  (server 409). Klaim ditolak/batal → `claim` kembali null.
+- Detail klaim: `paidAmount` dan `difference` **null selama belum ada bukti `validated`**
+  (bukan 0). `difference = totalAmount − paidAmount`, negatif = dibayar melebihi klaim.
+  `payment` = bukti aktif (submitted/validated) atau null — penentu tombol "Unggah bukti"
+  (hanya kalau klaim `approved` dan `payment` null).
+- Field tambahan opsional: `rejectedBy` (`admin`/`finance`), `items[].taskNotes` (alasan
+  lembur untuk pemeriksa), `perWorker[].totalDailyWage`/`totalOvertime`, `payment` di detail,
+  `claim.status/periodStart/periodEnd/subProject` dan `fileCount` di bukti bayar.
+- Folder sistem `labor-payment-proofs` ("Bukti Bayar Upah") di tiap tahapan konstruksi.
+- Seeder: 4 klaim demo dari 5 log terakhir tahapan demo — lunas (bukti pertama ditolak,
+  kedua validated), antrean Finance, ditolak Admin, antrean Admin.
+
+**Update 3 Nov 2026 — Approval Center & penutupan upah (T15.4, T16.3, T16.4).** Backend
+Divisi Lapangan kini lengkap.
+- `GET /approval-queue` memuat `labor_wage_claim` (tahap `admin`: validate/reject; `finance`:
+  approve/reject) dan `labor_payment_proof` (`finance`: validate/reject). `amount` klaim =
+  total upah + lembur; `amount` bukti = nominal DIBAYAR. `summary` klaim
+  `Periode DD-MM-YYYY s/d DD-MM-YYYY · N orang · M hari-orang`; bukti
+  `Bayar LWC-xxxxxx · diterima <nama> · N berkas` (bagian "diterima" hanya kalau diisi).
+- **Menutup tahapan kini 409 selama upah belum tuntas** — pesan menyebut jumlah: log pekerja
+  belum masuk klaim upah; klaim upah menunggu keputusan; klaim disetujui tanpa bukti bayar
+  tervalidasi. Klaim ditolak/batal membuat lognya kembali "belum diklaim". Untuk tahapan yang
+  punya log lama, alurnya: klaim semua periode → validasi → approve → bukti → validasi.
+- Arsip `stage-labor`: sheet `Log Pekerja` mendapat kolom `Klaim upah`; sheet baru `Klaim
+  Upah` (klaim ditolak ikut, dibatalkan tidak; footer total klaim aktif) dan `Bukti Bayar`
+  (yang ditolak ikut beserta alasannya).
+

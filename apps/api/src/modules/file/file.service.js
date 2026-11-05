@@ -34,6 +34,16 @@ const OWNERS = [
     find: (fileId) => prisma.materialReceiptAttachment.findUnique({ where: { fileId }, select: { id: true } }),
   },
   {
+    prefix: 'field-expense-receipts',
+    permission: 'field-cash:read',
+    find: (fileId) => prisma.fieldExpenseReceipt.findUnique({ where: { fileId }, select: { id: true } }),
+  },
+  {
+    prefix: 'labor-payment-proofs',
+    permission: 'labor-claim:read',
+    find: (fileId) => prisma.fieldLaborWagePaymentProofFile.findUnique({ where: { fileId }, select: { id: true } }),
+  },
+  {
     prefix: 'project-files',
     permission: 'project-file:read',
     find: (fileId) => prisma.projectFile.findUnique({ where: { fileId }, select: { id: true } }),

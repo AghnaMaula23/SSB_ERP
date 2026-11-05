@@ -4,14 +4,17 @@ const { httpError } = require('../../utils/error.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { assertContextOpen } = require('../project/context-lock.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
+const {
+  activeClaimsOfLogs, assertLogUnclaimed, LOG_IN_ACTIVE_CLAIM, ACTIVE_STATUSES: ACTIVE_CLAIM_STATUSES,
+} = require('./labor-wage-claim.service.js');
 
 // ============================================================
 // LOG TENAGA KERJA HARIAN — satu tahapan, satu tanggal, satu baris = satu orang
 // (docs/skema-tenaga-kerja-harian.md P1–P10).
 //
 // Tanpa status & tanpa validasi (P1): pemeriksaan Admin → Finance terjadi di
-// klaim upah. Selama belum diklaim, log boleh diubah/dihapus; jejaknya
-// created_by + updated_by. Total TIDAK disimpan: baris = daily_wage +
+// klaim upah. Selama belum masuk klaim AKTIF, log boleh diubah/dihapus (L6);
+// jejaknya created_by + updated_by. Total TIDAK disimpan: baris = daily_wage +
 // overtime_amount (tanpa pengali, P2), header = SUM barisnya.
 //
 // Satu orang tidak boleh tercatat di dua log pada tanggal yang sama, lintas
@@ -70,12 +73,14 @@ const summariesFor = async (logIds) => {
   return new Map(rows.map((r) => [r.log_id, shapeSummary(r)]));
 };
 
-const shapeLog = (row, summary) => ({
+const shapeLog = (row, summary, claim) => ({
   id: row.id,
   subProjectId: row.subProjectId,
   workDate: toDateOnly(row.workDate),
   notes: row.notes,
   summary,
+  // Klaim AKTIF yang memuat log ini (L6) — null = belum diklaim, boleh diubah
+  claim: claim ?? null,
   createdBy: shapeActor(row.createdByUser),
   updatedBy: shapeActor(row.updatedByUser),
   createdAt: row.createdAt,
@@ -120,7 +125,8 @@ const shapeDetail = async (row) => {
     totalOvertime: round2(s.totalOvertime + i.overtimeAmount),
   }), emptySummary());
 
-  return { ...shapeLog(row, summary), items };
+  const claim = (await activeClaimsOfLogs([row.id])).get(row.id);
+  return { ...shapeLog(row, summary, claim), items };
 };
 
 const findOrFail = async (id, client = prisma) => {
@@ -133,7 +139,7 @@ const findOrFail = async (id, client = prisma) => {
 // READ
 // ------------------------------------------------------------
 
-const list = async ({ page = 1, limit = 20, subProjectId, startDate, endDate, projectWorkerId }) => {
+const list = async ({ page = 1, limit = 20, subProjectId, startDate, endDate, projectWorkerId, claimed }) => {
   const stage = await prisma.subProject.findUnique({ where: { id: subProjectId }, select: { id: true } });
   if (!stage) throw httpError(`Tahapan dengan ID ${subProjectId} tidak ditemukan`, 404);
 
@@ -143,13 +149,18 @@ const list = async ({ page = 1, limit = 20, subProjectId, startDate, endDate, pr
       ...(startDate && { gte: new Date(startDate) }),
       ...(endDate && { lte: new Date(endDate) }),
     } }),
-    ...(projectWorkerId && { items: { some: { projectWorkerId } } }),
+    AND: [
+      ...(projectWorkerId ? [{ items: { some: { projectWorkerId } } }] : []),
+      ...(claimed === true ? [LOG_IN_ACTIVE_CLAIM] : []),
+      ...(claimed === false ? [{ NOT: LOG_IN_ACTIVE_CLAIM }] : []),
+    ],
   };
   const [rows, total] = await Promise.all([
     prisma.dailyLaborLog.findMany({ where, include: LOG_INCLUDE, orderBy: { workDate: 'desc' }, skip: (page - 1) * limit, take: limit }),
     prisma.dailyLaborLog.count({ where }),
   ]);
-  const summaries = await summariesFor(rows.map((r) => r.id));
+  const ids = rows.map((r) => r.id);
+  const [summaries, claims] = await Promise.all([summariesFor(ids), activeClaimsOfLogs(ids)]);
 
   // Ringkasan atas SEMUA log yang cocok filter, bukan hanya halaman ini
   const [period] = await prisma.$queryRaw`
@@ -160,10 +171,15 @@ const list = async ({ page = 1, limit = 20, subProjectId, startDate, endDate, pr
       AND (${startDate ?? null}::date IS NULL OR l.work_date >= ${startDate ?? null}::date)
       AND (${endDate ?? null}::date IS NULL OR l.work_date <= ${endDate ?? null}::date)
       AND (${projectWorkerId ?? null}::int IS NULL OR EXISTS (
-        SELECT 1 FROM daily_labor_log_items x WHERE x.daily_labor_log_id = l.id AND x.project_worker_id = ${projectWorkerId ?? null}::int))`;
+        SELECT 1 FROM daily_labor_log_items x WHERE x.daily_labor_log_id = l.id AND x.project_worker_id = ${projectWorkerId ?? null}::int))
+      AND (${claimed ?? null}::boolean IS NULL OR ${claimed ?? null}::boolean = EXISTS (
+        SELECT 1 FROM daily_labor_log_items x
+        JOIN field_labor_wage_claim_items ci ON ci.daily_labor_log_item_id = x.id
+        JOIN field_labor_wage_claims c ON c.id = ci.field_labor_wage_claim_id
+        WHERE x.daily_labor_log_id = l.id AND c.status::text = ANY(${ACTIVE_CLAIM_STATUSES})))`;
 
   return {
-    data: rows.map((r) => shapeLog(r, summaries.get(r.id) ?? emptySummary())),
+    data: rows.map((r) => shapeLog(r, summaries.get(r.id) ?? emptySummary(), claims.get(r.id))),
     total, page, limit,
     summary: {
       logs: period.logs,
@@ -269,6 +285,7 @@ const update = async (id, payload, userId) => {
 
   const row = await prisma.$transaction(async (tx) => {
     await assertContextOpen(tx, { subProjectId: existing.subProjectId });
+    await assertLogUnclaimed(tx, id);
     const data = { updatedBy: userId };
     if (payload.notes !== undefined) data.notes = payload.notes?.trim() || null;
     await tx.dailyLaborLog.update({ where: { id }, data });
@@ -296,7 +313,9 @@ const remove = async (id) => {
   const row = await findOrFail(id);
   await prisma.$transaction(async (tx) => {
     await assertContextOpen(tx, { subProjectId: row.subProjectId });
-    await tx.dailyLaborLog.delete({ where: { id } }); // items ikut terhapus (CASCADE)
+    await assertLogUnclaimed(tx, id);
+    // Items ikut terhapus (CASCADE); snapshot klaim yang sudah ditolak/batal tetap, rujukannya jadi NULL
+    await tx.dailyLaborLog.delete({ where: { id } });
   });
   return { id };
 };

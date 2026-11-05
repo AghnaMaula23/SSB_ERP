@@ -71,6 +71,20 @@ model User {
   workerAssignmentsCreated        SubProjectWorkerAssignment[] @relation("WorkerAssignmentCreatedBy")
   laborLogsCreated                DailyLaborLog[]              @relation("LaborLogCreatedBy")
   laborLogsUpdated                DailyLaborLog[]              @relation("LaborLogUpdatedBy")
+  fieldRequestsCreated            FieldOperationalRequest[]    @relation("FieldRequestRequestedBy")
+  fieldRequestsAdminValidated     FieldOperationalRequest[]    @relation("FieldRequestAdminValidatedBy")
+  fieldRequestsFinanceReviewed    FieldOperationalRequest[]    @relation("FieldRequestFinanceReviewedBy")
+  fieldRequestsCancelled          FieldOperationalRequest[]    @relation("FieldRequestCancelledBy")
+  fieldReportsSubmitted           FieldExpenseReport[]         @relation("FieldReportSubmittedBy")
+  fieldReportsValidated           FieldExpenseReport[]         @relation("FieldReportValidatedBy")
+  fieldReportsCancelled           FieldExpenseReport[]         @relation("FieldReportCancelledBy")
+  wageClaimsRequested             FieldLaborWageClaim[]        @relation("WageClaimRequestedBy")
+  wageClaimsAdminValidated        FieldLaborWageClaim[]        @relation("WageClaimAdminValidatedBy")
+  wageClaimsFinanceReviewed       FieldLaborWageClaim[]        @relation("WageClaimFinanceReviewedBy")
+  wageClaimsCancelled             FieldLaborWageClaim[]        @relation("WageClaimCancelledBy")
+  wageProofsSubmitted             FieldLaborWagePaymentProof[] @relation("WageProofSubmittedBy")
+  wageProofsValidated             FieldLaborWagePaymentProof[] @relation("WageProofValidatedBy")
+  wageProofsCancelled             FieldLaborWagePaymentProof[] @relation("WageProofCancelledBy")
 
   @@map("users")
 }
@@ -1031,6 +1045,9 @@ model SubProject {
   stockMovements       MaterialStockMovement[]
   workerAssignments    SubProjectWorkerAssignment[]
   laborLogs            DailyLaborLog[]
+  fieldRequests        FieldOperationalRequest[]
+  fieldReports         FieldExpenseReport[]
+  laborWageClaims      FieldLaborWageClaim[]
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
@@ -1592,14 +1609,16 @@ model File {
   trashedBy    Int?       @map("trashed_by")
   trashedAt    DateTime?  @map("trashed_at")
 
-  replacedBy     File?                      @relation("FileReplacedBy", fields: [replacedById], references: [id], onDelete: Restrict)
-  replaces       File?                      @relation("FileReplacedBy")
-  uploadedByUser User                       @relation("FileUploadedBy", fields: [uploadedBy], references: [id])
-  trashedByUser  User?                      @relation("FileTrashedBy", fields: [trashedBy], references: [id])
+  replacedBy     File?                           @relation("FileReplacedBy", fields: [replacedById], references: [id], onDelete: Restrict)
+  replaces       File?                           @relation("FileReplacedBy")
+  uploadedByUser User                            @relation("FileUploadedBy", fields: [uploadedBy], references: [id])
+  trashedByUser  User?                           @relation("FileTrashedBy", fields: [trashedBy], references: [id])
   deliveryNoteOf MaterialDelivery?
   receiptProofOf MaterialReceiptAttachment?
   projectFile    ProjectFile?
   closingArchive ProjectClosingArchive?
+  fieldReceiptOf FieldExpenseReceipt?
+  laborProofOf   FieldLaborWagePaymentProofFile?
 
   @@index([status, trashedAt])
   @@map("files")
@@ -1869,9 +1888,10 @@ model ProjectWorker {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  createdByUser User                         @relation("WorkerCreatedBy", fields: [createdBy], references: [id])
-  assignments   SubProjectWorkerAssignment[]
-  laborLogItems DailyLaborLogItem[]
+  createdByUser  User                         @relation("WorkerCreatedBy", fields: [createdBy], references: [id])
+  assignments    SubProjectWorkerAssignment[]
+  laborLogItems  DailyLaborLogItem[]
+  wageClaimItems FieldLaborWageClaimItem[]
 
   @@index([fullName])
   @@map("project_workers")
@@ -1940,10 +1960,354 @@ model DailyLaborLogItem {
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
-  dailyLaborLog DailyLaborLog @relation(fields: [dailyLaborLogId], references: [id], onDelete: Cascade)
-  projectWorker ProjectWorker @relation(fields: [projectWorkerId], references: [id], onDelete: Restrict)
+  dailyLaborLog  DailyLaborLog             @relation(fields: [dailyLaborLogId], references: [id], onDelete: Cascade)
+  projectWorker  ProjectWorker             @relation(fields: [projectWorkerId], references: [id], onDelete: Restrict)
+  wageClaimItems FieldLaborWageClaimItem[]
 
   @@unique([dailyLaborLogId, projectWorkerId])
   @@index([projectWorkerId])
   @@map("daily_labor_log_items")
+}
+
+// ============================================================
+// KAS LAPANGAN — pengajuan dana operasional (T11) + laporan realisasi & nota (T12).
+// docs/plan-divisi-lapangan.md L1–L4.
+// ============================================================
+
+/// Kategori biaya lapangan. Diisi SEEDER saja, tanpa endpoint kelola (L3).
+/// Tidak pernah dihapus — kategori yang tidak dipakai lagi dinonaktifkan, supaya
+/// dokumen lama tetap terbaca.
+model FieldExpenseCategory {
+  id           Int      @id @default(autoincrement())
+  categoryCode String   @unique @map("category_code") @db.VarChar(30)
+  categoryName String   @unique @map("category_name") @db.VarChar(100)
+  description  String?  @db.Text
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  requestItems FieldOperationalRequestItem[]
+  reportItems  FieldExpenseReportItem[]
+
+  @@map("field_expense_categories")
+}
+
+/// 5 nilai, pola request material (R1): `waiting_admin_validation` ERD dinamai
+/// `submitted`; penolakan Admin/Finance disatukan jadi `rejected` — siapa yang
+/// menolak terbaca dari kolom keputusan yang terisi.
+enum FieldOperationalRequestStatus {
+  submitted
+  waiting_finance_approval
+  approved
+  rejected
+  cancelled
+
+  @@map("field_operational_request_status")
+}
+
+/// Izin belanja lapangan (L1). Nominal = PERKIRAAN (L2): `approved` tidak membuat
+/// jurnal, pencairan terjadi di luar sistem. Total TIDAK disimpan (ERD
+/// total_requested_amount dibuang) — dihitung dari item saat dibaca.
+/// Tanpa tabel status log (ERD field_operational_request_status_logs): alur
+/// linear, kolom aktor di header memuat seluruh riwayat.
+model FieldOperationalRequest {
+  id           Int                           @id @default(autoincrement())
+  requestCode  String                        @unique @map("request_code") @db.VarChar(50)
+  subProjectId Int                           @map("sub_project_id")
+  requestDate  DateTime                      @map("request_date") @db.Date
+  neededDate   DateTime?                     @map("needed_date") @db.Date
+  notes        String?                       @db.Text
+  status       FieldOperationalRequestStatus @default(submitted)
+
+  requestedBy       Int       @map("requested_by")
+  adminValidatedBy  Int?      @map("admin_validated_by")
+  adminValidatedAt  DateTime? @map("admin_validated_at")
+  adminNotes        String?   @map("admin_notes") @db.Text
+  financeReviewedBy Int?      @map("finance_reviewed_by")
+  financeReviewedAt DateTime? @map("finance_reviewed_at")
+  financeNotes      String?   @map("finance_notes") @db.Text
+  cancelledBy       Int?      @map("cancelled_by")
+  cancelledAt       DateTime? @map("cancelled_at")
+  cancelReason      String?   @map("cancel_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subProject            SubProject                    @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
+  requestedByUser       User                          @relation("FieldRequestRequestedBy", fields: [requestedBy], references: [id])
+  adminValidatedByUser  User?                         @relation("FieldRequestAdminValidatedBy", fields: [adminValidatedBy], references: [id], onDelete: Restrict)
+  financeReviewedByUser User?                         @relation("FieldRequestFinanceReviewedBy", fields: [financeReviewedBy], references: [id], onDelete: Restrict)
+  cancelledByUser       User?                         @relation("FieldRequestCancelledBy", fields: [cancelledBy], references: [id], onDelete: Restrict)
+  items                 FieldOperationalRequestItem[]
+  reports               FieldExpenseReport[]
+
+  @@index([subProjectId, status])
+  @@index([requestedBy, requestDate])
+  @@map("field_operational_requests")
+}
+
+/// Baris pengajuan. Jumlah per baris = quantity × estimated_unit_price, dihitung
+/// saat dibaca (ERD requested_amount dibuang). Tanpa approved_amount: Finance
+/// tidak mengubah nominal.
+model FieldOperationalRequestItem {
+  id                        Int      @id @default(autoincrement())
+  fieldOperationalRequestId Int      @map("field_operational_request_id")
+  fieldExpenseCategoryId    Int      @map("field_expense_category_id")
+  itemName                  String   @map("item_name") @db.VarChar(150)
+  quantity                  Decimal  @db.Decimal(18, 2)
+  unit                      String   @db.VarChar(30)
+  estimatedUnitPrice        Decimal  @map("estimated_unit_price") @db.Decimal(18, 2)
+  notes                     String?  @db.Text
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  request     FieldOperationalRequest  @relation(fields: [fieldOperationalRequestId], references: [id], onDelete: Cascade)
+  category    FieldExpenseCategory     @relation(fields: [fieldExpenseCategoryId], references: [id], onDelete: Restrict)
+  reportItems FieldExpenseReportItem[]
+
+  @@index([fieldOperationalRequestId])
+  @@index([fieldExpenseCategoryId])
+  @@map("field_operational_request_items")
+}
+
+/// Laporan realisasi: `validated` = sumber jurnal Beban Operasional Lapangan (GL,
+/// belum dibangun). Ditolak/dibatalkan = final; koreksi = lapor ulang.
+enum FieldExpenseReportStatus {
+  submitted
+  validated
+  rejected
+  cancelled
+
+  @@map("field_expense_report_status")
+}
+
+/// Laporan realisasi + nota (L1, L4). Dua bentuk: merujuk pengajuan `approved`
+/// tahapan yang sama (satu pengajuan boleh beberapa laporan), atau MENDESAK tanpa
+/// pengajuan dengan `urgent_reason` wajib — dijaga CHECK. Harga = harga nota,
+/// boleh melebihi pengajuan (L2). Total tidak disimpan (ERD total_spent_amount).
+/// `validated_by/at` + `finance_notes` = keputusan Finance, termasuk penolakan
+/// (satu-satunya pemutus laporan). corrected_by_correction_id ERD menunggu GL.
+model FieldExpenseReport {
+  id                        Int                      @id @default(autoincrement())
+  reportCode                String                   @unique @map("report_code") @db.VarChar(50)
+  fieldOperationalRequestId Int?                     @map("field_operational_request_id")
+  subProjectId              Int                      @map("sub_project_id")
+  reportDate                DateTime                 @map("report_date") @db.Date
+  urgentReason              String?                  @map("urgent_reason") @db.Text
+  notes                     String?                  @db.Text
+  status                    FieldExpenseReportStatus @default(submitted)
+
+  submittedBy  Int       @map("submitted_by")
+  validatedBy  Int?      @map("validated_by")
+  validatedAt  DateTime? @map("validated_at")
+  financeNotes String?   @map("finance_notes") @db.Text
+  cancelledBy  Int?      @map("cancelled_by")
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?   @map("cancel_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  request         FieldOperationalRequest? @relation(fields: [fieldOperationalRequestId], references: [id], onDelete: Restrict)
+  subProject      SubProject               @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
+  submittedByUser User                     @relation("FieldReportSubmittedBy", fields: [submittedBy], references: [id])
+  validatedByUser User?                    @relation("FieldReportValidatedBy", fields: [validatedBy], references: [id], onDelete: Restrict)
+  cancelledByUser User?                    @relation("FieldReportCancelledBy", fields: [cancelledBy], references: [id], onDelete: Restrict)
+  items           FieldExpenseReportItem[]
+  receipts        FieldExpenseReceipt[]
+
+  @@index([subProjectId, reportDate])
+  @@index([fieldOperationalRequestId])
+  @@index([status])
+  @@map("field_expense_reports")
+}
+
+/// Baris realisasi. total = quantity × unit_price, dihitung saat dibaca.
+/// `field_operational_request_item_id` (opsional) wajib milik pengajuan yang
+/// dirujuk header — dijaga service saat lapor (header tidak bisa diubah).
+model FieldExpenseReportItem {
+  id                            Int      @id @default(autoincrement())
+  fieldExpenseReportId          Int      @map("field_expense_report_id")
+  fieldOperationalRequestItemId Int?     @map("field_operational_request_item_id")
+  fieldExpenseCategoryId        Int      @map("field_expense_category_id")
+  expenseDate                   DateTime @map("expense_date") @db.Date
+  itemName                      String   @map("item_name") @db.VarChar(150)
+  quantity                      Decimal  @db.Decimal(18, 2)
+  unit                          String   @db.VarChar(30)
+  unitPrice                     Decimal  @map("unit_price") @db.Decimal(18, 2)
+  vendorName                    String?  @map("vendor_name") @db.VarChar(150)
+  notes                         String?  @db.Text
+  createdAt                     DateTime @default(now()) @map("created_at")
+  updatedAt                     DateTime @updatedAt @map("updated_at")
+
+  report      FieldExpenseReport           @relation(fields: [fieldExpenseReportId], references: [id], onDelete: Cascade)
+  requestItem FieldOperationalRequestItem? @relation(fields: [fieldOperationalRequestItemId], references: [id], onDelete: Restrict)
+  category    FieldExpenseCategory         @relation(fields: [fieldExpenseCategoryId], references: [id], onDelete: Restrict)
+
+  @@index([fieldExpenseReportId])
+  @@index([fieldOperationalRequestItemId])
+  @@index([fieldExpenseCategoryId])
+  @@map("field_expense_report_items")
+}
+
+/// Nota per laporan (L4), minimal 1 — lewat `files` + storage.service, pola
+/// material_receipt_attachments. Nota per baris (ERD) tidak dibuat.
+model FieldExpenseReceipt {
+  id                   Int      @id @default(autoincrement())
+  fieldExpenseReportId Int      @map("field_expense_report_id")
+  fileId               Int      @unique @map("file_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  report FieldExpenseReport @relation(fields: [fieldExpenseReportId], references: [id], onDelete: Restrict)
+  file   File               @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([fieldExpenseReportId])
+  @@map("field_expense_receipts")
+}
+
+// ============================================================
+// UPAH PEKERJA — klaim upah per periode (T13) + bukti bayar (T14).
+// docs/claude_knowledge/plan-divisi-lapangan.md L5–L8.
+// ============================================================
+
+/// 5 nilai, pola request material & pengajuan dana. Siapa yang menolak terbaca
+/// dari kolom keputusan yang terisi.
+enum LaborWageClaimStatus {
+  submitted
+  waiting_finance_approval
+  approved
+  rejected
+  cancelled
+
+  @@map("labor_wage_claim_status")
+}
+
+/// Klaim upah satu tahapan satu periode (L5): semua log dalam rentang yang belum
+/// ada di klaim aktif ikut UTUH. Klaim aktif = submitted/waiting/approved; log di
+/// dalamnya terkunci (L6). `approved` tidak membuat jurnal — sumber jurnal adalah
+/// bukti bayar `validated`. Total tidak disimpan.
+model FieldLaborWageClaim {
+  id           Int                  @id @default(autoincrement())
+  claimCode    String               @unique @map("claim_code") @db.VarChar(50)
+  subProjectId Int                  @map("sub_project_id")
+  periodStart  DateTime             @map("period_start") @db.Date
+  periodEnd    DateTime             @map("period_end") @db.Date
+  notes        String?              @db.Text
+  status       LaborWageClaimStatus @default(submitted)
+
+  requestedBy       Int       @map("requested_by")
+  adminValidatedBy  Int?      @map("admin_validated_by")
+  adminValidatedAt  DateTime? @map("admin_validated_at")
+  adminNotes        String?   @map("admin_notes") @db.Text
+  financeReviewedBy Int?      @map("finance_reviewed_by")
+  financeReviewedAt DateTime? @map("finance_reviewed_at")
+  financeNotes      String?   @map("finance_notes") @db.Text
+  cancelledBy       Int?      @map("cancelled_by")
+  cancelledAt       DateTime? @map("cancelled_at")
+  cancelReason      String?   @map("cancel_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subProject            SubProject                   @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
+  requestedByUser       User                         @relation("WageClaimRequestedBy", fields: [requestedBy], references: [id])
+  adminValidatedByUser  User?                        @relation("WageClaimAdminValidatedBy", fields: [adminValidatedBy], references: [id], onDelete: Restrict)
+  financeReviewedByUser User?                        @relation("WageClaimFinanceReviewedBy", fields: [financeReviewedBy], references: [id], onDelete: Restrict)
+  cancelledByUser       User?                        @relation("WageClaimCancelledBy", fields: [cancelledBy], references: [id], onDelete: Restrict)
+  items                 FieldLaborWageClaimItem[]
+  paymentProofs         FieldLaborWagePaymentProof[]
+
+  @@index([subProjectId, status])
+  @@index([requestedBy])
+  @@map("field_labor_wage_claims")
+}
+
+/// SNAPSHOT satu baris log (L6): nama, kode, peran, jenis, upah, lembur disalin
+/// supaya perubahan master/log tidak mengubah klaim. `daily_labor_log_item_id`
+/// menunjuk asalnya; jadi NULL kalau baris log dihapus — itu hanya mungkin
+/// setelah klaim ditolak/batal, karena log di klaim aktif terkunci.
+/// total = daily_wage + overtime_amount (P2), tidak disimpan.
+model FieldLaborWageClaimItem {
+  id                    Int        @id @default(autoincrement())
+  fieldLaborWageClaimId Int        @map("field_labor_wage_claim_id")
+  dailyLaborLogItemId   Int?       @map("daily_labor_log_item_id")
+  projectWorkerId       Int        @map("project_worker_id")
+  workDate              DateTime   @map("work_date") @db.Date
+  workerCode            String     @map("worker_code") @db.VarChar(20)
+  workerName            String     @map("worker_name") @db.VarChar(150)
+  workerRole            String     @map("worker_role") @db.VarChar(100)
+  workerType            WorkerType @map("worker_type")
+  dailyWage             Decimal    @map("daily_wage") @db.Decimal(18, 2)
+  overtimeAmount        Decimal    @map("overtime_amount") @db.Decimal(18, 2)
+  taskNotes             String?    @map("task_notes") @db.Text
+  createdAt             DateTime   @default(now()) @map("created_at")
+
+  claim         FieldLaborWageClaim @relation(fields: [fieldLaborWageClaimId], references: [id], onDelete: Cascade)
+  logItem       DailyLaborLogItem?  @relation(fields: [dailyLaborLogItemId], references: [id], onDelete: SetNull)
+  projectWorker ProjectWorker       @relation(fields: [projectWorkerId], references: [id], onDelete: Restrict)
+
+  @@unique([fieldLaborWageClaimId, dailyLaborLogItemId])
+  @@index([dailyLaborLogItemId])
+  @@index([projectWorkerId])
+  @@map("field_labor_wage_claim_items")
+}
+
+/// `validated` = klaim LUNAS dan sumber jurnal Beban Upah Harian Project (GL,
+/// belum dibangun). Ditolak/dibatalkan = final; unggah bukti baru.
+enum LaborPaymentProofStatus {
+  submitted
+  validated
+  rejected
+  cancelled
+
+  @@map("labor_payment_proof_status")
+}
+
+/// Bukti bayar upah (L8): Lapangan membayar di luar sistem lalu mengunggah bukti.
+/// `paid_amount` boleh beda dari total klaim — selisih ditampilkan. Satu bukti
+/// AKTIF (submitted/validated) per klaim — partial unique index di migrasi.
+model FieldLaborWagePaymentProof {
+  id                    Int                     @id @default(autoincrement())
+  proofCode             String                  @unique @map("proof_code") @db.VarChar(50)
+  fieldLaborWageClaimId Int                     @map("field_labor_wage_claim_id")
+  paymentDate           DateTime                @map("payment_date") @db.Date
+  paidAmount            Decimal                 @map("paid_amount") @db.Decimal(18, 2)
+  receiverName          String?                 @map("receiver_name") @db.VarChar(150)
+  notes                 String?                 @db.Text
+  status                LaborPaymentProofStatus @default(submitted)
+
+  submittedBy  Int       @map("submitted_by")
+  validatedBy  Int?      @map("validated_by")
+  validatedAt  DateTime? @map("validated_at")
+  financeNotes String?   @map("finance_notes") @db.Text
+  cancelledBy  Int?      @map("cancelled_by")
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?   @map("cancel_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  claim           FieldLaborWageClaim              @relation(fields: [fieldLaborWageClaimId], references: [id], onDelete: Restrict)
+  submittedByUser User                             @relation("WageProofSubmittedBy", fields: [submittedBy], references: [id])
+  validatedByUser User?                            @relation("WageProofValidatedBy", fields: [validatedBy], references: [id], onDelete: Restrict)
+  cancelledByUser User?                            @relation("WageProofCancelledBy", fields: [cancelledBy], references: [id], onDelete: Restrict)
+  files           FieldLaborWagePaymentProofFile[]
+
+  @@index([fieldLaborWageClaimId])
+  @@index([status])
+  @@map("field_labor_wage_payment_proofs")
+}
+
+/// Berkas bukti bayar, 1–10 per bukti — lewat `files` + storage.service.
+model FieldLaborWagePaymentProofFile {
+  id                           Int      @id @default(autoincrement())
+  fieldLaborWagePaymentProofId Int      @map("field_labor_wage_payment_proof_id")
+  fileId                       Int      @unique @map("file_id")
+  createdAt                    DateTime @default(now()) @map("created_at")
+
+  proof FieldLaborWagePaymentProof @relation(fields: [fieldLaborWagePaymentProofId], references: [id], onDelete: Restrict)
+  file  File                       @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([fieldLaborWagePaymentProofId])
+  @@map("field_labor_wage_payment_proof_files")
 }

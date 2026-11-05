@@ -4,6 +4,7 @@ const { claimTransition } = require('../../utils/status-transition.js');
 const { CLOSED_STATUSES, lockForClosing, assertNothingOpen } = require('./context-lock.js');
 const closingArchive = require('../project-file/closing-archive.service.js');
 const workerAssignments = require('../labor/worker-assignment.service.js');
+const wageClaims = require('../labor/labor-wage-claim.service.js');
 const { toNumber, toDateOnly, coerceDates, pickWritable, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 
 // Urutan tahapan baku. Dipakai sebagai sequenceOrder default dan sebagai acuan
@@ -360,11 +361,16 @@ const assertNoOtherActiveStage = async (tx, subProject) => {
  * jalan: alat yang masih teralokasi menggantung, progress/request yang menunggu
  * keputusan tidak akan pernah bisa diputuskan, material di jalan tidak pernah
  * bisa diterima. Dihitung SETELAH baris tahapan dikunci (lockForClosing).
+ *
+ * Urusan uang lapangan ikut (L7a, docs/plan-divisi-lapangan.md): pengajuan dana
+ * dan laporan realisasi yang menunggu keputusan. Pengajuan `approved` yang tidak
+ * pernah dilaporkan TIDAK menahan — ia tercatat di arsip stage-field-cash.
  */
 const assertStageClosable = async (tx, row) => {
   await lockForClosing(tx, 'subProjectId', row.id);
   const subProjectId = row.id;
-  const [allocations, progress, materialRequests, equipmentRequests, undelivered] = await Promise.all([
+  const [allocations, progress, materialRequests, equipmentRequests, undelivered, fieldRequests, fieldReports,
+    unclaimedLogs, pendingClaims, unpaidClaims] = await Promise.all([
     tx.subProjectEquipmentAllocation.count({ where: { subProjectId, status: 'assigned' } }),
     tx.dailyProgressLog.count({ where: { subProjectId, status: 'submitted' } }),
     tx.materialRequest.count({ where: { subProjectId, status: { in: ['submitted', 'waiting_finance_approval'] } } }),
@@ -372,6 +378,12 @@ const assertStageClosable = async (tx, row) => {
     tx.materialDelivery.count({
       where: { cancelledAt: null, materialRequest: { subProjectId }, receipts: { none: { cancelledAt: null } } },
     }),
+    tx.fieldOperationalRequest.count({ where: { subProjectId, status: { in: ['submitted', 'waiting_finance_approval'] } } }),
+    tx.fieldExpenseReport.count({ where: { subProjectId, status: 'submitted' } }),
+    // L7a: upah tuntas = setiap log ada di klaim aktif, dan setiap klaim aktif lunas
+    tx.dailyLaborLog.count({ where: { subProjectId, NOT: wageClaims.LOG_IN_ACTIVE_CLAIM } }),
+    tx.fieldLaborWageClaim.count({ where: { subProjectId, status: { in: ['submitted', 'waiting_finance_approval'] } } }),
+    tx.fieldLaborWageClaim.count({ where: { subProjectId, status: 'approved', paymentProofs: { none: { status: 'validated' } } } }),
   ]);
   assertNothingOpen(`Tahapan ${row.subProjectType}`, [
     [allocations, 'alat masih teralokasi'],
@@ -379,6 +391,11 @@ const assertStageClosable = async (tx, row) => {
     [materialRequests, 'request material menunggu keputusan'],
     [equipmentRequests, 'request alat menunggu keputusan'],
     [undelivered, 'surat jalan belum diterima'],
+    [fieldRequests, 'pengajuan dana lapangan menunggu keputusan'],
+    [fieldReports, 'laporan realisasi kas lapangan menunggu validasi'],
+    [unclaimedLogs, 'log pekerja belum masuk klaim upah'],
+    [pendingClaims, 'klaim upah menunggu keputusan'],
+    [unpaidClaims, 'klaim upah disetujui tanpa bukti bayar tervalidasi'],
   ]);
 };
 
