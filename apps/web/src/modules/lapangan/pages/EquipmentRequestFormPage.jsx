@@ -1,21 +1,24 @@
 import { useState } from 'react';
 import FormPage, { Field, FormError, InfoCard } from '../../admin/project/components/FormPage.jsx';
+import { EmptyPanel, LoadingPanel } from '../../admin/project/components/ProjectUi.jsx';
 import { todayIso } from '../../admin/project/utils/projectFormat.js';
 import { StageSelect } from '../components/FieldUi.jsx';
 import { useActiveStages, useRecord } from '../hooks/useFieldData.js';
-import { createEquipmentRequest, listEquipmentTypes } from '../services/fieldService.js';
+import { createEquipmentRequest, getEquipmentRequest, listEquipmentTypes, updateEquipmentRequest } from '../services/fieldService.js';
+import { stageLabel } from '../utils/fieldFormat.js';
 
 const newRow = () => ({ key: crypto.randomUUID(), equipmentTypeId: '', requestedQuantity: '1', estimatedWorkhours: '', itemNotes: '' });
+const fromItem = (item) => ({ key: crypto.randomUUID(), equipmentTypeId: String(item.equipmentTypeId), requestedQuantity: String(item.requestedQuantity), estimatedWorkhours: item.estimatedWorkhours ?? '', itemNotes: item.itemNotes || '' });
 
 /** Pengajuan menyebut jenis alat saja: memilih unit fisik wewenang Divisi Alat. */
-export default function EquipmentRequestFormPage({ onCancel, onSaved }) {
+function EquipmentRequestForm({ initial, onCancel, onSaved }) {
   const { stages, error: stageError } = useActiveStages();
   const { data: types, error: typeError } = useRecord(listEquipmentTypes, 'types');
   const [subProjectId, setSubProjectId] = useState('');
-  const [neededDate, setNeededDate] = useState('');
-  const [locationDetail, setLocationDetail] = useState('');
-  const [requestNotes, setRequestNotes] = useState('');
-  const [rows, setRows] = useState([newRow()]);
+  const [neededDate, setNeededDate] = useState(initial?.neededDate || '');
+  const [locationDetail, setLocationDetail] = useState(initial?.locationDetail || '');
+  const [requestNotes, setRequestNotes] = useState(initial?.requestNotes || '');
+  const [rows, setRows] = useState(() => (initial ? initial.items.map(fromItem) : [newRow()]));
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -26,7 +29,7 @@ export default function EquipmentRequestFormPage({ onCancel, onSaved }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
     const next = {};
-    if (!subProjectId) next.subProjectId = 'Pilih tahapan.';
+    if (!initial && !subProjectId) next.subProjectId = 'Pilih tahapan.';
     if (rows.some((row) => !row.equipmentTypeId || !(Number(row.requestedQuantity) >= 1 && Number(row.requestedQuantity) <= 100))) next.items = 'Setiap baris wajib punya jenis alat dan jumlah 1–100.';
     setErrors(next);
     if (Object.keys(next).length) return;
@@ -34,19 +37,21 @@ export default function EquipmentRequestFormPage({ onCancel, onSaved }) {
     setBusy(true);
     setFormError('');
     try {
-      onSaved(await createEquipmentRequest({
-        subProjectId: Number(subProjectId),
-        requestDate: todayIso(),
-        ...(neededDate && { neededDate }),
-        ...(locationDetail.trim() && { locationDetail: locationDetail.trim() }),
-        ...(requestNotes.trim() && { requestNotes: requestNotes.trim() }),
-        items: rows.map((row) => ({
-          equipmentTypeId: Number(row.equipmentTypeId),
-          requestedQuantity: Number(row.requestedQuantity),
-          ...(row.estimatedWorkhours !== '' && { estimatedWorkhours: Number(row.estimatedWorkhours) }),
-          ...(row.itemNotes.trim() && { itemNotes: row.itemNotes.trim() }),
-        })),
+      const items = rows.map((row) => ({
+        equipmentTypeId: Number(row.equipmentTypeId),
+        requestedQuantity: Number(row.requestedQuantity),
+        ...(row.estimatedWorkhours !== '' && { estimatedWorkhours: Number(row.estimatedWorkhours) }),
+        ...(row.itemNotes.trim() && { itemNotes: row.itemNotes.trim() }),
       }));
+      const fields = {
+        neededDate: neededDate || null,
+        locationDetail: locationDetail.trim() || null,
+        requestNotes: requestNotes.trim() || null,
+        items,
+      };
+      onSaved(initial
+        ? await updateEquipmentRequest(initial.id, { requestDate: initial.requestDate, ...fields })
+        : await createEquipmentRequest({ subProjectId: Number(subProjectId), requestDate: todayIso(), ...fields }));
     } catch (error) {
       setFormError(error.message);
       setBusy(false);
@@ -55,14 +60,14 @@ export default function EquipmentRequestFormPage({ onCancel, onSaved }) {
 
   return (
     <FormPage
-      breadcrumb={[{ label: 'Request Alat', href: '#/lapangan/alat' }, { label: 'Ajukan' }]}
+      breadcrumb={[{ label: 'Request Alat', href: '#/lapangan/alat' }, { label: initial ? initial.requestCode : 'Ajukan' }]}
       icon="🚜"
-      title="Ajukan Request Alat"
+      title={initial ? `Ubah ${initial.requestCode}` : 'Ajukan Request Alat'}
       subtitle="Hanya untuk tahapan yang sedang aktif."
       busy={busy}
       onCancel={onCancel}
       onSubmit={handleSubmit}
-      submitLabel="Kirim ke Admin"
+      submitLabel={initial ? 'Simpan Perubahan' : 'Kirim ke Admin'}
       aside={(
         <InfoCard title="Alur">
           <p>Admin meneruskan ke Divisi Alat, lalu Divisi Alat memutuskan jumlah yang dipenuhi.</p>
@@ -72,7 +77,9 @@ export default function EquipmentRequestFormPage({ onCancel, onSaved }) {
     >
       <FormError>{formError || stageError || typeError}</FormError>
       <Field label="Tahapan" htmlFor="subProjectId" required error={errors.subProjectId}>
-        <StageSelect stages={stages} value={subProjectId} onChange={setSubProjectId} />
+        {initial
+          ? <input id="subProjectId" disabled value={stageLabel(initial.subProject)} className="input-control text-sm disabled:bg-slate-100" />
+          : <StageSelect stages={stages} value={subProjectId} onChange={setSubProjectId} />}
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Dibutuhkan Tanggal" htmlFor="neededDate">
@@ -106,4 +113,12 @@ export default function EquipmentRequestFormPage({ onCancel, onSaved }) {
       </Field>
     </FormPage>
   );
+}
+
+/** Tanpa `recordId` = pengajuan baru; dengan `recordId` = ubah pengajuan yang ada. */
+export default function EquipmentRequestFormPage({ recordId, onCancel, onSaved }) {
+  const { data, error } = useRecord(() => (recordId ? getEquipmentRequest(recordId) : Promise.resolve(null)), recordId || 'new');
+  if (recordId && error) return <EmptyPanel icon="🔎" title="Request alat tidak ditemukan">{error}</EmptyPanel>;
+  if (recordId && !data) return <LoadingPanel>Memuat request...</LoadingPanel>;
+  return <EquipmentRequestForm initial={data} onCancel={onCancel} onSaved={onSaved} />;
 }

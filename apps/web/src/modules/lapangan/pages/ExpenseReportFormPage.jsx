@@ -4,7 +4,7 @@ import { EmptyPanel, LoadingPanel } from '../../admin/project/components/Project
 import { formatCurrency, todayIso } from '../../admin/project/utils/projectFormat.js';
 import { FilePicker, StageSelect } from '../components/FieldUi.jsx';
 import { useActiveStages, useRecord } from '../hooks/useFieldData.js';
-import { createExpenseReport, getCashRequest, listExpenseCategories } from '../services/fieldService.js';
+import { createExpenseReport, getCashRequest, getExpenseReport, listExpenseCategories, updateExpenseReport } from '../services/fieldService.js';
 import { stageLabel } from '../utils/fieldFormat.js';
 
 const newRow = (patch = {}) => ({
@@ -15,20 +15,23 @@ const newRow = (patch = {}) => ({
  * Laporan realisasi + nota. Dua bentuk: merujuk pengajuan yang sudah disetujui
  * (`requestId`), atau mendesak tanpa pengajuan dengan alasan wajib. Harga mengikuti nota.
  */
-export default function ExpenseReportFormPage({ requestId, onCancel, onSaved }) {
+export default function ExpenseReportFormPage({ requestId, recordId, onCancel, onSaved }) {
   const { stages } = useActiveStages();
   const { data: categories, error: categoryError } = useRecord(listExpenseCategories, 'categories');
   const { data: request, error: requestError } = useRecord(() => (requestId ? getCashRequest(requestId) : Promise.resolve(null)), requestId || 'urgent');
+  const { data: report, error: reportError } = useRecord(() => (recordId ? getExpenseReport(recordId) : Promise.resolve(null)), recordId || 'new');
   const [subProjectId, setSubProjectId] = useState('');
-  const [reportDate, setReportDate] = useState(todayIso());
-  const [urgentReason, setUrgentReason] = useState('');
-  const [notes, setNotes] = useState('');
+  const [editedDate, setReportDate] = useState(null);
+  const [editedReason, setUrgentReason] = useState(null);
+  const [editedNotes, setNotes] = useState(null);
   const [editedRows, setRows] = useState(null);
   const [files, setFiles] = useState([]);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  if (recordId && reportError) return <EmptyPanel icon="🔎" title="Laporan tidak ditemukan">{reportError}</EmptyPanel>;
+  if (recordId && !report) return <LoadingPanel>Memuat laporan...</LoadingPanel>;
   if (requestId && requestError) return <EmptyPanel icon="🔎" title="Pengajuan tidak ditemukan">{requestError}</EmptyPanel>;
   if (requestId && !request) return <LoadingPanel>Memuat pengajuan...</LoadingPanel>;
   if (request && request.status !== 'approved') {
@@ -36,7 +39,12 @@ export default function ExpenseReportFormPage({ requestId, onCancel, onSaved }) 
   }
 
   // Isi awal dari baris pengajuan; harga dikosongkan supaya diketik dari nota.
-  const rows = editedRows ?? (request
+  const reportDate = editedDate ?? report?.reportDate ?? todayIso();
+  const urgentReason = editedReason ?? report?.urgentReason ?? '';
+  const notes = editedNotes ?? report?.notes ?? '';
+  const rows = editedRows ?? (report ? report.items.map((item) => newRow({
+    key: `row-${item.id}`, categoryId: String(item.categoryId), expenseDate: item.expenseDate, itemName: item.itemName, quantity: String(item.quantity), unit: item.unit, unitPrice: String(item.unitPrice), vendorName: item.vendorName || '', fieldOperationalRequestItemId: item.fieldOperationalRequestItemId,
+  })) : request
     ? request.items.map((item) => newRow({
       key: `item-${item.id}`, categoryId: String(item.categoryId), itemName: item.itemName, quantity: String(item.quantity), unit: item.unit, fieldOperationalRequestItemId: item.id,
     }))
@@ -47,34 +55,37 @@ export default function ExpenseReportFormPage({ requestId, onCancel, onSaved }) 
   const handleSubmit = async (event) => {
     event.preventDefault();
     const next = {};
-    if (!request && !subProjectId) next.subProjectId = 'Pilih tahapan.';
-    if (!request && !urgentReason.trim()) next.urgentReason = 'Laporan tanpa pengajuan wajib menyebut alasan mendesak.';
+    if (!report && !request && !subProjectId) next.subProjectId = 'Pilih tahapan.';
+    if (!(report?.request || request) && !urgentReason.trim()) next.urgentReason = 'Laporan tanpa pengajuan wajib menyebut alasan mendesak.';
     if (!rows.length || rows.some((row) => !row.categoryId || !row.expenseDate || !row.itemName.trim() || !(Number(row.quantity) > 0) || !row.unit.trim() || row.unitPrice === '' || Number(row.unitPrice) < 0)) {
       next.items = 'Lengkapi kategori, tanggal, nama, jumlah, satuan, dan harga nota di setiap baris.';
     }
-    if (files.length === 0) next.receipts = 'Lampirkan minimal satu nota.';
+    if (!report && files.length === 0) next.receipts = 'Lampirkan minimal satu nota.';
     setErrors(next);
     if (Object.keys(next).length) return;
 
     setBusy(true);
     setFormError('');
     try {
-      onSaved(await createExpenseReport({
-        subProjectId: request ? request.subProjectId : Number(subProjectId),
-        reportDate,
-        notes: notes.trim(),
-        ...(request ? { fieldOperationalRequestId: request.id } : { urgentReason: urgentReason.trim() }),
-        items: rows.map((row) => ({
-          categoryId: Number(row.categoryId),
-          expenseDate: row.expenseDate,
-          itemName: row.itemName.trim(),
-          quantity: Number(row.quantity),
-          unit: row.unit.trim(),
-          unitPrice: Number(row.unitPrice),
-          vendorName: row.vendorName.trim() || null,
-          fieldOperationalRequestItemId: row.fieldOperationalRequestItemId,
-        })),
-      }, files));
+      const items = rows.map((row) => ({
+        categoryId: Number(row.categoryId),
+        expenseDate: row.expenseDate,
+        itemName: row.itemName.trim(),
+        quantity: Number(row.quantity),
+        unit: row.unit.trim(),
+        unitPrice: Number(row.unitPrice),
+        vendorName: row.vendorName.trim() || null,
+        fieldOperationalRequestItemId: row.fieldOperationalRequestItemId,
+      }));
+      onSaved(report
+        ? await updateExpenseReport(report.id, { reportDate, notes: notes.trim() || null, ...(report.isUrgent && { urgentReason: urgentReason.trim() }), items })
+        : await createExpenseReport({
+          subProjectId: request ? request.subProjectId : Number(subProjectId),
+          reportDate,
+          notes: notes.trim(),
+          ...(request ? { fieldOperationalRequestId: request.id } : { urgentReason: urgentReason.trim() }),
+          items,
+        }, files));
     } catch (error) {
       setFormError(error.message);
       setBusy(false);
@@ -83,14 +94,14 @@ export default function ExpenseReportFormPage({ requestId, onCancel, onSaved }) 
 
   return (
     <FormPage
-      breadcrumb={[{ label: 'Kas Lapangan', href: '#/lapangan/kas' }, { label: 'Laporan Realisasi', href: '#/lapangan/kas/laporan' }, { label: request ? request.requestCode : 'Mendesak' }]}
+      breadcrumb={[{ label: 'Kas Lapangan', href: '#/lapangan/kas' }, { label: 'Laporan Realisasi', href: '#/lapangan/kas/laporan' }, { label: report?.reportCode || request?.requestCode || 'Mendesak' }]}
       icon="🧾"
-      title={request ? `Lapor Realisasi ${request.requestCode}` : 'Laporan Mendesak'}
-      subtitle={request ? `${stageLabel(request.subProject)} · perkiraan ${formatCurrency(request.requestedAmount)}` : 'Belanja yang harus terjadi tanpa pengajuan dana.'}
+      title={report ? `Ubah ${report.reportCode}` : request ? `Lapor Realisasi ${request.requestCode}` : 'Laporan Mendesak'}
+      subtitle={report ? stageLabel(report.subProject) : request ? `${stageLabel(request.subProject)} · perkiraan ${formatCurrency(request.requestedAmount)}` : 'Belanja yang harus terjadi tanpa pengajuan dana.'}
       busy={busy}
       onCancel={onCancel}
       onSubmit={handleSubmit}
-      submitLabel="Kirim ke Finance"
+      submitLabel={report ? 'Simpan Perubahan' : 'Kirim ke Finance'}
       footerNote={`Total nota ${formatCurrency(total)}`}
       aside={(
         <InfoCard title="Aturan">
@@ -101,11 +112,13 @@ export default function ExpenseReportFormPage({ requestId, onCancel, onSaved }) 
       )}
     >
       <FormError>{formError || categoryError}</FormError>
-      {!request && (
+      {(report ? report.isUrgent : !request) && (
         <>
-          <Field label="Tahapan" htmlFor="subProjectId" required error={errors.subProjectId}>
-            <StageSelect stages={stages} value={subProjectId} onChange={setSubProjectId} />
-          </Field>
+          {!report && (
+            <Field label="Tahapan" htmlFor="subProjectId" required error={errors.subProjectId}>
+              <StageSelect stages={stages} value={subProjectId} onChange={setSubProjectId} />
+            </Field>
+          )}
           <Field label="Alasan Mendesak" htmlFor="urgentReason" required error={errors.urgentReason}>
             <input id="urgentReason" value={urgentReason} onChange={(event) => { setUrgentReason(event.target.value); setErrors((current) => ({ ...current, urgentReason: undefined })); }} maxLength={500} className="input-control text-sm" placeholder="Contoh: Pompa mati saat hujan, solar harus dibeli malam itu" />
           </Field>
@@ -139,9 +152,13 @@ export default function ExpenseReportFormPage({ requestId, onCancel, onSaved }) 
       <Field label="Catatan" htmlFor="notes">
         <input id="notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={500} className="input-control text-sm" placeholder="Opsional" />
       </Field>
-      <Field label="Nota" htmlFor="receipts" required error={errors.receipts} hint="1–10 berkas: PDF, JPG, PNG, atau WebP, maksimal 10 MB per berkas.">
-        <FilePicker id="receipts" files={files} onChange={setFiles} max={10} />
-      </Field>
+      {report ? (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">Nota tetap {report.receipts.length} berkas. Untuk mengganti nota, batalkan laporan ini lalu lapor ulang.</p>
+      ) : (
+        <Field label="Nota" htmlFor="receipts" required error={errors.receipts} hint="1–10 berkas: PDF, JPG, PNG, atau WebP, maksimal 10 MB per berkas.">
+          <FilePicker id="receipts" files={files} onChange={setFiles} max={10} />
+        </Field>
+      )}
     </FormPage>
   );
 }

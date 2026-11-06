@@ -25,6 +25,7 @@ import { hasPermission } from '../../../../services/permissions.js';
 import { parseProjectRoute } from '../utils/projectRoute.js';
 import { formatDate, formatNumber, subProjectTypeLabel } from '../utils/projectFormat.js';
 import { divisionPrefix } from '../../utils/divisionRoute.js';
+import { FieldQuickActions } from '../../../lapangan/components/FieldUi.jsx';
 import { MOVEMENT_TYPES } from '../utils/stockFormat.js';
 
 const FINAL_STATUSES = ['completed', 'cancelled'];
@@ -167,7 +168,12 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
     }
 
     if (!selection.projectId) {
-      return <ProjectListView projects={projects} loading={loading} error={loadError} canCreate={permissions.createProject} onCreate={() => onNavigate(`${divisionPrefix()}/projects/new`)} />;
+      return (
+        <>
+          {divisionPrefix() === 'lapangan' && <FieldQuickActions />}
+          <ProjectListView projects={projects} loading={loading} error={loadError} canCreate={permissions.createProject} onCreate={() => onNavigate(`${divisionPrefix()}/projects/new`)} />
+        </>
+      );
     }
     if (!project) {
       if (loading || !(extraProject.id === selection.projectId && extraProject.missing)) return <LoadingPanel>Memuat project...</LoadingPanel>;

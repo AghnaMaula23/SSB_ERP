@@ -34,6 +34,7 @@ export default function FieldWorkspacePage({ route, onNavigate, onBackToModules,
       const detail = `lapangan/material/${id}`;
       switch (view) {
         case 'new': return <MaterialRequestFormPage key={route} onCancel={() => go('lapangan/material')} onSaved={(saved) => go(`lapangan/material/${saved.id}`, `Request ${saved.requestCode} dikirim ke Admin.`)} />;
+        case 'edit': return <MaterialRequestFormPage key={route} recordId={id} onCancel={() => go(detail)} onSaved={(saved) => go(detail, `Request ${saved.requestCode} diubah.`)} />;
         case 'detail': return <MaterialRequestDetailPage key={route} {...shared} recordId={id} />;
         case 'delivery-new': return <DeliveryFormPage key={route} requestId={id} onCancel={() => go(detail)} onSaved={(saved) => go(detail, `Surat jalan ${saved.deliveryNoteNumber} tercatat (${saved.deliveryCode}).`)} />;
         case 'receipt-new': return <ReceiptFormPage key={route} requestId={id} deliveryId={childId} onCancel={() => go(detail)} onSaved={(saved) => go(detail, `Penerimaan ${saved.receiptCode} tercatat.`)} />;
@@ -43,6 +44,7 @@ export default function FieldWorkspacePage({ route, onNavigate, onBackToModules,
     if (section === 'alat') {
       switch (view) {
         case 'new': return <EquipmentRequestFormPage key={route} onCancel={() => go('lapangan/alat')} onSaved={(saved) => go(`lapangan/alat/${saved.id}`, `Request ${saved.requestCode} dikirim ke Admin.`)} />;
+        case 'edit': return <EquipmentRequestFormPage key={route} recordId={id} onCancel={() => go(`lapangan/alat/${id}`)} onSaved={(saved) => go(`lapangan/alat/${id}`, `Request ${saved.requestCode} diubah.`)} />;
         case 'detail': return <EquipmentRequestDetailPage key={route} {...shared} recordId={id} />;
         default: return <EquipmentRequestListPage key={route} {...shared} />;
       }
@@ -50,10 +52,12 @@ export default function FieldWorkspacePage({ route, onNavigate, onBackToModules,
     if (section === 'kas') {
       switch (view) {
         case 'new': return <CashRequestFormPage key={route} onCancel={() => go('lapangan/kas')} onSaved={(saved) => go(`lapangan/kas/${saved.id}`, `Pengajuan ${saved.requestCode} dikirim ke Admin.`)} />;
+        case 'edit': return <CashRequestFormPage key={route} recordId={id} onCancel={() => go(`lapangan/kas/${id}`)} onSaved={(saved) => go(`lapangan/kas/${id}`, `Pengajuan ${saved.requestCode} diubah.`)} />;
         case 'detail': return <CashRequestDetailPage key={route} {...shared} recordId={id} />;
         case 'report-list': return <ExpenseReportListPage key={route} {...shared} />;
         case 'report-new': return <ExpenseReportFormPage key={route} onCancel={() => go('lapangan/kas/laporan')} onSaved={(saved) => go(`lapangan/kas/laporan/${saved.id}`, `Laporan ${saved.reportCode} dikirim ke Finance.`)} />;
         case 'report-from-request': return <ExpenseReportFormPage key={route} requestId={id} onCancel={() => go(`lapangan/kas/${id}`)} onSaved={(saved) => go(`lapangan/kas/laporan/${saved.id}`, `Laporan ${saved.reportCode} dikirim ke Finance.`)} />;
+        case 'report-edit': return <ExpenseReportFormPage key={route} recordId={id} onCancel={() => go(`lapangan/kas/laporan/${id}`)} onSaved={(saved) => go(`lapangan/kas/laporan/${id}`, `Laporan ${saved.reportCode} diubah.`)} />;
         case 'report-detail': return <ExpenseReportDetailPage key={route} {...shared} recordId={id} />;
         default: return <CashRequestListPage key={route} {...shared} />;
       }

@@ -109,6 +109,11 @@ export async function listRentalWorkhours(equipmentItemId, { startDate, endDate 
   return apiRequest(`/api/equipment/items/${equipmentItemId}/workhour-logs${query({ sourceType: 'external_rental', startDate, endDate, limit: 100 })}`);
 }
 
+/** Log tidak diubah: salah input dibatalkan (alasan wajib), lalu dicatat ulang. */
+export async function voidRentalWorkhour(logId, reason) {
+  return apiRequest(`/api/equipment/workhour-logs/${logId}/void`, { method: 'PUT', body: JSON.stringify({ reason: reason.trim() }) });
+}
+
 /**
  * Satu lembar timesheet: semua sesi masuk atau tidak sama sekali. totalWorkhour
  * dihitung backend dari jam mulai/selesai, jadi tidak dikirim (E23).

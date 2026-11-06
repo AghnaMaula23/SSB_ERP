@@ -267,6 +267,41 @@ const create = async (payload, user) => {
   return shapeDetail(row);
 };
 
+/** Pengaju boleh mengubah selama request internal masih di antrean Admin. */
+const update = async (id, payload, userId) => {
+  const row = await findOrFail(id);
+  if (row.requestedBy !== userId) throw httpError('Hanya pengaju yang boleh mengubah request ini', 403);
+  if (row.status !== 'submitted') throw httpError(`Request berstatus "${row.status}" sudah tidak bisa diubah`, 409);
+  await assertTypesExist(payload.items);
+
+  const requestDate = payload.requestDate ? assertNotFuture(payload.requestDate, 'Tanggal request') : row.requestDate;
+  const neededDate = payload.neededDate ? new Date(payload.neededDate) : null;
+  if (neededDate && toDateOnly(neededDate) < toDateOnly(requestDate)) {
+    throw httpError('Tanggal kebutuhan tidak boleh sebelum tanggal request', 400);
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await claimTransition(tx.equipmentRequest, { id, status: 'submitted' }, {
+      requestDate,
+      neededDate,
+      locationDetail: payload.locationDetail ?? null,
+      requestNotes: payload.requestNotes ?? null,
+    });
+    await tx.equipmentRequestItem.deleteMany({ where: { equipmentRequestId: id } });
+    await tx.equipmentRequestItem.createMany({
+      data: payload.items.map((i) => ({
+        equipmentRequestId: id,
+        equipmentTypeId: i.equipmentTypeId,
+        requestedQuantity: i.requestedQuantity,
+        estimatedWorkhours: i.estimatedWorkhours ?? null,
+        itemNotes: i.itemNotes ?? null,
+      })),
+    });
+    return findOrFail(id, tx);
+  });
+  return shapeDetail(updated);
+};
+
 const cancel = async (id, userId) => {
   const row = await findOrFail(id);
   if (!['submitted', 'equipment_review'].includes(row.status)) {
@@ -404,4 +439,5 @@ const equipmentReview = async (id, { items: decisions, notes, equipmentPoolId },
   return shapeDetail(updated);
 };
 
-module.exports = { list, getById, create, cancel, adminReview, equipmentReview };
+module.exports = {
+  list, getById, create, update, cancel, adminReview, equipmentReview };

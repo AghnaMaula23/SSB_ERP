@@ -1785,6 +1785,13 @@ const swaggerSpec = {
       },
     },
     '/request-alat/{id}': {
+      put: {
+        tags: ['Request Alat'], summary: 'Ubah request alat',
+        description: 'Permission: equipment-request:create, hanya pengaju, status submitted. Body sama dengan POST tanpa requestType & konteks; items diganti seluruhnya.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: { 200: { description: 'Berhasil diubah' }, 403: { description: 'Bukan pengaju' }, 409: { description: 'Status sudah tidak bisa diubah' } },
+      },
       get: {
         tags: ['Request Alat'], summary: 'Detail request + items',
         description: 'Permission: equipment-request:read. Per item: `decision` (pending/approved/partially_approved/rejected) dan `rejectedQuantity` DITURUNKAN dari approvedQuantity (null = belum diputuskan), plus `poolItems` yang lahir dari item tersebut.',
@@ -1858,6 +1865,13 @@ const swaggerSpec = {
       },
     },
     '/request-material/{id}': {
+      put: {
+        tags: ['Request Material'], summary: 'Ubah request material',
+        description: 'Permission: material-request:create, hanya pengaju, status submitted, dan Admin belum mengisi kuantitas/biaya. Body sama dengan POST tanpa requestType & konteks; items diganti seluruhnya.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: { 200: { description: 'Berhasil diubah' }, 403: { description: 'Bukan pengaju' }, 409: { description: 'Status sudah tidak bisa diubah' } },
+      },
       get: {
         tags: ['Request Material'], summary: 'Detail request material',
         description: 'Permission: material-request:read. Tiap item memuat `unit` (dari jenis material), `requestedQuantity`, `adminValidatedQuantity` (null = belum diubah Admin), `effectiveQuantity` (yang berlaku), `materialPoolItemId` (terisi setelah disetujui Finance), serta `deliveredQuantity`/`deliveryCount` (jumlahan delivery aktif) dan `acceptedQuantity` (jumlahan receipt aktif yang diterima baik) — dihitung saat dibaca, boleh melebihi effectiveQuantity. `costs` = rincian biaya, `totalCostAmount` = jumlahnya (tidak disimpan).',
@@ -2561,6 +2575,13 @@ const swaggerSpec = {
       },
     },
     '/field-operational-requests/{id}': {
+      put: {
+        tags: ['Kas Lapangan'], summary: 'Ubah pengajuan dana',
+        description: 'Permission: field-cash:create, hanya pengaju, status submitted. Body sama dengan POST tanpa subProjectId; items diganti seluruhnya.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: { 200: { description: 'Berhasil diubah' }, 403: { description: 'Bukan pengaju' }, 409: { description: 'Status sudah tidak bisa diubah' } },
+      },
       get: {
         tags: ['Kas Lapangan'], summary: 'Detail pengajuan',
         description: 'Permission: field-cash:read. Header + `items` (dengan `estimatedAmount` = qty × harga) + keputusan Admin/Finance (`adminValidatedBy/At`, `adminNotes`, `financeReviewedBy/At`, `financeNotes`) + `reports` (laporan yang merujuknya, ringkas) + `requestedAmount`, `realizedAmount`, `difference` (dihitung).',
@@ -2611,6 +2632,13 @@ const swaggerSpec = {
       },
     },
     '/field-expense-reports/{id}': {
+      put: {
+        tags: ['Kas Lapangan'], summary: 'Ubah laporan realisasi',
+        description: 'Permission: field-cash:create, hanya pelapor, status submitted. JSON tanpa berkas: nota tetap. subProjectId & fieldOperationalRequestId tidak bisa diubah; items diganti seluruhnya.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: { 200: { description: 'Berhasil diubah' }, 403: { description: 'Bukan pengaju' }, 409: { description: 'Status sudah tidak bisa diubah' } },
+      },
       get: {
         tags: ['Kas Lapangan'], summary: 'Detail laporan',
         description: 'Permission: field-cash:read. Header + `items` (`totalPrice` = qty × harga, dihitung) + `receipts[]` (`fileId` untuk GET /files/{id}/url) + `request` (ringkas: kode, `requestedAmount`) + keputusan Finance (`validatedBy/At`, `financeNotes`).',

@@ -2,11 +2,11 @@ const { Router } = require('express');
 const { body, param, query } = require('express-validator');
 const controller = require('./user.controller.js');
 const validate = require('../../middleware/validate.js');
-const { authenticate, authorize } = require('../../middleware/auth.js');
+const { authenticate, authorize, clearAuthCacheOnWrite } = require('../../middleware/auth.js');
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, clearAuthCacheOnWrite);
 
 const idParam = param('id').isInt({ min: 1 }).withMessage('ID user tidak valid').toInt();
 

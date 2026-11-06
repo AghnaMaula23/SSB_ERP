@@ -25,6 +25,8 @@ export default function EquipmentRequestDetailPage({ recordId, initialNotice }) 
           <h1 className="font-mono text-2xl font-bold text-slate-900">{request.requestCode}</h1>
           <StatusBadge status={request.status} map={EQUIPMENT_STATUS} />
         </div>
+        <div className="flex flex-wrap gap-2">
+        {canCancel && request.status === 'submitted' && <a href={`#/lapangan/alat/${request.id}/edit`} className="btn btn-secondary text-xs">✎ Ubah</a>}
         {canCancel && (
           <CancelAction
             needsReason={false}
@@ -33,6 +35,7 @@ export default function EquipmentRequestDetailPage({ recordId, initialNotice }) 
             onConfirm={async () => { await cancelEquipmentRequest(request.id); setNotice(`${request.requestCode} dibatalkan.`); reload(); }}
           />
         )}
+        </div>
       </div>
       <Notice tone="success" onDismiss={() => setNotice('')}>{notice}</Notice>
 

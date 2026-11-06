@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Breadcrumb, GuardedLink, MetricCard, Notice, PageHeader } from '../components/ProjectUi.jsx';
-import { listAllocations, listItemWorkhours } from '../services/projectService.js';
+import { listAllocations, listItemWorkhours, voidWorkhourLog } from '../services/projectService.js';
+import { hasPermission } from '../../../../services/permissions.js';
 import { actorName, formatDate, formatNumber, formatTime, stageCrumbs, subProjectTypeLabel, todayIso } from '../utils/projectFormat.js';
 import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { downloadCsv } from '../../../../utils/csv.js';
@@ -22,7 +23,10 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
   const [unitFilter, setUnitFilter] = useState('');
   const [state, setState] = useState({ key: null, allocations: [], logs: [], error: '' });
   const [notice, setNotice] = useState(initialNotice || '');
-  const requestKey = `${stage.id}|${month}`;
+  const [reloadKey, setReloadKey] = useState(0);
+  const [actionError, setActionError] = useState('');
+  const requestKey = `${stage.id}|${month}|${reloadKey}`;
+  const canVoid = hasPermission('workhour:update') && stage.status === 'active';
   const loading = state.key !== requestKey;
 
   useEffect(() => {
@@ -47,6 +51,19 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
       .catch((error) => { if (!cancelled) setState({ key: requestKey, allocations: [], logs: [], error: error.message }); });
     return () => { cancelled = true; };
   }, [month, requestKey, stage.id]);
+
+  const handleVoid = async (log) => {
+    const reason = window.prompt(`Alasan membatalkan ${log.totalWorkhour} jam ${log.assetCode} tanggal ${formatDate(log.workDate)}:`);
+    if (!reason?.trim()) return;
+    setActionError('');
+    try {
+      await voidWorkhourLog(log.id, reason);
+      setNotice(`Jam kerja ${log.assetCode} tanggal ${formatDate(log.workDate)} dibatalkan. Catat ulang bila perlu.`);
+      setReloadKey((key) => key + 1);
+    } catch (error) {
+      setActionError(error.message);
+    }
+  };
 
   const units = useMemo(() => [...new Set(state.allocations.map((row) => row.equipmentItem?.assetCode).filter(Boolean))], [state.allocations]);
   const visible = unitFilter ? state.logs.filter((log) => log.assetCode === unitFilter) : state.logs;
@@ -102,6 +119,7 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
 
       <Notice tone="success" onDismiss={() => setNotice('')}>{notice}</Notice>
       {state.error && !loading && <Notice tone="error">{state.error}</Notice>}
+      <Notice tone="error" onDismiss={() => setActionError('')}>{actionError}</Notice>
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard label="Total Jam" value={`${formatNumber(totalHours)} jam`} accent tone="teal" loading={loading} />
@@ -144,13 +162,14 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
                   <th className="text-center">Jeda</th>
                   <th className="text-right">Total Jam</th>
                   <th>Keterangan</th>
+                  {canVoid && <th className="text-right">Aksi</th>}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} className="py-12 text-center text-sm text-slate-500">Memuat timesheet...</td></tr>
+                  <tr><td colSpan={9} className="py-12 text-center text-sm text-slate-500">Memuat timesheet...</td></tr>
                 ) : visible.length === 0 ? (
-                  <tr><td colSpan={8} className="py-12 text-center text-sm text-slate-500">
+                  <tr><td colSpan={9} className="py-12 text-center text-sm text-slate-500">
                     {units.length === 0 ? 'Belum ada alat yang dialokasikan ke tahapan ini.' : 'Belum ada jam kerja tercatat pada periode ini.'}
                   </td></tr>
                 ) : visible.map((log, index) => (
@@ -169,6 +188,7 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
                       <p className="truncate" title={log.description || ''}>{log.description || '-'}</p>
                       <p className="text-[11px] text-slate-400">{actorName(log.createdBy)}</p>
                     </td>
+                    {canVoid && <td className="text-right"><button type="button" onClick={() => handleVoid(log)} className="btn btn-ghost px-2 py-1 text-[11px] text-red-600 hover:bg-red-50">Batalkan</button></td>}
                   </tr>
                 ))}
               </tbody>
@@ -178,6 +198,7 @@ export default function TimesheetPage({ project, stage, canRecord, initialNotice
                     <td colSpan={6} className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-slate-600">Jumlah Total</td>
                     <td className="px-4 py-3 text-right"><span className="rounded-md bg-brand-700 px-2.5 py-1 font-mono text-sm font-bold text-white">{formatNumber(totalHours)} Jam</span></td>
                     <td />
+                    {canVoid && <td />}
                   </tr>
                 </tfoot>
               )}

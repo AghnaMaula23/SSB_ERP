@@ -30,6 +30,12 @@ const create = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const update = async (req, res, next) => {
+  try {
+    return success(res, await service.update(req.params.id, req.body, req.user.id), 'Pengajuan dana diubah');
+  } catch (err) { next(err); }
+};
+
 const cancel = async (req, res, next) => {
   try {
     return success(res, await service.cancel(req.params.id, req.body, req.user.id), 'Pengajuan dana dibatalkan');
@@ -54,4 +60,4 @@ const reject = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, detail, create, cancel, validate, approve, reject };
+module.exports = { list, detail, create, update, cancel, validate, approve, reject };

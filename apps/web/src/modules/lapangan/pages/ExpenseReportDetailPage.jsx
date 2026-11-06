@@ -25,7 +25,10 @@ export default function ExpenseReportDetailPage({ recordId, initialNotice }) {
           <h1 className="font-mono text-2xl font-bold text-slate-900">{row.reportCode}</h1>
           <StatusBadge status={row.status} map={PROOF_STATUS} />
         </div>
-        {canCancel && <CancelAction label="Batalkan Laporan" onConfirm={async (reason) => { await cancelExpenseReport(row.id, reason); setNotice(`${row.reportCode} dibatalkan.`); reload(); }} />}
+        <div className="flex flex-wrap gap-2">
+          {canCancel && <a href={`#/lapangan/kas/laporan/${row.id}/edit`} className="btn btn-secondary text-xs">✎ Ubah</a>}
+          {canCancel && <CancelAction label="Batalkan Laporan" onConfirm={async (reason) => { await cancelExpenseReport(row.id, reason); setNotice(`${row.reportCode} dibatalkan.`); reload(); }} />}
+        </div>
       </div>
       <Notice tone="success" onDismiss={() => setNotice('')}>{notice}</Notice>
 

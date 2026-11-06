@@ -5,6 +5,8 @@ const isId = (value) => /^\d+$/.test(value || '');
  *   lapangan/material                               daftar request material
  *   lapangan/material/new                           form request material
  *   lapangan/material/:id                           detail + pengiriman
+ *   lapangan/<material|alat|kas>/:id/edit           ubah pengajuan yang masih di antrean Admin
+ *   lapangan/kas/laporan/:id/edit                   ubah laporan yang belum diputuskan Finance
  *   lapangan/material/:id/delivery/new              catat surat jalan
  *   lapangan/material/:id/delivery/:deliveryId/receipt  catat penerimaan
  *   lapangan/alat[/new|/:id]                        request alat internal
@@ -30,6 +32,7 @@ export function parseFieldRoute(route) {
     if (size === 2) return result('report-list');
     if (size === 3 && b === 'new') return result('report-new');
     if (size === 3 && isId(b)) return result('report-detail', b);
+    if (size === 4 && isId(b) && c === 'edit') return result('report-edit', b);
     return null;
   }
   if (!['material', 'alat', 'kas', 'upah'].includes(section)) return null;
@@ -37,6 +40,7 @@ export function parseFieldRoute(route) {
   if (size === 2 && a === 'new') return result('new');
   if (!isId(a)) return null;
   if (size === 2) return result('detail', a);
+  if (size === 3 && b === 'edit' && section !== 'upah') return result('edit', a);
 
   if (section === 'material' && b === 'delivery') {
     if (size === 4 && c === 'new') return result('delivery-new', a);

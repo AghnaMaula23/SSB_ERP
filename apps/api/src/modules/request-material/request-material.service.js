@@ -269,6 +269,45 @@ const create = async (payload, userId) => {
   return shapeDetail(row);
 };
 
+/**
+ * Pengaju boleh mengubah selama request masih di antrean Admin dan Admin belum
+ * mulai memeriksanya: baris diganti seluruhnya, dan rincian biaya menunjuk baris
+ * itu, jadi pekerjaan Admin tidak boleh terhapus diam-diam.
+ */
+const update = async (id, payload, userId) => {
+  const row = await findOrFail(id);
+  if (row.requestedBy !== userId) throw httpError('Hanya pengaju yang boleh mengubah request ini', 403);
+  if (row.status !== 'submitted') throw httpError(`Request berstatus "${row.status}" sudah tidak bisa diubah`, 409);
+  if (row.costs.length || row.items.some((item) => item.adminValidatedQuantity !== null)) {
+    throw httpError('Admin sudah mulai memeriksa request ini, jadi tidak bisa diubah lagi. Batalkan lalu ajukan ulang bila perlu.', 409);
+  }
+  await assertMaterialTypes(payload.items);
+
+  const requestDate = payload.requestDate ? assertNotFuture(payload.requestDate, 'Tanggal request') : row.requestDate;
+  const neededDate = payload.neededDate ? new Date(payload.neededDate) : null;
+  if (neededDate && toDateOnly(neededDate) < toDateOnly(requestDate)) {
+    throw httpError('Tanggal kebutuhan tidak boleh sebelum tanggal request', 400);
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await assertContextOpen(tx, contextOf(row));
+    await claimTransition(tx.materialRequest, { id, status: 'submitted' }, {
+      requestDate, neededDate, requestNotes: payload.requestNotes ?? null,
+    });
+    await tx.materialRequestItem.deleteMany({ where: { materialRequestId: id } });
+    await tx.materialRequestItem.createMany({
+      data: payload.items.map((i) => ({
+        materialRequestId: id,
+        materialTypeId: i.materialTypeId,
+        requestedQuantity: i.requestedQuantity,
+        itemNotes: i.itemNotes ?? null,
+      })),
+    });
+    return findOrFail(id, tx);
+  });
+  return shapeDetail(updated);
+};
+
 /** Pengaju boleh membatalkan selama Finance belum memutuskan — sama dengan purchase request. */
 const cancel = async (id, userId) => {
   const row = await findOrFail(id);
@@ -540,4 +579,5 @@ const reject = async (id, { notes }, user) => {
   return shapeDetail(updated);
 };
 
-module.exports = { list, getById, create, cancel, adminValidate, replaceCosts, submitToFinance, approve, reject };
+module.exports = {
+  list, getById, create, update, cancel, adminValidate, replaceCosts, submitToFinance, approve, reject };

@@ -25,6 +25,9 @@ export default function MaterialRequestDetailPage({ recordId, initialNotice }) {
   const canDeliver = request.status === 'approved' && hasPermission('material-delivery:create');
   const canReceive = hasPermission('material-receipt:create');
   const isOwn = request.requestedBy?.id === currentUserId();
+  // Setelah Admin mulai memeriksa (kuantitas/biaya), pengaju tidak lagi bisa mengubah.
+  const canEdit = isOwn && request.status === 'submitted' && hasPermission('material-request:create')
+    && !request.costs?.length && request.items.every((item) => item.adminValidatedQuantity === null);
 
   // 409 = keadaan dokumen sudah berubah: tampilkan pesannya dan muat ulang.
   const showError = (requestError) => {
@@ -40,6 +43,8 @@ export default function MaterialRequestDetailPage({ recordId, initialNotice }) {
           <h1 className="font-mono text-2xl font-bold text-slate-900">{request.requestCode}</h1>
           <StatusBadge status={request.status} map={REQUEST_STATUS} />
         </div>
+        <div className="flex flex-wrap gap-2">
+        {canEdit && <a href={`${base}/edit`} className="btn btn-secondary text-xs">✎ Ubah</a>}
         {isOwn && CANCELLABLE_REQUEST.includes(request.status) && hasPermission('material-request:create') && (
           <CancelAction
             needsReason={false}
@@ -48,6 +53,7 @@ export default function MaterialRequestDetailPage({ recordId, initialNotice }) {
             onConfirm={async () => { await cancelMaterialRequest(request.id); setNotice({ tone: 'success', text: `${request.requestCode} dibatalkan.` }); reload(); }}
           />
         )}
+        </div>
       </div>
       <Notice tone={notice.tone} onDismiss={() => setNotice({ tone: 'success', text: '' })}>{notice.text}</Notice>
 

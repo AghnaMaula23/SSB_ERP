@@ -3,6 +3,7 @@ import { Notice } from '../../admin/project/components/ProjectUi.jsx';
 import { RejectReasonForm } from '../../admin/approvals/components/ApprovalUi.jsx';
 import { actorName, formatDateTime } from '../../admin/project/utils/projectFormat.js';
 import { openFileInNewTab } from '../../admin/files/services/projectFiles.js';
+import { hasPermission } from '../../../services/permissions.js';
 
 // Komponen yang dipakai berulang di modul Divisi Lapangan.
 
@@ -170,5 +171,29 @@ export function CancelAction({ label = 'Batalkan', needsReason = true, confirmTe
         onCancel={() => setOpen(false)}
       />
     </div>
+  );
+}
+
+const QUICK_ACTIONS = [
+  { label: '+ Ajukan Material', href: '#/lapangan/material/new', permission: 'material-request:create' },
+  { label: '+ Ajukan Alat', href: '#/lapangan/alat/new', permission: 'equipment-request:create' },
+  { label: '+ Ajukan Dana', href: '#/lapangan/kas/new', permission: 'field-cash:create' },
+  { label: '+ Ajukan Klaim Upah', href: '#/lapangan/upah/new', permission: 'labor-claim:create' },
+];
+
+/** Halaman awal Lapangan: project dibuat Admin, jadi jelaskan di mana data ditambahkan. */
+export function FieldQuickActions() {
+  const actions = QUICK_ACTIONS.filter((action) => hasPermission(action.permission));
+  if (!actions.length) return null;
+  return (
+    <section className="card-panel mb-5 p-4" aria-label="Tambah data lapangan">
+      <p className="text-sm font-bold text-slate-900">Tambah data</p>
+      <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+        Progress, jam alat, stok, pekerja, dan log harian dicatat di dalam tahapan: pilih project di bawah, lalu tahapannya.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {actions.map((action) => <a key={action.href} href={action.href} className="btn btn-secondary text-xs">{action.label}</a>)}
+      </div>
+    </section>
   );
 }

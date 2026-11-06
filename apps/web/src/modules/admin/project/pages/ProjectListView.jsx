@@ -7,6 +7,7 @@ const STATUS_FILTERS = ['', 'planned', 'active', 'completed', 'cancelled'];
 
 /** Halaman awal menu Project: ringkasan portofolio + kartu tiap project. */
 export default function ProjectListView({ projects, loading, error, canCreate, onCreate }) {
+  const isField = divisionPrefix() === 'lapangan';
   const [statusFilter, setStatusFilter] = useState('');
   const counts = useMemo(() => projects.reduce((result, project) => {
     result[project.status] = (result[project.status] || 0) + 1;
@@ -16,11 +17,11 @@ export default function ProjectListView({ projects, loading, error, canCreate, o
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Divisi Admin' }, { label: 'Project' }]} />
+      <Breadcrumb items={[{ label: isField ? 'Divisi Lapangan' : 'Divisi Admin' }, { label: 'Project' }]} />
       <div className="mb-6 mt-2 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Project Konstruksi</h1>
-          <p className="mt-1 text-xs text-slate-500">Kelola project, tahapan pekerjaan, dan validasi progress lapangan.</p>
+          <p className="mt-1 text-xs text-slate-500">{isField ? 'Pilih project, lalu buka tahapannya untuk mencatat pekerjaan harian.' : 'Kelola project, tahapan pekerjaan, dan validasi progress lapangan.'}</p>
         </div>
         {canCreate && <button type="button" onClick={onCreate} className="btn btn-primary text-xs">+ Tambah Proyek</button>}
       </div>

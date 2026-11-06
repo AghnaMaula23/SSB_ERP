@@ -2,11 +2,11 @@ const { Router } = require('express');
 const { body, param } = require('express-validator');
 const controller = require('./permission.controller.js');
 const validate = require('../../middleware/validate.js');
-const { authenticate, authorize } = require('../../middleware/auth.js');
+const { authenticate, authorize, clearAuthCacheOnWrite } = require('../../middleware/auth.js');
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, clearAuthCacheOnWrite);
 
 router.get('/', authorize('permission:read', 'role:read'), controller.list);
 

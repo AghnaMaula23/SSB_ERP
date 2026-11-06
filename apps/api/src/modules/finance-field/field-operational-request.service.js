@@ -261,6 +261,41 @@ const create = async (payload, userId) => {
   return shapeDetail(row);
 };
 
+/** Pengaju boleh mengubah selama pengajuan masih di antrean Admin. Tahapan tidak bisa diubah. */
+const update = async (id, payload, userId) => {
+  const row = await findOrFail(id);
+  if (row.requestedBy !== userId) throw httpError('Hanya pengaju yang boleh mengubah pengajuan ini', 403);
+  if (row.status !== 'submitted') throw httpError(`Pengajuan berstatus "${row.status}" sudah tidak bisa diubah`, 409);
+  await assertCategories(payload.items);
+
+  const requestDate = assertNotFuture(payload.requestDate, 'Tanggal pengajuan');
+  const neededDate = payload.neededDate ? new Date(payload.neededDate) : null;
+  if (neededDate && toDateOnly(neededDate) < toDateOnly(requestDate)) {
+    throw httpError('Tanggal kebutuhan tidak boleh sebelum tanggal pengajuan', 400);
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await assertContextOpen(tx, { subProjectId: row.subProjectId });
+    await claimTransition(tx.fieldOperationalRequest, { id, status: 'submitted' }, {
+      requestDate, neededDate, notes: payload.notes?.trim() || null,
+    });
+    await tx.fieldOperationalRequestItem.deleteMany({ where: { fieldOperationalRequestId: id } });
+    await tx.fieldOperationalRequestItem.createMany({
+      data: payload.items.map((i) => ({
+        fieldOperationalRequestId: id,
+        fieldExpenseCategoryId: i.categoryId,
+        itemName: i.itemName.trim(),
+        quantity: i.quantity,
+        unit: i.unit.trim(),
+        estimatedUnitPrice: i.estimatedUnitPrice,
+        notes: i.notes?.trim() || null,
+      })),
+    });
+    return findOrFail(id, tx);
+  });
+  return shapeDetail(updated);
+};
+
 /** Pengaju boleh membatalkan selama Finance belum memutuskan; alasan wajib. */
 const cancel = async (id, { reason }, userId) => {
   const row = await findOrFail(id);
@@ -349,4 +384,4 @@ const reject = async (id, { notes }, user) => {
 };
 
 // assertCategories & requestedAmountsOf dipakai juga laporan realisasi
-module.exports = { list, getById, create, cancel, validate, approve, reject, assertCategories, requestedAmountsOf };
+module.exports = { list, getById, create, update, cancel, validate, approve, reject, assertCategories, requestedAmountsOf };

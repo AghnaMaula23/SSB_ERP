@@ -247,6 +247,58 @@ const create = async (payload, uploads, userId) => {
   return shapeDetail(row);
 };
 
+/**
+ * Pelapor boleh mengubah isi laporan selama Finance belum memutuskan. Tahapan, dasar
+ * pengajuan, dan nota tetap: nota menempel pada pengajuan ke Finance, jadi menggantinya
+ * lewat batalkan lalu lapor ulang supaya jejaknya utuh.
+ */
+const update = async (id, payload, userId) => {
+  const row = await findOrFail(id);
+  if (row.submittedBy !== userId) throw httpError('Hanya pelapor yang boleh mengubah laporan ini', 403);
+  if (row.status !== 'submitted') throw httpError(`Laporan berstatus "${row.status}" sudah tidak bisa diubah`, 409);
+  const urgentReason = payload.urgentReason?.trim() || null;
+  if (row.fieldOperationalRequestId && urgentReason) throw httpError('urgentReason hanya untuk laporan tanpa pengajuan', 400);
+  if (!row.fieldOperationalRequestId && !urgentReason) {
+    throw httpError('Laporan tanpa pengajuan dana wajib menyertakan urgentReason (alasan mendesak)', 400);
+  }
+
+  const reportDate = assertNotFuture(payload.reportDate, 'Tanggal laporan');
+  for (const [index, item] of payload.items.entries()) {
+    if (toDateOnly(item.expenseDate) > toDateOnly(reportDate)) {
+      throw httpError(`Baris ${index + 1}: tanggal belanja tidak boleh setelah tanggal laporan`, 400);
+    }
+    if (!row.fieldOperationalRequestId && item.fieldOperationalRequestItemId) {
+      throw httpError(`Baris ${index + 1}: laporan tanpa pengajuan tidak bisa merujuk baris pengajuan`, 400);
+    }
+  }
+  await assertCategories(payload.items);
+  if (row.fieldOperationalRequestId) await assertRequest(row.fieldOperationalRequestId, row.subProjectId, payload.items);
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await assertContextOpen(tx, { subProjectId: row.subProjectId });
+    await claimTransition(tx.fieldExpenseReport, { id, status: 'submitted' }, {
+      reportDate, urgentReason, notes: payload.notes?.trim() || null,
+    });
+    await tx.fieldExpenseReportItem.deleteMany({ where: { fieldExpenseReportId: id } });
+    await tx.fieldExpenseReportItem.createMany({
+      data: payload.items.map((i) => ({
+        fieldExpenseReportId: id,
+        fieldExpenseCategoryId: i.categoryId,
+        fieldOperationalRequestItemId: i.fieldOperationalRequestItemId ?? null,
+        expenseDate: new Date(i.expenseDate),
+        itemName: i.itemName.trim(),
+        quantity: i.quantity,
+        unit: i.unit.trim(),
+        unitPrice: i.unitPrice,
+        vendorName: i.vendorName?.trim() || null,
+        notes: i.notes?.trim() || null,
+      })),
+    });
+    return findOrFail(id, tx);
+  });
+  return shapeDetail(updated);
+};
+
 /** Pelapor membatalkan selama belum diputuskan Finance; alasan wajib. */
 const cancel = async (id, { reason }, userId) => {
   const row = await findOrFail(id);
@@ -287,4 +339,4 @@ const reject = async (id, { notes }, userId) => {
   return transition(row, { status: 'rejected', validatedBy: userId, validatedAt: new Date(), financeNotes: notes.trim() });
 };
 
-module.exports = { list, getById, create, cancel, validate, reject };
+module.exports = { list, getById, create, update, cancel, validate, reject };

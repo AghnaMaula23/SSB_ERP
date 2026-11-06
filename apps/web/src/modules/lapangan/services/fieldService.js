@@ -42,6 +42,7 @@ export const listExpenseCategories = () => apiRequest('/api/field-expense-catego
 export const listMaterialRequests = (params = {}) => apiRequest(`/api/request-material${query({ limit: 15, ...params })}`);
 export const getMaterialRequest = (id) => apiRequest(`/api/request-material/${id}`);
 export const createMaterialRequest = (payload) => post('/api/request-material', payload);
+export const updateMaterialRequest = (id, payload) => put(`/api/request-material/${id}`, payload);
 export const cancelMaterialRequest = (id) => put(`/api/request-material/${id}/cancel`);
 
 // ---------------- Surat jalan & penerimaan ----------------
@@ -57,6 +58,7 @@ export const createReceipt = (fields, files) => apiRequest('/api/material-receip
 export const listEquipmentRequests = (params = {}) => apiRequest(`/api/request-alat${query({ requestType: 'internal_project', limit: 15, ...params })}`);
 export const getEquipmentRequest = (id) => apiRequest(`/api/request-alat/${id}`);
 export const createEquipmentRequest = (payload) => post('/api/request-alat', { requestType: 'internal_project', ...payload });
+export const updateEquipmentRequest = (id, payload) => put(`/api/request-alat/${id}`, payload);
 export const cancelEquipmentRequest = (id) => put(`/api/request-alat/${id}/cancel`);
 
 // ---------------- Kas lapangan: pengajuan dana ----------------
@@ -64,6 +66,7 @@ export const cancelEquipmentRequest = (id) => put(`/api/request-alat/${id}/cance
 export const listCashRequests = (params = {}) => apiRequest(`/api/field-operational-requests${query({ limit: 15, ...params })}`);
 export const getCashRequest = (id) => apiRequest(`/api/field-operational-requests/${id}`);
 export const createCashRequest = (payload) => post('/api/field-operational-requests', payload);
+export const updateCashRequest = (id, payload) => put(`/api/field-operational-requests/${id}`, payload);
 export const cancelCashRequest = (id, reason) => put(`/api/field-operational-requests/${id}/cancel`, { reason: reason.trim() });
 /** Admin: teruskan ke Finance. */
 export const validateCashRequest = (id, notes) => put(`/api/field-operational-requests/${id}/validate`, notesBody(notes));
@@ -78,6 +81,8 @@ export const createExpenseReport = ({ items, ...fields }, files) => apiRequest('
   method: 'POST',
   body: toFormData({ ...fields, items: JSON.stringify(items) }, 'receipts', files),
 });
+/** Isi laporan saja: nota tetap, ganti nota = batalkan lalu lapor ulang. */
+export const updateExpenseReport = (id, payload) => put(`/api/field-expense-reports/${id}`, payload);
 export const cancelExpenseReport = (id, reason) => put(`/api/field-expense-reports/${id}/cancel`, { reason: reason.trim() });
 
 // ---------------- Klaim upah & bukti bayar ----------------

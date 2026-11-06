@@ -28,6 +28,7 @@ export default function CashRequestDetailPage({ recordId, initialNotice }) {
         </div>
         <div className="flex flex-wrap gap-2">
           {canCreate && row.status === 'approved' && <a href={`#/lapangan/kas/${row.id}/laporan/new`} className="btn btn-primary text-xs">+ Lapor Realisasi</a>}
+          {canCancel && row.status === 'submitted' && <a href={`#/lapangan/kas/${row.id}/edit`} className="btn btn-secondary text-xs">✎ Ubah</a>}
           {canCancel && <CancelAction label="Batalkan Pengajuan" onConfirm={async (reason) => { await cancelCashRequest(row.id, reason); setNotice(`${row.requestCode} dibatalkan.`); reload(); }} />}
         </div>
       </div>

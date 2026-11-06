@@ -71,11 +71,20 @@ const createRules = [
 
 const notesRule = body('notes').optional({ values: 'null' }).isString().isLength({ max: 5000 }).withMessage('notes maksimal 5000 karakter');
 
+// JSON biasa, tanpa berkas: nota tidak diganti lewat sini
+const updateRules = [
+  idParam,
+  ...['subProjectId', 'fieldOperationalRequestId']
+    .map((f) => body(f).not().exists().withMessage(`${f} tidak bisa diubah — batalkan lalu lapor ulang`)),
+  ...createRules.filter((rule) => !rule.builder?.fields?.some((f) => ['subProjectId', 'fieldOperationalRequestId'].includes(f))),
+];
+
 router.get('/', authorize('field-cash:read'), validate(listRules), controller.list);
 router.get('/:id', authorize('field-cash:read'), validate([idParam]), controller.detail);
 // Urutan: authorize dulu (tolak sebelum file dibaca), lalu multipart, baru validator field teks
 router.post('/', authorize('field-cash:create'), uploadMany('receipts', 'evidence', { min: 1, max: MAX_RECEIPTS }),
   validate(createRules), controller.create);
+router.put('/:id', authorize('field-cash:create'), validate(updateRules), controller.update);
 router.put('/:id/cancel', authorize('field-cash:create'),
   validate([idParam, body('reason').isString().trim().notEmpty().withMessage('Alasan pembatalan wajib diisi')]),
   controller.cancel);

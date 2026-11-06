@@ -54,9 +54,17 @@ const createRules = [
   ...managedFields,
 ];
 
+// Tahapan tidak bisa diubah: salah tahapan = batalkan lalu ajukan ulang
+const updateRules = [
+  idParam,
+  body('subProjectId').not().exists().withMessage('subProjectId tidak bisa diubah — batalkan lalu ajukan ulang'),
+  ...createRules.filter((rule) => !rule.builder?.fields?.includes('subProjectId')),
+];
+
 router.get('/', authorize('field-cash:read'), validate(listRules), controller.list);
 router.get('/:id', authorize('field-cash:read'), validate([idParam]), controller.detail);
 router.post('/', authorize('field-cash:create'), validate(createRules), controller.create);
+router.put('/:id', authorize('field-cash:create'), validate(updateRules), controller.update);
 router.put('/:id/cancel', authorize('field-cash:create'),
   validate([idParam, body('reason').isString().trim().notEmpty().withMessage('Alasan pembatalan wajib diisi')]),
   controller.cancel);

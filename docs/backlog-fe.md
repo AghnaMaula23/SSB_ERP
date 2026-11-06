@@ -869,3 +869,17 @@ Sheet rental memakai `rental-sheet` dan kolom `workSession` (E23 bagian 1–2).
 
 **Masih terbuka:** layar Finance (approve dana/klaim, validasi laporan & bukti) belum ada, jadi
 alur berhenti di antrean Finance sampai modulnya dibuat; batalkan log & operator rental (E23 3–4).
+
+## E30. Ubah data Lapangan & kecepatan (5 November 2026)
+
+**CRUD.** Selain buat & batal, kini ada `PUT` untuk `/request-material/:id`, `/request-alat/:id`,
+`/field-operational-requests/:id`, dan `/field-expense-reports/:id`: hanya pengaju, hanya selama belum
+diputuskan, baris diganti seluruhnya. Request material terkunci begitu Admin mengisi kuantitas/biaya.
+Hapus tetap berupa batal beralasan supaya jejak audit utuh. Tetap batal-lalu-ulang: surat jalan (G),
+penerimaan, mutasi stok, klaim upah (log disalin per periode), nota laporan. Jam kerja kini bisa
+dibatalkan dari timesheet (E23 bagian 4). super_admin tetap hanya memantau (E3).
+
+**Kecepatan.** Hasil ukur: tiap request menjalankan 5 query hanya untuk `authenticate`, dan satu query lewat
+pooler port 6543 ±125–400 ms dari jaringan dev (port 5432 ±25–35 ms). Sekarang `authenticate` satu JOIN + cache
+30 detik (dibersihkan saat akun/role diubah lewat API), GET kembar digabung di `apiRequest`, halaman dimuat per
+rute (`React.lazy`), dan log query Prisma hanya nyala dengan `PRISMA_LOG_QUERIES=true`.
