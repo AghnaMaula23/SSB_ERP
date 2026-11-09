@@ -883,3 +883,17 @@ dibatalkan dari timesheet (E23 bagian 4). super_admin tetap hanya memantau (E3).
 pooler port 6543 ±125–400 ms dari jaringan dev (port 5432 ±25–35 ms). Sekarang `authenticate` satu JOIN + cache
 30 detik (dibersihkan saat akun/role diubah lewat API), GET kembar digabung di `apiRequest`, halaman dimuat per
 rute (`React.lazy`), dan log query Prisma hanya nyala dengan `PRISMA_LOG_QUERIES=true`.
+
+## E31. Modul Divisi Finance (6 November 2026)
+
+Rute `#/finance/*`, kartu Divisi Finance aktif untuk pemegang `*:approve` Finance (dan super_admin untuk memantau).
+
+- **Approvals** — satu tab per antrean `stage=finance` di `/api/approval-queue`: PO Divisi Alat (nominal AKTUAL per baris,
+  Kas Alat keluar saat disetujui), Request Material (pilih pool bila project punya >1 pool aktif), Pengajuan Dana,
+  Laporan Realisasi (+ nota), Klaim Upah, Bukti Bayar Upah. Panel keputusan dikunci untuk dokumen sendiri dan bila
+  user yang sama sudah memeriksanya sebagai Admin (pemisahan tugas backend).
+- **Gaji & Upah** — rekap klaim upah harian per bulan (dari `/api/labor-wage-claims`). Gaji bulanan staf: menunggu
+  backend Payroll Karyawan, tanpa data contoh.
+- **Buku Kas Alat** — `/api/equipment/cash/*` baca saja (`cash:read`). Bukan General Ledger.
+- **Chart of Accounts, General Ledger, Verifikasi Pendapatan** — "Soon": `/api/finance-accounting` dan `/api/income`
+  belum dibangun. Sepakati kontraknya dulu sebelum layar dibuat (aturan E21).

@@ -70,6 +70,8 @@ export const updateCashRequest = (id, payload) => put(`/api/field-operational-re
 export const cancelCashRequest = (id, reason) => put(`/api/field-operational-requests/${id}/cancel`, { reason: reason.trim() });
 /** Admin: teruskan ke Finance. */
 export const validateCashRequest = (id, notes) => put(`/api/field-operational-requests/${id}/validate`, notesBody(notes));
+/** Finance: izin belanja; nominal tetap perkiraan. */
+export const approveCashRequest = (id, notes) => put(`/api/field-operational-requests/${id}/approve`, notesBody(notes));
 export const rejectCashRequest = (id, notes) => put(`/api/field-operational-requests/${id}/reject`, { notes: notes.trim() });
 
 // ---------------- Kas lapangan: laporan realisasi + nota ----------------
@@ -93,6 +95,8 @@ export const createWageClaim = (payload) => post('/api/labor-wage-claims', paylo
 export const cancelWageClaim = (id, reason) => put(`/api/labor-wage-claims/${id}/cancel`, { reason: reason.trim() });
 /** Admin: teruskan ke Finance setelah memeriksa kehadiran & upah. */
 export const validateWageClaim = (id, notes) => put(`/api/labor-wage-claims/${id}/validate`, notesBody(notes));
+/** Finance: setujui klaim; Lapangan lalu membayar dan mengunggah bukti. */
+export const approveWageClaim = (id, notes) => put(`/api/labor-wage-claims/${id}/approve`, notesBody(notes));
 export const rejectWageClaim = (id, notes) => put(`/api/labor-wage-claims/${id}/reject`, { notes: notes.trim() });
 
 /** Log tahapan dalam rentang yang belum masuk klaim aktif — pratinjau form klaim. */

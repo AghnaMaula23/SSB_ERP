@@ -9,6 +9,7 @@ import { parseApprovalRoute } from './modules/admin/approvals/utils/approvalRout
 import { parseFilesRoute } from './modules/admin/files/utils/filesRoute.js';
 import FieldLayout from './modules/lapangan/components/FieldLayout.jsx';
 import { parseFieldRoute } from './modules/lapangan/utils/fieldRoute.js';
+import { parseFinanceRoute } from './modules/finance/utils/financeRoute.js';
 import { clearSession, getCurrentUser } from './services/auth.js';
 
 // Tiap halaman dimuat saat dibuka, bukan semuanya sekaligus saat aplikasi mulai.
@@ -33,6 +34,7 @@ const IncomeWorkspacePage = lazy(() => import('./modules/admin/income/pages/Inco
 const ApprovalWorkspacePage = lazy(() => import('./modules/admin/approvals/pages/ApprovalWorkspacePage.jsx'));
 const FilesWorkspacePage = lazy(() => import('./modules/admin/files/pages/FilesWorkspacePage.jsx'));
 const FieldWorkspacePage = lazy(() => import('./modules/lapangan/pages/FieldWorkspacePage.jsx'));
+const FinanceWorkspacePage = lazy(() => import('./modules/finance/pages/FinanceWorkspacePage.jsx'));
 
 function getInitialRoute() {
   const route = window.location.hash.replace(/^#\/?/, '').split('?')[0].replace(/\/+$/, '');
@@ -72,7 +74,8 @@ function isKnownRoute(route) {
     parseIncomeRoute(route) !== null ||
     parseApprovalRoute(route) !== null ||
     parseFilesRoute(route) !== null ||
-    parseFieldRoute(route) !== null;
+    parseFieldRoute(route) !== null ||
+    parseFinanceRoute(route) !== null;
 }
 
 function AppLoading() {
@@ -230,6 +233,8 @@ export default function App() {
     return <IncomeWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseApprovalRoute(route))
     return <ApprovalWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (parseFinanceRoute(route))
+    return <FinanceWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseFieldRoute(route))
     return <FieldWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseFilesRoute(route))

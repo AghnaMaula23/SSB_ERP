@@ -2,7 +2,7 @@ const modules = [
   { id: 'admin/projects', title: 'Admin Division', description: 'Manage construction projects, sub-project contracts, and progress validation.', icon: '▦', tone: 'brand' },
   { id: 'alat/items', title: 'Divisi Alat', description: 'Manage equipment inventory, active issues, and maintenance.', icon: '⚒', tone: 'leaf' },
   { id: 'lapangan/projects', title: 'Divisi Lapangan', description: 'Daily progress, labor logs, material and equipment requests, field cash, and wage claims.', icon: '⌖', tone: 'amber' },
-  { id: 'finance', title: 'Divisi Finance', description: 'Track financial transactions, invoicing, and budget reports.', icon: '▤', tone: 'violet' },
+  { id: 'finance/approvals', title: 'Divisi Finance', description: 'Approve spending, field cash and wage claims, and review the equipment cash book.', icon: '▤', tone: 'violet' },
 ];
 
 // Warna kartu mengikuti logo: biru (brand) & hijau daun (leaf) untuk divisi aktif.
@@ -24,7 +24,9 @@ export default function ModuleSelection({ user = {}, onSelectModule, onSignOut }
   const canAccessAdmin = permissions.includes('project:read') && !isFieldOnly;
   // user:create hanya dipegang super_admin, yang boleh masuk untuk memantau (E3).
   const canAccessField = permissions.includes('progress:create') || permissions.includes('user:create');
-  const moduleAccess = { 'alat/items': canAccessEquipment, 'admin/projects': canAccessAdmin, 'lapangan/projects': canAccessField };
+  const canAccessFinance = ['purchase-request:approve', 'material-request:approve', 'field-cash:approve', 'labor-claim:approve', 'user:create']
+    .some((permission) => permissions.includes(permission));
+  const moduleAccess = { 'alat/items': canAccessEquipment, 'admin/projects': canAccessAdmin, 'lapangan/projects': canAccessField, 'finance/approvals': canAccessFinance };
 
   return (
     <main className="page-enter min-h-screen bg-slate-50 px-4 py-8 text-slate-800 sm:px-8 sm:py-12">
