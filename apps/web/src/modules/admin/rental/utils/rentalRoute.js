@@ -14,7 +14,7 @@
 export function parseRentalRoute(route) {
   const empty = { projectId: null, form: null, unitKey: null };
   const parts = String(route).split('/');
-  if (parts[0] !== 'admin' || parts[1] !== 'rental') return null;
+  if ((parts[0] !== 'admin' && parts[0] !== 'lapangan') || parts[1] !== 'rental') return null;
   const rest = parts.slice(2);
 
   if (rest.length === 0) return empty;

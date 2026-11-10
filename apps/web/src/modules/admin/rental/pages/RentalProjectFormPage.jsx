@@ -4,6 +4,7 @@ import { MockBanner } from '../../project/components/ProjectUi.jsx';
 import UnitFields from '../components/UnitFields.jsx';
 import { fieldErrorsFrom } from '../../project/utils/projectFormat.js';
 import { BILLING_METHODS } from '../utils/rentalFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { emptyUnitForm, validateUnitForm } from '../utils/unitForm.js';
 
 const toForm = (project) => ({
@@ -67,8 +68,8 @@ export default function RentalProjectFormPage({ project, onSubmitForm, onCancel,
   return (
     <FormPage
       breadcrumb={isEdit
-        ? [{ label: 'Rental', href: '#/admin/rental' }, { label: project.projectName, href: `#/admin/rental/${project.id}` }, { label: 'Ubah' }]
-        : [{ label: 'Rental', href: '#/admin/rental' }, { label: 'Transaksi Baru' }]}
+        ? [{ label: 'Rental', href: `#/${divisionPrefix()}/rental` }, { label: project.projectName, href: `#/${divisionPrefix()}/rental/${project.id}` }, { label: 'Ubah' }]
+        : [{ label: 'Rental', href: `#/${divisionPrefix()}/rental` }, { label: 'Transaksi Baru' }]}
       icon="🛠️"
       title={isEdit ? 'Ubah Kontrak Rental' : 'Transaksi Baru'}
       subtitle={isEdit ? project.projectCode : 'Sewa alat berat ke penyewa eksternal'}

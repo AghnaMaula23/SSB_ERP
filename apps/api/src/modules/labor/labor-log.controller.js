@@ -1,7 +1,7 @@
 const { success, created, paginated } = require('../../utils/response.js');
 // Konversi angka dari query string WAJIB di sini — `.toInt()` pada query()
 // tidak berfungsi di Express 5. Lihat utils/query.js.
-const { pageParams, numQuery } = require('../../utils/query.js');
+const { pageParams, numQuery, boolQuery } = require('../../utils/query.js');
 const service = require('./labor-log.service.js');
 
 const list = async (req, res, next) => {
@@ -10,6 +10,7 @@ const list = async (req, res, next) => {
       ...pageParams(req),
       subProjectId: numQuery(req.query.subProjectId),
       projectWorkerId: numQuery(req.query.projectWorkerId),
+      claimed: boolQuery(req.query.claimed),
       startDate: req.query.startDate,
       endDate: req.query.endDate,
     });

@@ -55,12 +55,6 @@ export function prSummary(pr) {
   return { units: [], lines: (pr.stockItems || []).map((item) => item.itemName) };
 }
 
-export const KAS_STATUS = {
-  submitted: { label: 'Menunggu Verifikasi', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  approved: { label: 'Disetujui', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
-  rejected: { label: 'Ditolak', className: 'bg-red-50 text-red-700 border-red-200' },
-};
-
 function readUser() {
   try {
     return JSON.parse(localStorage.getItem('user') || '{}');
@@ -87,6 +81,8 @@ export const QUEUE_SOURCES = {
   material_request: { label: 'Request Material', icon: '🧱', className: 'bg-amber-50 text-amber-800 border-amber-200' },
   equipment_request: { label: 'Request Alat', icon: '🚜', className: 'bg-sky-50 text-sky-700 border-sky-200' },
   progress_log: { label: 'Progress Harian', icon: '📈', className: 'bg-brand-50 text-brand-700 border-brand-200' },
+  field_operational_request: { label: 'Kas Lapangan', icon: '💵', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
+  labor_wage_claim: { label: 'Klaim Upah', icon: '👷', className: 'bg-violet-50 text-violet-700 border-violet-200' },
 };
 
 // detailPath progress: /api/projects/sub-projects/:subId/progress-logs/:logId
@@ -101,6 +97,8 @@ export function queueDetailRoute(row) {
   if (row.sourceType === 'purchase_request') return `${base}/pr/${row.sourceId}`;
   if (row.sourceType === 'equipment_request') return `${base}/alat/${row.sourceId}`;
   if (row.sourceType === 'material_request') return `${base}/material/${row.sourceId}`;
+  if (row.sourceType === 'field_operational_request') return `${base}/kas/${row.sourceId}`;
+  if (row.sourceType === 'labor_wage_claim') return `${base}/upah/${row.sourceId}`;
   if (row.sourceType === 'progress_log') {
     const ids = progressIds(row);
     return ids ? `${base}/progress/${ids.subProjectId}/${ids.logId}` : null;

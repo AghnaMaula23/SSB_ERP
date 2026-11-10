@@ -40,7 +40,7 @@ async function readPayload(response) {
   return raw;
 }
 
-export async function apiRequest(path, options = {}) {
+async function sendRequest(path, options) {
   const headers = new Headers(options.headers || {});
   const token = localStorage.getItem('token');
 
@@ -77,6 +77,21 @@ export async function apiRequest(path, options = {}) {
 
   if (payload?.meta) return { data: payload.data, ...payload.meta };
   return payload?.data ?? payload;
+}
+
+// GET yang sama saat yang pertama masih berjalan memakai hasil yang sama: beberapa
+// komponen sering meminta data yang sama (dan StrictMode menjalankan effect dua kali),
+// padahal tiap permintaan berarti bolak-balik ke database.
+const inflightGets = new Map();
+
+export function apiRequest(path, options = {}) {
+  if ((options.method && options.method !== 'GET') || options.signal) return sendRequest(path, options);
+  const key = `${localStorage.getItem('token')}|${path}`;
+  const running = inflightGets.get(key);
+  if (running) return running;
+  const request = sendRequest(path, options).finally(() => inflightGets.delete(key));
+  inflightGets.set(key, request);
+  return request;
 }
 
 export { API_BASE_URL };

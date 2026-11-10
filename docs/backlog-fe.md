@@ -759,3 +759,141 @@ horizontal halaman maupun elemen terpotong di luar wadah gulir.
 membalas 500 `Cannot read properties of undefined (reading 'findMany')`.
 
 **Tetap mock (backend belum ada):** income, klaim pendapatan alat, kas lapangan, log aktivitas.
+## E27. Kontrak Divisi Lapangan BEKU — kas lapangan & upah pekerja (26 Okt 2026)
+
+Rencana & fase: `docs/plan-divisi-lapangan.md`. Kontrak: Swagger tag *Kas Lapangan* dan
+*Upah Pekerja*. **API belum dibangun** (fase F2/F4) — jangan buat mock/localStorage untuk
+endpoint ini; layar menunggu API + data seeder.
+
+- `fieldCashMockService.js` diganti di F3. Bentuknya berubah: bukan satu "klaim kas"
+  yang diputuskan Admin, tapi **pengajuan** (Admin → Finance, nominal perkiraan) lalu
+  **laporan realisasi + nota** (Finance validasi). Laporan boleh tanpa pengajuan dengan
+  `urgentReason` wajib — tampilkan penanda "tanpa pengajuan" di antrean Finance.
+- Kategori biaya dari `GET /field-expense-categories` (seeder), bukan daftar di kode.
+- Antrean Approval Center bertambah 4 `sourceType`: `field_operational_request`,
+  `field_expense_report`, `labor_wage_claim`, `labor_payment_proof`.
+- `GET /labor-logs` mendapat `?claimed=` dan field `claim` per log; ubah/hapus log yang
+  ada di klaim aktif → 409.
+- Menutup tahapan kini juga 409 selama urusan upah/kas belum tuntas (L7a).
+
+**Update 3 Nov 2026 — API pengajuan dana SUDAH ADA (T11)**, persis kontrak swagger:
+`GET /field-expense-categories[?activeOnly=false]`, `GET/POST /field-operational-requests`,
+`GET /:id`, `PUT /:id/cancel` (`{ reason }` wajib), `/validate`, `/approve`, `/reject`
+(`{ notes }` wajib). Seeder membuat 8 kategori + 6 pengajuan demo (satu per status, dua
+penolakan: Admin & Finance). Field tambahan opsional di response: `rejectedBy`
+(`admin`/`finance`), `itemCount` (list), `cancelledBy`/`cancelledAt`/`cancelReason` (detail).
+Yang **masih kosong sampai laporan realisasi dibangun (T12)**: `realizedAmount` selalu `0`,
+`difference` = `requestedAmount`, `reports` = `[]` — tampilkan apa adanya, jangan dihitung
+di FE. Belum ada juga: antrean Approval Center untuk pengajuan ini (T15.3) dan syarat
+penutupan tahapan (T16.3) — sampai itu, layar Admin/Finance membaca langsung
+`GET /field-operational-requests?status=submitted|waiting_finance_approval`.
+
+**Update 3 Nov 2026 — API laporan realisasi + nota SUDAH ADA (T12)**, persis kontrak:
+`GET /field-expense-reports` (filter `subProjectId`, `fieldOperationalRequestId`,
+`urgent`, `status`, `startDate`/`endDate`), `GET /:id`, `POST` multipart (`items` = string
+JSON, nota di field `receipts` 1–10 file), `PUT /:id/cancel` (`{ reason }`), `/validate`,
+`/reject` (`{ notes }` wajib) — keduanya Finance saja. Nota dibuka lewat
+`GET /files/{fileId}/url`. Folder sistem `field-expense-receipts` ("Nota Kas Lapangan")
+muncul di tiap tahapan konstruksi di halaman Files. Pengajuan kini memuat angka sungguhan:
+`realizedAmount` (laporan `validated`), `difference` (boleh negatif = realisasi melebihi
+pengajuan), `reports[]` (semua laporan, ringkas). Field tambahan opsional: `itemCount`,
+`receiptCount` (list laporan), `request.status` (detail laporan). Seeder: 3 laporan demo
+(validated merujuk pengajuan, mendesak menunggu Finance, ditolak).
+
+**Update 3 Nov 2026 — Approval Center & penutupan kas (T15.3, T16.3, T16.4).**
+`GET /approval-queue` kini memuat `field_operational_request` (tahap `admin` dan `finance`,
+aksi validate/reject lalu approve/reject) dan `field_expense_report` (tahap `finance`, aksi
+validate/reject). `amount` = total perkiraan/nota. `summary` laporan diawali
+`Mendesak · tanpa pengajuan` atau `Realisasi FOR-xxxxxx` — itulah penanda "tanpa pengajuan"
+untuk 15.5. Menutup tahapan kini 409 selama ada pengajuan dana menunggu keputusan atau
+laporan menunggu validasi (pesannya menyebut jumlah masing-masing); pengajuan `approved`
+tanpa laporan tidak menahan. Penutupan menulis arsip ke-5 `stage-field-cash` (sheet
+Pengajuan, Item Pengajuan, Laporan Realisasi, Item Laporan) di folder Arsip Penutupan.
+
+**Update 3 Nov 2026 — API klaim upah + bukti bayar SUDAH ADA (T13, T14)**, persis kontrak:
+`GET/POST /labor-wage-claims` (`{ subProjectId, periodStart, periodEnd, notes }` — log
+TIDAK dipilih FE: semua log tahapan dalam rentang yang belum di klaim aktif ikut; 0 log →
+409), `GET /:id`, `PUT /:id/cancel` (`{ reason }`), `/validate`, `/approve`, `/reject`
+(`{ notes }` wajib). `GET/POST /labor-payment-proofs` (multipart, berkas di field `proofs`
+1–10 file), `GET /:id`, `PUT /:id/cancel`, `/validate`, `/reject` (Finance). Kode
+`LWC-NNNNNN` / `LPP-NNNNNN`. Yang perlu diketahui layar:
+- `GET /labor-logs?claimed=true|false` + field `claim` (`{ id, claimCode, status }` atau
+  null) di list DAN detail log. Log dengan `claim` ≠ null: sembunyikan tombol ubah/hapus
+  (server 409). Klaim ditolak/batal → `claim` kembali null.
+- Detail klaim: `paidAmount` dan `difference` **null selama belum ada bukti `validated`**
+  (bukan 0). `difference = totalAmount − paidAmount`, negatif = dibayar melebihi klaim.
+  `payment` = bukti aktif (submitted/validated) atau null — penentu tombol "Unggah bukti"
+  (hanya kalau klaim `approved` dan `payment` null).
+- Field tambahan opsional: `rejectedBy` (`admin`/`finance`), `items[].taskNotes` (alasan
+  lembur untuk pemeriksa), `perWorker[].totalDailyWage`/`totalOvertime`, `payment` di detail,
+  `claim.status/periodStart/periodEnd/subProject` dan `fileCount` di bukti bayar.
+- Folder sistem `labor-payment-proofs` ("Bukti Bayar Upah") di tiap tahapan konstruksi.
+- Seeder: 4 klaim demo dari 5 log terakhir tahapan demo — lunas (bukti pertama ditolak,
+  kedua validated), antrean Finance, ditolak Admin, antrean Admin.
+
+**Update 3 Nov 2026 — Approval Center & penutupan upah (T15.4, T16.3, T16.4).** Backend
+Divisi Lapangan kini lengkap.
+- `GET /approval-queue` memuat `labor_wage_claim` (tahap `admin`: validate/reject; `finance`:
+  approve/reject) dan `labor_payment_proof` (`finance`: validate/reject). `amount` klaim =
+  total upah + lembur; `amount` bukti = nominal DIBAYAR. `summary` klaim
+  `Periode DD-MM-YYYY s/d DD-MM-YYYY · N orang · M hari-orang`; bukti
+  `Bayar LWC-xxxxxx · diterima <nama> · N berkas` (bagian "diterima" hanya kalau diisi).
+- **Menutup tahapan kini 409 selama upah belum tuntas** — pesan menyebut jumlah: log pekerja
+  belum masuk klaim upah; klaim upah menunggu keputusan; klaim disetujui tanpa bukti bayar
+  tervalidasi. Klaim ditolak/batal membuat lognya kembali "belum diklaim". Untuk tahapan yang
+  punya log lama, alurnya: klaim semua periode → validasi → approve → bukti → validasi.
+- Arsip `stage-labor`: sheet `Log Pekerja` mendapat kolom `Klaim upah`; sheet baru `Klaim
+  Upah` (klaim ditolak ikut, dibatalkan tidak; footer total klaim aktif) dan `Bukti Bayar`
+  (yang ditolak ikut beserta alasannya).
+
+
+---
+
+# Modul Lapangan (5 November 2026)
+
+## E29. Layar Divisi Lapangan & sinkronisasi Admin
+
+**Modul baru `modules/lapangan`, rute `#/lapangan/*`:** Request Material (+ surat jalan &
+penerimaan), Request Alat internal, Kas Lapangan (pengajuan + laporan realisasi/mendesak),
+Upah Pekerja (klaim + bukti bayar).
+
+**Dipakai bersama Admin:** halaman Project & Rental dibuka lewat `lapangan/projects` dan
+`lapangan/rental`; tombolnya sudah disaring `hasPermission`, yang berbeda hanya awalan rute
+(`modules/admin/utils/divisionRoute.js`) dan menu (`DivisionLayout`, `FieldLayout`). Tab baru
+**Log Harian** di tiap tahapan: Lapangan menulis, Admin hanya membaca (E26).
+
+**Admin:** tab Kas Lapangan & Klaim Upah di Pusat Approval memakai antrean sungguhan;
+`fieldCashMockService` dihapus. Folder sistem Nota Kas & Bukti Bayar tampil di Files.
+Sheet rental memakai `rental-sheet` dan kolom `workSession` (E23 bagian 1–2).
+`ModuleSelection`: Lapangan tidak lagi masuk workspace Admin.
+
+**Masih terbuka:** layar Finance (approve dana/klaim, validasi laporan & bukti) belum ada, jadi
+alur berhenti di antrean Finance sampai modulnya dibuat; batalkan log & operator rental (E23 3–4).
+
+## E30. Ubah data Lapangan & kecepatan (5 November 2026)
+
+**CRUD.** Selain buat & batal, kini ada `PUT` untuk `/request-material/:id`, `/request-alat/:id`,
+`/field-operational-requests/:id`, dan `/field-expense-reports/:id`: hanya pengaju, hanya selama belum
+diputuskan, baris diganti seluruhnya. Request material terkunci begitu Admin mengisi kuantitas/biaya.
+Hapus tetap berupa batal beralasan supaya jejak audit utuh. Tetap batal-lalu-ulang: surat jalan (G),
+penerimaan, mutasi stok, klaim upah (log disalin per periode), nota laporan. Jam kerja kini bisa
+dibatalkan dari timesheet (E23 bagian 4). super_admin tetap hanya memantau (E3).
+
+**Kecepatan.** Hasil ukur: tiap request menjalankan 5 query hanya untuk `authenticate`, dan satu query lewat
+pooler port 6543 ±125–400 ms dari jaringan dev (port 5432 ±25–35 ms). Sekarang `authenticate` satu JOIN + cache
+30 detik (dibersihkan saat akun/role diubah lewat API), GET kembar digabung di `apiRequest`, halaman dimuat per
+rute (`React.lazy`), dan log query Prisma hanya nyala dengan `PRISMA_LOG_QUERIES=true`.
+
+## E31. Modul Divisi Finance (6 November 2026)
+
+Rute `#/finance/*`, kartu Divisi Finance aktif untuk pemegang `*:approve` Finance (dan super_admin untuk memantau).
+
+- **Approvals** — satu tab per antrean `stage=finance` di `/api/approval-queue`: PO Divisi Alat (nominal AKTUAL per baris,
+  Kas Alat keluar saat disetujui), Request Material (pilih pool bila project punya >1 pool aktif), Pengajuan Dana,
+  Laporan Realisasi (+ nota), Klaim Upah, Bukti Bayar Upah. Panel keputusan dikunci untuk dokumen sendiri dan bila
+  user yang sama sudah memeriksanya sebagai Admin (pemisahan tugas backend).
+- **Gaji & Upah** — rekap klaim upah harian per bulan (dari `/api/labor-wage-claims`). Gaji bulanan staf: menunggu
+  backend Payroll Karyawan, tanpa data contoh.
+- **Buku Kas Alat** — `/api/equipment/cash/*` baca saja (`cash:read`). Bukan General Ledger.
+- **Chart of Accounts, General Ledger, Verifikasi Pendapatan** — "Soon": `/api/finance-accounting` dan `/api/income`
+  belum dibangun. Sepakati kontraknya dulu sebelum layar dibuat (aturan E21).

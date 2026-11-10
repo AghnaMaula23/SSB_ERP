@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StatusBadge } from './ProjectUi.jsx';
 import { PROJECT_STATUS, subProjectTypeLabel } from '../utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { SUB_PAGES } from '../utils/projectRoute.js';
 
 const STATUS_DOT = {
@@ -59,7 +60,7 @@ export default function ProjectTree({ project, stagesEntry, selection, canCreate
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b border-slate-200 px-4 py-4">
-        <a href="#/admin/projects" className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-brand-700">
+        <a href={`#/${divisionPrefix()}/projects`} className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-brand-700">
           ← Semua Project
         </a>
         <p className="mt-3 font-mono text-[11px] font-semibold text-slate-400">{project.projectCode}</p>
@@ -69,7 +70,7 @@ export default function ProjectTree({ project, stagesEntry, selection, canCreate
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-3" aria-label="Navigasi project">
         <a
-          href={`#/admin/projects/${project.id}`}
+          href={`#/${divisionPrefix()}/projects/${project.id}`}
           className={`flex items-center gap-2 ${linkClass(overviewActive)}`}
           aria-current={overviewActive ? 'page' : undefined}
         >
@@ -77,7 +78,7 @@ export default function ProjectTree({ project, stagesEntry, selection, canCreate
           Ringkasan Project
         </a>
         <a
-          href={`#/admin/projects/${project.id}/pool`}
+          href={`#/${divisionPrefix()}/projects/${project.id}/pool`}
           className={`mt-0.5 flex items-center gap-2 ${linkClass(poolActive)}`}
           aria-current={poolActive ? 'page' : undefined}
         >
@@ -101,7 +102,7 @@ export default function ProjectTree({ project, stagesEntry, selection, canCreate
                 <div className="flex items-center gap-1">
                   <Toggle open={open} onClick={() => toggleSub(stage.id)} label={label} />
                   <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[stage.status] || STATUS_DOT.planned}`} title={stage.status} aria-hidden="true" />
-                  <a href={`#/admin/projects/${project.id}/sub/${stage.id}/volume`} className={`${linkClass(false)} font-medium`}>{label}</a>
+                  <a href={`#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/volume`} className={`${linkClass(false)} font-medium`}>{label}</a>
                 </div>
                 {open && (
                   <ul className="ml-3 space-y-0.5 border-l border-slate-200 pl-2">
@@ -110,7 +111,7 @@ export default function ProjectTree({ project, stagesEntry, selection, canCreate
                       return (
                         <li key={page.key}>
                           <a
-                            href={`#/admin/projects/${project.id}/sub/${stage.id}/${page.key}`}
+                            href={`#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/${page.key}`}
                             className={`flex items-center gap-2 border-l-2 ${active ? 'border-brand-600' : 'border-transparent'} ${linkClass(active)}`}
                             aria-current={active ? 'page' : undefined}
                           >
@@ -130,7 +131,7 @@ export default function ProjectTree({ project, stagesEntry, selection, canCreate
           {canAddStage && (
             <li>
               <a
-                href={`#/admin/projects/${project.id}/sub/new`}
+                href={`#/${divisionPrefix()}/projects/${project.id}/sub/new`}
                 className={`flex items-center gap-1 rounded-md px-1 py-1.5 text-[13px] font-medium transition ${
                   selection.form === 'sub-new' ? 'bg-brand-50 text-brand-800' : 'text-brand-700 hover:bg-brand-50'
                 }`}

@@ -69,13 +69,13 @@ export function FilterChips({ options, value, onChange }) {
  * Isian alasan penolakan — backend mewajibkan `notes` saat menolak (400 tanpa itu).
  * `onSubmit(notes)` boleh melempar; pesannya ditampilkan di bawah isian.
  */
-export function RejectReasonForm({ label, submitLabel = 'Tolak', placeholder, onSubmit, onCancel }) {
+export function RejectReasonForm({ label, submitLabel = 'Tolak', requiredMessage = 'Alasan penolakan wajib diisi.', placeholder, onSubmit, onCancel }) {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    if (!notes.trim()) { setError('Alasan penolakan wajib diisi.'); return; }
+    if (!notes.trim()) { setError(requiredMessage); return; }
     setBusy(true);
     try {
       await onSubmit(notes.trim());

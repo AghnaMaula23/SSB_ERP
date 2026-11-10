@@ -3,6 +3,7 @@ import FormPage, { Field, FormError, InfoCard } from '../components/FormPage.jsx
 import { EmptyPanel, LoadingPanel } from '../components/ProjectUi.jsx';
 import { addPoolItem, getPool } from '../services/projectService.js';
 import { fieldErrorsFrom } from '../utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { getEquipmentTypes, getItems } from '../../../alat/services/alatService.js';
 
 /** Tambah item ke equipment pool (permission equipment-pool:update). */
@@ -71,9 +72,9 @@ export default function PoolItemFormPage({ project, poolId, onCancel, onSaved })
   return (
     <FormPage
       breadcrumb={[
-        { label: 'Project', href: '#/admin/projects' },
-        { label: project.projectName, href: `#/admin/projects/${project.id}` },
-        { label: 'Equipment Pool', href: `#/admin/projects/${project.id}/pool` },
+        { label: 'Project', href: `#/${divisionPrefix()}/projects` },
+        { label: project.projectName, href: `#/${divisionPrefix()}/projects/${project.id}` },
+        { label: 'Equipment Pool', href: `#/${divisionPrefix()}/projects/${project.id}/pool` },
         { label: pool.poolCode },
       ]}
       icon="🧰"

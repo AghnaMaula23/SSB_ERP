@@ -52,6 +52,14 @@ const createRules = [
   ),
 ];
 
+// Jenis & konteks tidak bisa diubah: salah tujuan = batalkan lalu ajukan ulang
+const updateRules = [
+  idParam,
+  ...['requestType', 'subProjectId', 'externalRentalProjectId']
+    .map((f) => body(f).not().exists().withMessage(`${f} tidak bisa diubah — batalkan lalu ajukan ulang`)),
+  ...createRules.filter((rule) => !rule.builder?.fields?.some((f) => ['requestType', 'subProjectId', 'externalRentalProjectId'].includes(f))),
+];
+
 const adminReviewRules = [
   idParam,
   body('action').isIn(['forward', 'reject']).withMessage('action harus "forward" atau "reject"'),
@@ -71,6 +79,7 @@ const equipmentReviewRules = [
 router.get('/', authorize('equipment-request:read'), validate(listRules), controller.list);
 router.get('/:id', authorize('equipment-request:read'), validate([idParam]), controller.detail);
 router.post('/', authorize('equipment-request:create'), validate(createRules), controller.create);
+router.put('/:id', authorize('equipment-request:create'), validate(updateRules), controller.update);
 router.put('/:id/cancel', authorize('equipment-request:create'), validate([idParam]), controller.cancel);
 router.put('/:id/admin-review', authorize('equipment-request:review'), validate(adminReviewRules), controller.adminReview);
 router.put('/:id/equipment-review', authorize('equipment-request:approve'), validate(equipmentReviewRules), controller.equipmentReview);

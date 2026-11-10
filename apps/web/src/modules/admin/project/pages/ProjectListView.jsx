@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Breadcrumb, EmptyPanel, LoadingPanel, MetricCard, StatusBadge } from '../components/ProjectUi.jsx';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { PROJECT_STATUS, formatDate, projectSchedule } from '../utils/projectFormat.js';
 
 const STATUS_FILTERS = ['', 'planned', 'active', 'completed', 'cancelled'];
 
 /** Halaman awal menu Project: ringkasan portofolio + kartu tiap project. */
 export default function ProjectListView({ projects, loading, error, canCreate, onCreate }) {
+  const isField = divisionPrefix() === 'lapangan';
   const [statusFilter, setStatusFilter] = useState('');
   const counts = useMemo(() => projects.reduce((result, project) => {
     result[project.status] = (result[project.status] || 0) + 1;
@@ -15,11 +17,11 @@ export default function ProjectListView({ projects, loading, error, canCreate, o
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Divisi Admin' }, { label: 'Project' }]} />
+      <Breadcrumb items={[{ label: isField ? 'Divisi Lapangan' : 'Divisi Admin' }, { label: 'Project' }]} />
       <div className="mb-6 mt-2 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Project Konstruksi</h1>
-          <p className="mt-1 text-xs text-slate-500">Kelola project, tahapan pekerjaan, dan validasi progress lapangan.</p>
+          <p className="mt-1 text-xs text-slate-500">{isField ? 'Pilih project, lalu buka tahapannya untuk mencatat pekerjaan harian.' : 'Kelola project, tahapan pekerjaan, dan validasi progress lapangan.'}</p>
         </div>
         {canCreate && <button type="button" onClick={onCreate} className="btn btn-primary text-xs">+ Tambah Proyek</button>}
       </div>
@@ -69,7 +71,7 @@ export default function ProjectListView({ projects, loading, error, canCreate, o
             return (
               <a
                 key={project.id}
-                href={`#/admin/projects/${project.id}`}
+                href={`#/${divisionPrefix()}/projects/${project.id}`}
                 className="card-panel group flex flex-col p-5 transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">

@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { GuardedLink, Notice } from '../../project/components/ProjectUi.jsx';
 import { formatDate, formatNumber, todayIso } from '../../project/utils/projectFormat.js';
 import { SESSIONS, groupTimesheet, monthRange } from '../utils/rentalFormat.js';
-import { listRentalWorkhours } from '../services/rentalService.js';
+import { listRentalWorkhours, voidRentalWorkhour } from '../services/rentalService.js';
+import { hasPermission } from '../../../../services/permissions.js';
 import { listDemoLogs } from '../services/rentalDemoService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { downloadCsv } from '../../../../utils/csv.js';
 
 const fmtHours = (value) => (value ? formatNumber(value) : '-');
@@ -29,7 +31,10 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
   const [month, setMonth] = useState(() => todayIso().slice(0, 7));
   const [showAllDays, setShowAllDays] = useState(true);
   const [state, setState] = useState({ key: null, logs: [], error: '' });
-  const requestKey = `${unit.key}|${month}`;
+  const [reloadKey, setReloadKey] = useState(0);
+  const [actionError, setActionError] = useState('');
+  const requestKey = `${unit.key}|${month}|${reloadKey}`;
+  const canVoid = canRecord && unit.kind !== 'demo' && hasPermission('workhour:update');
   const loading = state.key !== requestKey;
 
   useEffect(() => {
@@ -45,6 +50,19 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
     return () => { cancelled = true; };
   }, [month, requestKey, unit]);
 
+  // Satu baris = satu tanggal, jadi semua sesinya dibatalkan bersama lalu dicatat ulang.
+  const handleVoid = async (row) => {
+    const reason = window.prompt(`Alasan membatalkan seluruh sesi tanggal ${formatDate(row.date)}:`);
+    if (!reason?.trim()) return;
+    setActionError('');
+    try {
+      for (const logId of row.logIds) await voidRentalWorkhour(logId, reason);
+    } catch (error) {
+      setActionError(error.message);
+    }
+    setReloadKey((key) => key + 1);
+  };
+
   const grouped = useMemo(() => groupTimesheet(state.logs), [state.logs]);
   const rows = useMemo(() => {
     if (!showAllDays) return grouped;
@@ -55,7 +73,7 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
   const sum = (key) => grouped.reduce((total, row) => total + (row.sessions[key]?.hours || 0), 0);
   const totalHours = grouped.reduce((total, row) => total + row.total, 0);
   const workDays = grouped.filter((row) => row.total > 0).length;
-  const sheetHref = `#/admin/rental/${project.id}/unit/${unit.key}/sheet/new`;
+  const sheetHref = `#/${divisionPrefix()}/rental/${project.id}/unit/${unit.key}/sheet/new`;
 
   const exportCsv = () => downloadCsv(`timesheet-${project.projectCode}-${unit.assetCode || unit.key}-${month}.csv`, grouped, [
     { label: 'Tanggal', value: (row) => row.date },
@@ -70,6 +88,7 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
 
   return (
     <section className="card-panel overflow-hidden" aria-label="Rekapitulasi timesheet">
+      {actionError && <p className="border-b border-red-200 bg-red-50 px-5 py-2 text-xs text-red-700" role="alert">{actionError}</p>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
         <div>
           <h2 className="text-base font-bold text-slate-900">Rekapitulasi Timesheet Pemakaian Alat</h2>
@@ -135,6 +154,7 @@ export default function UnitTimesheet({ project, unit, canRecord }) {
                   <td className="border-r border-slate-100 bg-brand-50/50 px-3 py-2 text-center font-mono text-sm font-bold text-slate-900">{row.empty ? '-' : formatNumber(row.total)}</td>
                   <td className="border-r border-slate-100 px-3 py-2 text-center">{row.total > 0 ? 1 : 0}</td>
                   <td className="max-w-64 px-3 py-2">
+                    {canVoid && !row.empty && <button type="button" onClick={() => handleVoid(row)} className="float-right text-[11px] font-semibold text-red-600 hover:underline">Batalkan</button>}
                     <span className={`block truncate ${row.empty ? 'italic' : ''}`} title={row.notes.join('; ')}>
                       {row.empty ? (sunday ? 'Libur Mingguan' : 'Tidak beroperasi') : row.notes.join('; ') || '-'}
                       {row.untimed > 0 && <span className="ml-1 text-[10px] text-slate-400">(+{formatNumber(row.untimed)} jam tanpa jam mulai)</span>}

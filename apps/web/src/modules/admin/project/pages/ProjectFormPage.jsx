@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import FormPage, { Field, InfoCard, SectionDivider } from '../components/FormPage.jsx';
 import { createProject, updateProject } from '../services/projectService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { fieldErrorsFrom, formatCurrency } from '../utils/projectFormat.js';
 
 const toForm = (project) => ({
@@ -48,8 +49,8 @@ export default function ProjectFormPage({ project, contractSummary, onCancel, on
   return (
     <FormPage
       breadcrumb={isEdit
-        ? [{ label: 'Project', href: '#/admin/projects' }, { label: project.projectName, href: `#/admin/projects/${project.id}` }, { label: 'Ubah' }]
-        : [{ label: 'Project', href: '#/admin/projects' }, { label: 'Project Baru' }]}
+        ? [{ label: 'Project', href: `#/${divisionPrefix()}/projects` }, { label: project.projectName, href: `#/${divisionPrefix()}/projects/${project.id}` }, { label: 'Ubah' }]
+        : [{ label: 'Project', href: `#/${divisionPrefix()}/projects` }, { label: 'Project Baru' }]}
       icon="🏗️"
       title={isEdit ? 'Ubah Project' : 'Input Project Baru'}
       subtitle={isEdit ? project.projectCode : 'Drafting new construction project'}

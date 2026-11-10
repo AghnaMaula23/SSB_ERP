@@ -30,6 +30,18 @@ const COPY = {
     empty: 'Tidak ada progress harian yang menunggu validasi.',
     permission: 'progress:validate',
   },
+  field_operational_request: {
+    title: 'Pengajuan Dana Lapangan',
+    description: 'Periksa kewajaran perkiraan biaya, lalu teruskan ke Finance atau tolak dengan alasan. Nominal tidak diubah di sini.',
+    empty: 'Tidak ada pengajuan dana yang menunggu Admin.',
+    permission: 'field-cash:validate',
+  },
+  labor_wage_claim: {
+    title: 'Klaim Upah Harian',
+    description: 'Periksa kehadiran dan upah per orang, lalu teruskan ke Finance atau tolak. Log yang salah diperbaiki Lapangan setelah klaim ditolak.',
+    empty: 'Tidak ada klaim upah yang menunggu Admin.',
+    permission: 'labor-claim:validate',
+  },
 };
 
 /**

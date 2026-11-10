@@ -3,6 +3,7 @@ import { Breadcrumb, GuardedLink, Notice, ProgressBar, ProgressRing, StatusBadge
 import FieldConditionModal from '../components/FieldConditionModal.jsx';
 import { RejectReasonForm } from '../../approvals/components/ApprovalUi.jsx';
 import { listProgressLogs, setProgressValidation } from '../services/projectService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import {
   PROGRESS_STATUS, PROJECT_STATUS, formatCurrency, formatDate, formatNumber, formatVolume,
   stageCrumbs, subProjectTypeLabel, unitLabel,
@@ -170,7 +171,7 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
             </button>
           )}
           <GuardedLink
-            href={`#/admin/projects/${project.id}/sub/${stage.id}/volume/new`}
+            href={`#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/volume/new`}
             allowed={canRecord && stage.status === 'active'}
             reason={!canRecord ? 'Pencatatan progress milik role Lapangan (progress:create).' : 'Progress hanya bisa dicatat pada tahapan berstatus Active.'}
           >
@@ -273,7 +274,7 @@ export default function SubProjectVolumePage({ project, stage, canValidate, canR
                       <td>
                         <div className="flex justify-end gap-1">
                           {canRecord && log.status !== 'validated' && (
-                            <a href={`#/admin/projects/${project.id}/sub/${stage.id}/volume/${log.id}/edit`} className="btn btn-ghost px-2 py-1 text-[11px]" title="Perbaiki catatan">✎ Ubah</a>
+                            <a href={`#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/volume/${log.id}/edit`} className="btn btn-ghost px-2 py-1 text-[11px]" title="Perbaiki catatan">✎ Ubah</a>
                           )}
                           {canValidate && (NEXT_VALIDATION[log.status] || []).map((status) => (
                             <button

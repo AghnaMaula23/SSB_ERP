@@ -56,7 +56,7 @@ function seedLogs(unitKey, unitIndex) {
     if (next() < 0.08) continue; // standby / maintenance
     const date = isoDate(day);
     const push = (start, end, hours, description) => logs.push({
-      id: logs.length + 1, workDate: date, startedAt: at(date, start), stoppedAt: at(date, end), totalWorkhour: hours, description, sourceType: 'external_rental',
+      id: logs.length + 1, workDate: date, startedAt: at(date, start), stoppedAt: at(date, end), totalWorkhour: hours, description, sourceType: 'external_rental', workSession: start < '12:00' ? 'pagi' : start < '17:00' ? 'siang' : 'overtime',
     });
     const task = ['Langsir material sirtu', 'Backfill area A1', 'Galian saluran utama', 'Perataan tanah', 'Loading ke dump truck'][Math.floor(next() * 5)];
     push('08:00', '12:00', 4, task);

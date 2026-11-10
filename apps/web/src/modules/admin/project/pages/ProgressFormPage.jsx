@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import FormPage, { Field, FormError, InfoCard, SectionDivider } from '../components/FormPage.jsx';
 import { EmptyPanel, LoadingPanel } from '../components/ProjectUi.jsx';
 import { createProgressLog, getProgressLog, updateProgressLog } from '../services/projectService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { fieldErrorsFrom, formatDate, formatVolume, stageCrumbs, todayIso, unitLabel } from '../utils/projectFormat.js';
 
 const WEATHER_OPTIONS = ['Cerah', 'Berawan', 'Gerimis', 'Hujan', 'Hujan Lebat'];
@@ -91,20 +92,20 @@ export default function ProgressFormPage({ project, stage, logId, onCancel, onSa
     }
   };
 
-  const crumbs = stageCrumbs(project, stage, { label: 'Kontrak Volume', href: `#/admin/projects/${project.id}/sub/${stage.id}/volume` }, { label: isEdit ? 'Ubah Progress' : 'Input Progress' });
+  const crumbs = stageCrumbs(project, stage, { label: 'Kontrak Volume', href: `#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/volume` }, { label: isEdit ? 'Ubah Progress' : 'Input Progress' });
 
   if (loadState === 'loading') return <LoadingPanel>Memuat catatan progress...</LoadingPanel>;
   if (loadState === 'error') return <EmptyPanel icon="🔎" title="Catatan tidak bisa dibuka">{formError}</EmptyPanel>;
   if (!isEdit && stage.status !== 'active') {
     return (
-      <EmptyPanel icon="⏸️" title="Tahapan belum aktif" action={<a href={`#/admin/projects/${project.id}`} className="btn btn-secondary text-xs">← Ke ringkasan project</a>}>
+      <EmptyPanel icon="⏸️" title="Tahapan belum aktif" action={<a href={`#/${divisionPrefix()}/projects/${project.id}`} className="btn btn-secondary text-xs">← Ke ringkasan project</a>}>
         Progress harian hanya bisa dicatat pada tahapan berstatus Active. Aktifkan tahapan ini dulu dari ringkasan project.
       </EmptyPanel>
     );
   }
   if (isEdit && original?.status === 'validated') {
     return (
-      <EmptyPanel icon="🔒" title="Progress sudah divalidasi" action={<a href={`#/admin/projects/${project.id}/sub/${stage.id}/volume`} className="btn btn-secondary text-xs">← Kembali</a>}>
+      <EmptyPanel icon="🔒" title="Progress sudah divalidasi" action={<a href={`#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/volume`} className="btn btn-secondary text-xs">← Kembali</a>}>
         Angka tervalidasi sudah menjadi dasar tagihan. Admin perlu menekan “Buka Kembali” pada baris ini sebelum catatannya bisa diperbaiki.
       </EmptyPanel>
     );

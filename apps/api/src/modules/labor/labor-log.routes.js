@@ -20,6 +20,7 @@ const idParam = param('id').isInt({ min: 1 }).withMessage('ID tidak valid').toIn
 const listRules = [
   query('subProjectId').isInt({ min: 1 }).withMessage('subProjectId wajib diisi'),
   query('projectWorkerId').optional().isInt({ min: 1 }).withMessage('projectWorkerId tidak valid'),
+  query('claimed').optional().isIn(['true', 'false']).withMessage('claimed harus true atau false'),
   query('startDate').optional().isISO8601().withMessage('startDate harus tanggal ISO (YYYY-MM-DD)'),
   query('endDate').optional().isISO8601().withMessage('endDate harus tanggal ISO (YYYY-MM-DD)'),
   query('page').optional().isInt({ min: 1 }).withMessage('page harus angka >= 1'),

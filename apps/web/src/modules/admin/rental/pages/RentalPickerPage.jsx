@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Breadcrumb, EmptyPanel, LoadingPanel, MetricCard, MockBanner, PageHeader, StatusBadge } from '../../project/components/ProjectUi.jsx';
 import { formatDate } from '../../project/utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { BILLING_METHODS, RENTAL_STATUS } from '../utils/rentalFormat.js';
 
 /** Halaman awal Rental: pilih kontrak sewa, pengganti panel "Kontrak Rental". */
@@ -23,7 +24,7 @@ export default function RentalPickerPage({ projects, loading, error, canCreate }
       <PageHeader
         title="Kontrak Rental"
         subtitle="SSB sebagai agen penyewaan alat berat ke penyewa eksternal. Pilih kontrak untuk melihat unit dan timesheet pemakaiannya."
-        actions={canCreate && <a href="#/admin/rental/new" className="btn btn-primary text-xs">+ Tambah Transaksi</a>}
+        actions={canCreate && <a href={`#/${divisionPrefix()}/rental/new`} className="btn btn-primary text-xs">+ Tambah Transaksi</a>}
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -58,13 +59,13 @@ export default function RentalPickerPage({ projects, loading, error, canCreate }
       {loading ? (
         <LoadingPanel>Memuat kontrak rental...</LoadingPanel>
       ) : projects.length === 0 ? (
-        <EmptyPanel icon="🛠️" title="Belum ada kontrak rental" action={canCreate && <a href="#/admin/rental/new" className="btn btn-primary text-xs">+ Tambah Transaksi</a>} />
+        <EmptyPanel icon="🛠️" title="Belum ada kontrak rental" action={canCreate && <a href={`#/${divisionPrefix()}/rental/new`} className="btn btn-primary text-xs">+ Tambah Transaksi</a>} />
       ) : filtered.length === 0 ? (
         <EmptyPanel icon="🔎" title="Tidak ada kontrak yang cocok" />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((project) => (
-            <a key={project.id} href={`#/admin/rental/${project.id}`} className="card-panel group flex flex-col overflow-hidden transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md">
+            <a key={project.id} href={`#/${divisionPrefix()}/rental/${project.id}`} className="card-panel group flex flex-col overflow-hidden transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md">
               <div className="flex items-start justify-between gap-3 p-5 pb-0">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-lg" aria-hidden="true">🛠️</span>
                 <div className="flex items-center gap-1.5">

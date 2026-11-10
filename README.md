@@ -202,7 +202,8 @@ npm run dev                  # Vite dev server dengan HMR
 | Request Material | 🔲 Belum | `/api/request-material` |
 | Approval Center | 🔲 Belum | `/api/approvals` |
 | Income | 🔲 Belum | `/api/income` |
-| Finance Field | 🔲 Belum | `/api/finance-field` |
+| Divisi Lapangan (FE) | ✅ Project, Rental, request, surat jalan, penerimaan, kas, upah | `#/lapangan/*` |
+| Finance Field | ✅ Kas lapangan & klaim upah (API + layar Lapangan & Admin; layar Finance belum) | `/api/field-operational-requests`, `/api/field-expense-reports`, `/api/labor-wage-claims`, `/api/labor-payment-proofs` |
 | Finance Accounting | 🔲 Belum | `/api/finance-accounting` |
 | Payroll | 🔲 Belum | `/api/payroll` |
 

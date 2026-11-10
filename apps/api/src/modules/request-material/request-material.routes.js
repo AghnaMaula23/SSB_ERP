@@ -57,6 +57,14 @@ const createRules = [
   ),
 ];
 
+// Jenis & konteks tidak bisa diubah: salah tujuan = batalkan lalu ajukan ulang
+const updateRules = [
+  idParam,
+  ...['requestType', 'subProjectId', 'externalSupplyProjectId']
+    .map((f) => body(f).not().exists().withMessage(`${f} tidak bisa diubah — batalkan lalu ajukan ulang`)),
+  ...createRules.filter((rule) => !rule.builder?.fields?.some((f) => ['requestType', 'subProjectId', 'externalSupplyProjectId'].includes(f))),
+];
+
 const adminValidationRules = [
   idParam,
   body('items').isArray({ min: 1 }).withMessage('items wajib berisi minimal satu penyesuaian'),
@@ -91,6 +99,7 @@ const approveRules = [
 router.get('/', authorize('material-request:read'), validate(listRules), controller.list);
 router.get('/:id', authorize('material-request:read'), validate([idParam]), controller.detail);
 router.post('/', authorize('material-request:create'), validate(createRules), controller.create);
+router.put('/:id', authorize('material-request:create'), validate(updateRules), controller.update);
 router.put('/:id/cancel', authorize('material-request:create'), validate([idParam]), controller.cancel);
 router.put('/:id/admin-validation', authorize('material-request:validate'), validate(adminValidationRules), controller.adminValidate);
 router.put('/:id/costs', authorize('material-request:validate'), validate(costRules), controller.replaceCosts);

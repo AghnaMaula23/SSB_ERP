@@ -1,33 +1,40 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, useCallback, useEffect, useState } from 'react';
 import Login from './pages/Login.jsx';
 import ModuleSelection from './pages/ModuleSelection.jsx';
-import ItemsPage from './modules/alat/pages/ItemsPage.jsx';
-import RegisterItemPage from './modules/alat/pages/RegisterItemPage.jsx';
-import ItemDetailPage from './modules/alat/pages/ItemDetailPage.jsx';
-import InformationPage from './modules/alat/information/pages/InformationPage.jsx';
-import DamageLogFormPage from './modules/alat/information/pages/DamageLogFormPage.jsx';
-import DamageLogDetailPage from './modules/alat/information/pages/DamageLogDetailPage.jsx';
-import MaintenancePage from './modules/alat/pages/MaintenancePage.jsx';
-import MaintenanceThresholdPage from './modules/alat/pages/MaintenanceThresholdPage.jsx';
-import ResetMaintenancePage from './modules/alat/pages/ResetMaintenancePage.jsx';
-import PurchaseOrderPage from './modules/alat/pages/PurchaseOrderPage.jsx';
-import PurchaseOrderCreatePage from './modules/alat/pages/PurchaseOrderCreatePage.jsx';
-import PurchaseOrderDetailPage from './modules/alat/pages/PurchaseOrderDetailPage.jsx';
-import KasPage from './modules/alat/pages/KasPage.jsx';
-import KasClaimPendapatanPage from './modules/alat/pages/KasClaimPendapatanPage.jsx';
-import ProjectWorkspacePage from './modules/admin/project/pages/ProjectWorkspacePage.jsx';
 import { parseProjectRoute } from './modules/admin/project/utils/projectRoute.js';
-import SupplyWorkspacePage from './modules/admin/supply/pages/SupplyWorkspacePage.jsx';
 import { parseSupplyRoute } from './modules/admin/supply/utils/supplyRoute.js';
-import RentalWorkspacePage from './modules/admin/rental/pages/RentalWorkspacePage.jsx';
 import { parseRentalRoute } from './modules/admin/rental/utils/rentalRoute.js';
-import IncomeWorkspacePage from './modules/admin/income/pages/IncomeWorkspacePage.jsx';
 import { parseIncomeRoute } from './modules/admin/income/utils/incomeRoute.js';
-import ApprovalWorkspacePage from './modules/admin/approvals/pages/ApprovalWorkspacePage.jsx';
 import { parseApprovalRoute } from './modules/admin/approvals/utils/approvalRoute.js';
-import FilesWorkspacePage from './modules/admin/files/pages/FilesWorkspacePage.jsx';
 import { parseFilesRoute } from './modules/admin/files/utils/filesRoute.js';
+import FieldLayout from './modules/lapangan/components/FieldLayout.jsx';
+import { parseFieldRoute } from './modules/lapangan/utils/fieldRoute.js';
+import { parseFinanceRoute } from './modules/finance/utils/financeRoute.js';
 import { clearSession, getCurrentUser } from './services/auth.js';
+
+// Tiap halaman dimuat saat dibuka, bukan semuanya sekaligus saat aplikasi mulai.
+const ItemsPage = lazy(() => import('./modules/alat/pages/ItemsPage.jsx'));
+const RegisterItemPage = lazy(() => import('./modules/alat/pages/RegisterItemPage.jsx'));
+const ItemDetailPage = lazy(() => import('./modules/alat/pages/ItemDetailPage.jsx'));
+const InformationPage = lazy(() => import('./modules/alat/information/pages/InformationPage.jsx'));
+const DamageLogFormPage = lazy(() => import('./modules/alat/information/pages/DamageLogFormPage.jsx'));
+const DamageLogDetailPage = lazy(() => import('./modules/alat/information/pages/DamageLogDetailPage.jsx'));
+const MaintenancePage = lazy(() => import('./modules/alat/pages/MaintenancePage.jsx'));
+const MaintenanceThresholdPage = lazy(() => import('./modules/alat/pages/MaintenanceThresholdPage.jsx'));
+const ResetMaintenancePage = lazy(() => import('./modules/alat/pages/ResetMaintenancePage.jsx'));
+const PurchaseOrderPage = lazy(() => import('./modules/alat/pages/PurchaseOrderPage.jsx'));
+const PurchaseOrderCreatePage = lazy(() => import('./modules/alat/pages/PurchaseOrderCreatePage.jsx'));
+const PurchaseOrderDetailPage = lazy(() => import('./modules/alat/pages/PurchaseOrderDetailPage.jsx'));
+const KasPage = lazy(() => import('./modules/alat/pages/KasPage.jsx'));
+const KasClaimPendapatanPage = lazy(() => import('./modules/alat/pages/KasClaimPendapatanPage.jsx'));
+const ProjectWorkspacePage = lazy(() => import('./modules/admin/project/pages/ProjectWorkspacePage.jsx'));
+const SupplyWorkspacePage = lazy(() => import('./modules/admin/supply/pages/SupplyWorkspacePage.jsx'));
+const RentalWorkspacePage = lazy(() => import('./modules/admin/rental/pages/RentalWorkspacePage.jsx'));
+const IncomeWorkspacePage = lazy(() => import('./modules/admin/income/pages/IncomeWorkspacePage.jsx'));
+const ApprovalWorkspacePage = lazy(() => import('./modules/admin/approvals/pages/ApprovalWorkspacePage.jsx'));
+const FilesWorkspacePage = lazy(() => import('./modules/admin/files/pages/FilesWorkspacePage.jsx'));
+const FieldWorkspacePage = lazy(() => import('./modules/lapangan/pages/FieldWorkspacePage.jsx'));
+const FinanceWorkspacePage = lazy(() => import('./modules/finance/pages/FinanceWorkspacePage.jsx'));
 
 function getInitialRoute() {
   const route = window.location.hash.replace(/^#\/?/, '').split('?')[0].replace(/\/+$/, '');
@@ -66,7 +73,9 @@ function isKnownRoute(route) {
     parseRentalRoute(route) !== null ||
     parseIncomeRoute(route) !== null ||
     parseApprovalRoute(route) !== null ||
-    parseFilesRoute(route) !== null;
+    parseFilesRoute(route) !== null ||
+    parseFieldRoute(route) !== null ||
+    parseFinanceRoute(route) !== null;
 }
 
 function AppLoading() {
@@ -212,16 +221,22 @@ export default function App() {
     return <KasPage key={route} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   // Satu instance untuk seluruh rute admin/projects/* supaya pohon project dan
   // cache tahapan tidak dimuat ulang setiap kali pindah halaman.
+  // Divisi Lapangan memakai halaman Project & Rental yang sama, dengan menu sendiri.
+  const layoutProps = route.startsWith('lapangan/') ? { Layout: FieldLayout } : {};
   if (parseProjectRoute(route))
-    return <ProjectWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+    return <ProjectWorkspacePage {...layoutProps} route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseSupplyRoute(route))
     return <SupplyWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseRentalRoute(route))
-    return <RentalWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+    return <RentalWorkspacePage {...layoutProps} route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseIncomeRoute(route))
     return <IncomeWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseApprovalRoute(route))
     return <ApprovalWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (parseFinanceRoute(route))
+    return <FinanceWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (parseFieldRoute(route))
+    return <FieldWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseFilesRoute(route))
     return <FilesWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (route === 'alat/kas/claim-pendapatan' || route === 'alat/kas/request-pendapatan')

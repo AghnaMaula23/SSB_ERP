@@ -4,6 +4,7 @@ import { Breadcrumb, GuardedLink, MetricCard, Notice, PageHeader } from '../comp
 import { RejectReasonForm } from '../../approvals/components/ApprovalUi.jsx';
 import { cancelStockMovement, getStageStock, listStageMovements, listStageReceipts } from '../services/materialStockService.js';
 import { actorName, formatDate, formatNumber, stageCrumbs, todayIso } from '../utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { MOVEMENT_TYPES } from '../utils/stockFormat.js';
 
 const HISTORY_TABS = [
@@ -69,7 +70,7 @@ export default function InventoryPage({ project, stage, canRecord, initialNotice
   const requestKey = `${stage.id}|${reloadKey}`;
   const loading = result.key !== requestKey;
   const userId = currentUserId();
-  const base = `#/admin/projects/${project.id}/sub/${stage.id}/inventory`;
+  const base = `#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/inventory`;
 
   useEffect(() => {
     let cancelled = false;

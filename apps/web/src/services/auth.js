@@ -11,7 +11,7 @@ export function clearSession() {
   // Sisa store lokal yang masih dipakai karena endpoint-nya belum ada:
   // - income_claims : modul income belum di-mount, klaim pendapatan masih lokal
   // - maintenance_* : threshold per tipe & reset reference belum punya endpoint
-  // - admin_mock_*  : inventory, pekerja, supply, rental, income, kas lapangan & files Admin, backend belum ada
+  // - admin_mock_*  : supply, rental & income Admin, backend belum ada (sisanya kunci lama yang dibersihkan)
   localStorage.removeItem('po_data');
   localStorage.removeItem('po_seq');
   localStorage.removeItem('kas_data');

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import FormPage, { Field, InfoCard, SectionDivider } from '../components/FormPage.jsx';
 import { createSubProject, updateSubProject } from '../services/projectService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { SUB_PROJECT_TYPES, VOLUME_UNITS, fieldErrorsFrom, formatCurrency, subProjectTypeLabel, unitLabel } from '../utils/projectFormat.js';
 
 const toForm = (subProject, defaultType) => ({
@@ -66,9 +67,9 @@ export default function SubProjectFormPage({ project, subProject, usedTypes = []
   return (
     <FormPage
       breadcrumb={[
-        { label: 'Project', href: '#/admin/projects' },
-        { label: project.projectName, href: `#/admin/projects/${project.id}` },
-        ...(isEdit ? [{ label: subProjectTypeLabel(subProject.subProjectType), href: `#/admin/projects/${project.id}/sub/${subProject.id}/volume` }, { label: 'Ubah' }] : [{ label: 'Sub-Project Baru' }]),
+        { label: 'Project', href: `#/${divisionPrefix()}/projects` },
+        { label: project.projectName, href: `#/${divisionPrefix()}/projects/${project.id}` },
+        ...(isEdit ? [{ label: subProjectTypeLabel(subProject.subProjectType), href: `#/${divisionPrefix()}/projects/${project.id}/sub/${subProject.id}/volume` }, { label: 'Ubah' }] : [{ label: 'Sub-Project Baru' }]),
       ]}
       icon="🧱"
       title={isEdit ? `Ubah Tahapan ${subProjectTypeLabel(subProject.subProjectType)}` : 'Input Sub-Project Baru'}

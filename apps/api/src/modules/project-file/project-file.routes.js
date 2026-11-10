@@ -15,7 +15,8 @@ router.use(authenticate);
 
 const PROJECT_TYPES = ['construction', 'rental', 'supply'];
 const FILE_KINDS = ['image', 'pdf', 'sheet', 'doc', 'cad'];
-const SYSTEM_KEYS = ['delivery-notes', 'receipt-proofs', 'closing-archive'];
+// Diturunkan dari registry — pemakai lampiran baru cukup menambah baris SYSTEM_FOLDERS
+const SYSTEM_KEYS = require('./project-file.service.js').SYSTEM_FOLDER_KEYS;
 
 const idParam = param('id').isInt({ min: 1 }).withMessage('ID tidak valid').toInt();
 const projectParams = [

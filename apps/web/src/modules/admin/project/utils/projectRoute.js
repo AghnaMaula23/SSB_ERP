@@ -5,6 +5,7 @@ export const SUB_PAGES = [
   { key: 'timesheet', label: 'Timesheet Alat', icon: '⏱️' },
   { key: 'inventory', label: 'Inventory', icon: '📦' },
   { key: 'pekerja', label: 'Pekerja', icon: '👷' },
+  { key: 'log', label: 'Log Harian', icon: '📝' },
 ];
 
 const SUB_PAGE_KEYS = SUB_PAGES.map((page) => page.key);
@@ -19,6 +20,8 @@ const SUB_FORMS = {
   'inventory/:id/mutasi': 'inventory-movement',
   'pekerja/new': 'worker-new',
   'pekerja/:id/edit': 'worker-edit',
+  'log/new': 'labor-new',
+  'log/:id/edit': 'labor-edit',
 };
 
 /**
@@ -38,7 +41,7 @@ const SUB_FORMS = {
 export function parseProjectRoute(route) {
   const empty = { projectId: null, projectPage: null, subProjectId: null, subPage: null, form: null, recordId: null, poolId: null };
   const parts = String(route).split('/');
-  if (parts[0] !== 'admin' || parts[1] !== 'projects') return null;
+  if ((parts[0] !== 'admin' && parts[0] !== 'lapangan') || parts[1] !== 'projects') return null;
   const rest = parts.slice(2);
   const isId = (value) => /^\d+$/.test(value || '');
 

@@ -280,6 +280,11 @@ export async function listItemWorkhours(equipmentItemId, { startDate, endDate, l
   return apiRequest(`/api/equipment/items/${equipmentItemId}/workhour-logs${query({ sourceType: 'internal_project', startDate, endDate, limit })}`);
 }
 
+/** Log tidak diubah: salah input dibatalkan (alasan wajib), lalu dicatat ulang. Counter maintenance ikut ditarik. */
+export async function voidWorkhourLog(logId, reason) {
+  return apiRequest(`/api/equipment/workhour-logs/${logId}/void`, { method: 'PUT', body: JSON.stringify({ reason: reason.trim() }) });
+}
+
 /**
  * Catat jam kerja lewat alokasi. Unit alat diturunkan backend dari alokasinya,
  * jadi equipmentItemId sengaja tidak dikirim.

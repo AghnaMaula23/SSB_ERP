@@ -4,6 +4,7 @@ import { EmptyPanel, LoadingPanel } from '../components/ProjectUi.jsx';
 import {
   WORKER_ROLES, WORKER_TYPES, createAssignment, createWorker, getAssignment, getWorker, listAllWorkers, updateAssignment, updateWorker,
 } from '../services/workerService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { fieldErrorsFrom, stageCrumbs, todayIso } from '../utils/projectFormat.js';
 
 const emptyForm = (stage) => ({
@@ -129,7 +130,7 @@ export default function WorkerFormPage({ project, stage, workerId, onCancel, onS
 
   return (
     <FormPage
-      breadcrumb={stageCrumbs(project, stage, { label: 'Pekerja', href: `#/admin/projects/${project.id}/sub/${stage.id}/pekerja` }, { label: isEdit ? 'Ubah' : 'Tugaskan Pekerja' })}
+      breadcrumb={stageCrumbs(project, stage, { label: 'Pekerja', href: `#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/pekerja` }, { label: isEdit ? 'Ubah' : 'Tugaskan Pekerja' })}
       icon="👷"
       title={isEdit ? `Ubah ${form.fullName || 'Pekerja'}` : 'Tugaskan Pekerja'}
       subtitle="Identitas orang + kesepakatan kerjanya di tahapan ini"

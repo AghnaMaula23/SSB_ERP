@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Breadcrumb, GuardedLink, MetricCard, Notice, PageHeader, StatusBadge } from '../components/ProjectUi.jsx';
 import { changeAllocationStatus, listAllocations, receiveAllocation } from '../services/projectService.js';
 import { ALLOCATION_STATUS, actorName, formatDateTime, stageCrumbs, subProjectTypeLabel } from '../utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { equipmentStatusLabel, normalizeEquipmentStatus } from '../../../alat/services/alatService.js';
 
 const CLOSE_ACTIONS = {
@@ -79,9 +80,9 @@ export default function SubProjectEquipmentPage({ project, stage, permissions, i
         subtitle={`Unit yang dialokasikan ke tahapan ${subProjectTypeLabel(stage.subProjectType)}.`}
         actions={(
           <>
-            <a href={`#/admin/projects/${project.id}/pool`} className="btn btn-secondary text-xs">Equipment Pool</a>
+            <a href={`#/${divisionPrefix()}/projects/${project.id}/pool`} className="btn btn-secondary text-xs">Equipment Pool</a>
             <GuardedLink
-              href={`#/admin/projects/${project.id}/sub/${stage.id}/alat/new`}
+              href={`#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/alat/new`}
               allowed={permissions.createAllocation && stage.status === 'active'}
               reason={!permissions.createAllocation ? 'Alokasi alat milik Divisi Alat (allocation:create).' : 'Alat hanya bisa dialokasikan ke tahapan Active.'}
             >

@@ -3,6 +3,7 @@ import ResponsiveTable from '../../../../components/ResponsiveTable.jsx';
 import { Breadcrumb, MetricCard, Notice, PageHeader, StatusBadge } from '../components/ProjectUi.jsx';
 import { ASSIGNMENT_STATUS, WORKER_TYPES, assignmentStatus, deleteAssignment, endAssignment, listAssignments } from '../services/workerService.js';
 import { formatCurrency, formatDate, initials, stageCrumbs, todayIso } from '../utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { hasPermission } from '../../../../services/permissions.js';
 
 /** Pekerja yang ditugaskan di tahapan ini — GET /api/worker-assignments?subProjectId=. */
@@ -17,7 +18,7 @@ export default function WorkersPage({ project, stage, initialNotice }) {
   const [actionError, setActionError] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const base = `#/admin/projects/${project.id}/sub/${stage.id}/pekerja`;
+  const base = `#/${divisionPrefix()}/projects/${project.id}/sub/${stage.id}/pekerja`;
   const canCreate = hasPermission('worker:create');
   const canUpdate = hasPermission('worker:update');
   const canDelete = hasPermission('worker:delete');
