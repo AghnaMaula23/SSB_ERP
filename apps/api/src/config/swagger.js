@@ -132,13 +132,13 @@ const swaggerSpec = {
         type: 'object',
         description: 'Satu baris antrean Approval Center. Ringkasan untuk list — detail & aksi selalu lewat endpoint modul sumber.',
         properties: {
-          sourceType: { type: 'string', enum: ['purchase_request', 'material_request', 'equipment_request', 'progress_log', 'field_operational_request', 'field_expense_report', 'labor_wage_claim', 'labor_payment_proof'] },
+          sourceType: { type: 'string', enum: ['purchase_request', 'material_request', 'equipment_request', 'progress_log', 'field_operational_request', 'field_expense_report', 'labor_wage_claim', 'labor_payment_proof', 'income_record', 'equipment_income_claim'] },
           sourceId: { type: 'integer', example: 12 },
           stage: { type: 'string', enum: ['admin', 'finance'] },
           referenceCode: { type: 'string', nullable: true, example: 'MRQ-000012', description: 'Kode dokumen. `null` untuk progress_log (tidak bernomor)' },
           context: { type: 'string', example: 'PRJ-000003 Jalan Demak-Kudus · Galian', description: 'Project & tahapan, kontrak supply, atau kategori order PR' },
           summary: { type: 'string', example: '3 material', description: 'Ringkasan isi: jumlah item, kategori order, atau volume + tanggal progress' },
-          amount: { type: 'number', nullable: true, example: 15000000, description: 'Rupiah. PR: estimasi total; request material tahap finance: total rincian biaya; lainnya `null`' },
+          amount: { type: 'number', nullable: true, example: 15000000, description: 'Rupiah. PR: estimasi total; request material tahap finance: total rincian biaya; income_record: total tagihan; equipment_income_claim: total klaim; lainnya `null`' },
           requestedBy: { type: 'object', properties: { id: { type: 'integer' }, fullName: { type: 'string' } } },
           submittedAt: { type: 'string', format: 'date-time', description: 'Waktu masuk antrean TAHAP INI (lihat tabel di GET /approval-queue)' },
           detailPath: { type: 'string', example: '/api/request-material/12', description: 'Endpoint detail sumber' },
@@ -226,16 +226,17 @@ const swaggerSpec = {
     { name: 'Approval Center', description: 'Antrean baca-saja lintas modul (VIEW approval_queue). Aksi tetap di modul sumber' },
     { name: 'Pekerja', description: 'Master pekerja (global) + penugasan per tahapan — docs/skema-tenaga-kerja-harian.md' },
     { name: 'Log Tenaga Kerja', description: 'Log pekerja harian per tahapan per tanggal, satu baris = satu orang, tanpa validasi (P1)' },
-    { name: 'Income Records', description: 'Pencatatan pendapatan dan billing' },
-    { name: 'Income Payments', description: 'Pembayaran client' },
-    { name: 'Equipment Income Claims', description: 'Klaim pendapatan alat oleh Divisi Alat' },
+    { name: 'Income Records', description: 'Tagihan klien per tahapan konstruksi / kontrak rental / kontrak supply — docs/claude_knowledge/plan-divisi-finance.md F10–F18' },
+    { name: 'Income Payments', description: 'Pembayaran klien dicatat Finance (langsung sah + jurnal) — F15–F16' },
+    { name: 'Equipment Income Claims', description: 'Klaim pendapatan alat Divisi Alat → Finance → cash-in Kas Alat + jurnal — F19–F23' },
     { name: 'Kas Lapangan', description: 'Pengajuan dana operasional (izin belanja) + laporan realisasi & nota — docs/plan-divisi-lapangan.md L1–L4, L7' },
     { name: 'Upah Pekerja', description: 'Klaim upah dari log tenaga kerja + bukti bayar — docs/plan-divisi-lapangan.md L5–L8' },
-    { name: 'Chart of Accounts', description: 'Master akun keuangan' },
-    { name: 'Journal Entries', description: 'Jurnal umum debit-credit' },
-    { name: 'Financial Corrections', description: 'Koreksi transaksi keuangan' },
-    { name: 'Employees', description: 'Master karyawan tetap' },
-    { name: 'Payroll', description: 'Penggajian karyawan tetap' }
+    { name: 'Chart of Accounts', description: 'Daftar akun dari seeder, baca saja — F4' },
+    { name: 'Journal Entries', description: 'Jurnal otomatis dari aksi sumber (tanpa input bebas), buku besar, neraca saldo — F1–F3, F7, F24–F25' },
+    { name: 'Accounting Periods', description: 'Tutup buku bulanan; tanggal jurnal = tanggal kejadian — F3' },
+    { name: 'Manual Expenses', description: 'Pengeluaran Finance yang belum punya modul sendiri — F9' },
+    { name: 'Employees', description: 'Master karyawan tetap (Admin) + riwayat gaji pokok (Finance) — F26, F29' },
+    { name: 'Payroll', description: 'Payroll bulanan karyawan tetap — F27–F28' }
   ],
 
   paths: {
@@ -323,6 +324,15 @@ const swaggerSpec = {
         tags: ['Users'], summary: 'Detail user + roles + permissions', description: 'Permission: user:read',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         responses: { 200: { description: 'Detail user' }, 404: { description: 'User tidak ditemukan' } }
+      }
+    },
+    '/users/{id}/employee': {
+      put: {
+        tags: ['Users'], summary: 'Tautkan akun ke karyawan tetap',
+        description: 'Permission: user:update. Mengisi `users.employee_id` (FK ke employees, unique): akun ini milik karyawan itu. `employeeId: null` melepas tautan. Karyawan yang sudah tertaut ke akun lain → 409. Ditambahkan 16 Nov 2026 (plan Finance F26).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['employeeId'], properties: { employeeId: { type: 'integer', nullable: true } } } } } },
+        responses: { 200: { description: 'User terbaru' }, 404: { description: 'User / karyawan tidak ditemukan' }, 409: { description: 'Karyawan sudah tertaut ke akun lain' } }
       }
     },
     '/users/{id}/roles': {
@@ -691,7 +701,7 @@ const swaggerSpec = {
     '/projects/sub-projects/{subProjectId}/progress-logs/{id}/validate': {
       put: {
         tags: ['Daily Progress'], summary: 'Validasi / tolak progress harian (GERBANG TAGIHAN)',
-        description: 'Permission: progress:validate — DIPEGANG ADMIN, sengaja TIDAK diberikan ke role lapangan: yang mencatat tidak memvalidasi catatannya sendiri. Inilah gerbang yang memisahkan catatan lapangan dari angka yang boleh menagih klien: hanya baris `validated` yang masuk `billableAmount`. Transisi sah: submitted→validated|rejected, validated→submitted (cabut validasi), rejected→submitted. `notes` disimpan di `validationNotes` (catatan keputusan TERAKHIR): **WAJIB saat `rejected`**, opsional selainnya, dan ditimpa setiap transisi — kembali ke `submitted` tanpa catatan mengosongkannya. Aksi bersamaan pada log yang sama: satu 200, satu 409. Log `submitted` muncul di antrean `GET /approval-queue` (sourceType `progress_log`).',
+        description: 'Permission: progress:validate — DIPEGANG ADMIN, sengaja TIDAK diberikan ke role lapangan: yang mencatat tidak memvalidasi catatannya sendiri. Inilah gerbang yang memisahkan catatan lapangan dari angka yang boleh menagih klien: hanya baris `validated` yang masuk `billableAmount`. Transisi sah: submitted→validated|rejected, validated→submitted (cabut validasi), rejected→submitted. `notes` disimpan di `validationNotes` (catatan keputusan TERAKHIR): **WAJIB saat `rejected`**, opsional selainnya, dan ditimpa setiap transisi — kembali ke `submitted` tanpa catatan mengosongkannya. Aksi bersamaan pada log yang sama: satu 200, satu 409. Log `submitted` muncul di antrean `GET /approval-queue` (sourceType `progress_log`). **Sejak modul Income (16 Nov 2026):** cabut validasi (validated→submitted) ditolak 409 kalau log sudah masuk perhitungan income record aktif (submitted/verified) tahapan itu.',
         parameters: [
           { in: 'path', name: 'subProjectId', required: true, schema: { type: 'integer' } },
           { in: 'path', name: 'id', required: true, schema: { type: 'integer' } }
@@ -1169,7 +1179,7 @@ const swaggerSpec = {
     '/equipment/workhour-logs/{id}/void': {
       put: {
         tags: ['Workhour Logs'], summary: 'Batalkan log jam kerja yang salah input',
-        description: 'Permission: workhour:update (Lapangan, Divisi Alat). Log tidak pernah diubah atau dihapus: koreksi = batalkan lalu catat ulang. Dalam satu transaksi: log ditandai `isVoided` (+ alasan, siapa, kapan), `total_workhour` alat dikurangi, dan counter servis dikurangi HANYA pada setting aktif yang mulai menghitung sebelum log itu dibuat (`counterStartedAt`) — jam yang sudah "terhapus" oleh servis tidak dikurangi dua kali. Ditolak 409 kalau tahapan/kontrak rental pemilik log sudah ditutup. `manual_adjustment` selalu bisa dibatalkan.',
+        description: 'Permission: workhour:update (Lapangan, Divisi Alat). Log tidak pernah diubah atau dihapus: koreksi = batalkan lalu catat ulang. Dalam satu transaksi: log ditandai `isVoided` (+ alasan, siapa, kapan), `total_workhour` alat dikurangi, dan counter servis dikurangi HANYA pada setting aktif yang mulai menghitung sebelum log itu dibuat (`counterStartedAt`) — jam yang sudah "terhapus" oleh servis tidak dikurangi dua kali. Ditolak 409 kalau tahapan/kontrak rental pemilik log sudah ditutup, atau (sejak modul Income, 16 Nov 2026) log ada di income record aktif atau klaim pendapatan alat aktif/approved. `manual_adjustment` selalu bisa dibatalkan.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: {
           type: 'object', required: ['reason'], properties: { reason: { type: 'string', example: 'Salah ketik jam selesai' } }
@@ -1919,7 +1929,7 @@ const swaggerSpec = {
     '/request-material/{id}/approve': {
       put: {
         tags: ['Request Material'], summary: 'Finance menyetujui paket dana',
-        description: 'Permission: material-request:approve (Finance; super_admin TIDAK). `waiting_finance_approval` → `approved`. Nominal yang disetujui = yang diajukan. Di transaksi yang sama setiap material masuk material pool project (konstruksi: pool construction project tahapan; supply: pool supply project). Pool dibuat otomatis kalau belum ada; lebih dari satu pool aktif → `materialPoolId` wajib. Material yang sudah ada di pool memakai pool item yang sama. Approve ganda / approve + cancel bersamaan: yang kalah 409. Admin yang meneruskan paket ini tidak boleh menyetujuinya walau juga memegang role finance (403, pemisahan tugas).',
+        description: 'Permission: material-request:approve (Finance; super_admin TIDAK). `waiting_finance_approval` → `approved`. Nominal yang disetujui = yang diajukan. Di transaksi yang sama setiap material masuk material pool project (konstruksi: pool construction project tahapan; supply: pool supply project). Pool dibuat otomatis kalau belum ada; lebih dari satu pool aktif → `materialPoolId` wajib. Material yang sudah ada di pool memakai pool item yang sama. Approve ganda / approve + cancel bersamaan: yang kalah 409. Admin yang meneruskan paket ini tidak boleh menyetujuinya walau juga memegang role finance (403, pemisahan tugas). **Sejak modul GL (16 Nov 2026):** di transaksi yang sama dibuat jurnal bertanggal hari approve: Dr Beban Material Proyek (internal_project) / HPP Material Supply (external_supply), Cr Kas/Bank Induk Finance sebesar Σ rincian biaya (estimasi). Selisih aktual dicatat lewat POST /journal-entries/{id}/adjustments (plan Finance F7).',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { content: { 'application/json': { schema: { type: 'object', properties: {
           notes: { type: 'string' },
@@ -2030,7 +2040,7 @@ const swaggerSpec = {
     '/material-receipts/{id}/cancel': {
       put: {
         tags: ['Material Receipt'], summary: 'Batalkan receipt',
-        description: 'Permission: material-receipt:create, hanya pencatatnya, alasan wajib. Konstruksi: ditolak 409 kalau material itu sudah terpakai (stok jadi minus). Koreksi = batalkan lalu catat ulang untuk delivery yang sama.',
+        description: 'Permission: material-receipt:create, hanya pencatatnya, alasan wajib. Konstruksi: ditolak 409 kalau material itu sudah terpakai (stok jadi minus). Supply: ditolak 409 kalau penerimaan sudah masuk income record aktif (sejak modul Income, 16 Nov 2026). Koreksi = batalkan lalu catat ulang untuk delivery yang sama.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } },
         responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pencatat' }, 409: { description: 'Sudah dibatalkan / stok jadi minus' } },
@@ -2272,6 +2282,8 @@ const swaggerSpec = {
           '| `material_request` | finance | status `waiting_finance_approval` | `material-request:approve` | `admin_reviewed_at` |',
           '| `equipment_request` | admin | status `submitted` (hanya `internal_project`) | `equipment-request:review` | `created_at` |',
           '| `progress_log` | admin | status `submitted` | `progress:validate` | `updated_at` |',
+          '| `income_record` | finance | status `submitted` | `income:verify` | `created_at` |',
+          '| `equipment_income_claim` | finance | status `submitted` | `equipment-claim:approve` | `created_at` |',
           '',
           'Keputusan Divisi Alat atas Request Alat (`equipment_review`) **tidak** masuk — ERD Approval Center membatasi diri pada Admin & Finance.',
           '',
@@ -2284,7 +2296,7 @@ const swaggerSpec = {
         parameters: [
           { $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
           { in: 'query', name: 'stage', schema: { type: 'string', enum: ['admin', 'finance'] }, description: 'Kosong = semua tahap yang boleh Anda proses' },
-          { in: 'query', name: 'sourceType', schema: { type: 'string', enum: ['purchase_request', 'material_request', 'equipment_request', 'progress_log', 'field_operational_request', 'field_expense_report', 'labor_wage_claim', 'labor_payment_proof'] } },
+          { in: 'query', name: 'sourceType', schema: { type: 'string', enum: ['purchase_request', 'material_request', 'equipment_request', 'progress_log', 'field_operational_request', 'field_expense_report', 'labor_wage_claim', 'labor_payment_proof', 'income_record', 'equipment_income_claim'] } },
           { in: 'query', name: 'search', schema: { type: 'string' }, description: 'Cocokkan `referenceCode` atau `context` (tidak peka huruf besar-kecil)' },
           { in: 'query', name: 'sort', schema: { type: 'string', enum: ['oldest', 'newest'], default: 'oldest' } },
         ],
@@ -2321,74 +2333,155 @@ const swaggerSpec = {
     },
 
     // ========================================
-    // 7. INCOME
+    // 7. INCOME & KLAIM PENDAPATAN ALAT — docs/claude_knowledge/plan-divisi-finance.md F10–F23
+    // Kontrak beku 16 Nov 2026 (menggantikan placeholder September /income/*)
     // ========================================
-    '/income/records': {
-      get: { tags: ['Income Records'], summary: 'List income records', parameters: [ { $ref: '#/components/parameters/PageParam' }, { in: 'query', name: 'projectSourceType', schema: { type: 'string', enum: ['construction_project','external_rental','external_supply'] } }, { in: 'query', name: 'status', schema: { type: 'string' } } ], responses: { 200: { description: 'Paginated list' } } },
+    '/income-records/billable': {
+      get: {
+        tags: ['Income Records'], summary: 'Pratinjau sumber tagihan (belum ditagih)',
+        description: 'Permission: income:create (Admin). Tepat SATU konteks: `subProjectId` (konstruksi) | `externalRentalProjectId` | `externalSupplyProjectId` — 400 kalau nol/lebih. Konteks boleh sudah ditutup (F18). Hasil per jenis: **konstruksi** → `progress { volumeFrom, volumeTo, targetVolume, volumeUnit, contractValue, percentFrom, percentTo, amount }` = volume `validated` kumulatif s.d. `periodEnd` dikurangi yang sudah ditagih record aktif, dibatasi 100% kontrak (F11); **rental** → `units[{ equipmentItemId, assetCode, defaultHourlyRate, suggestedRate, logs[{ id, workDate, workSession, totalWorkhour }] }]` — log tidak di-void dan belum di record aktif; tarif usulan = tarif unit itu di record verified terakhir kontrak ini, kalau tidak ada `defaultHourlyRate` (F13); **supply** → `materials[{ materialTypeId, materialName, unit, receipts[{ id, receiptCode, receivedAt, acceptedQuantity }] }]` — penerimaan tidak dibatalkan & belum di record aktif (F14).',
+        parameters: [
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'externalRentalProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'externalSupplyProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'periodStart', required: true, schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'periodEnd', required: true, schema: { type: 'string', format: 'date' }, description: 'Tanggal potong; ≥ periodStart, tidak di masa depan' }],
+        responses: { 200: { description: 'Pratinjau' }, 400: { description: 'Konteks tidak tepat satu / periode tidak sah' }, 404: { description: 'Konteks tidak ditemukan' } },
+      },
+    },
+    '/income-records': {
+      get: {
+        tags: ['Income Records'], summary: 'List income record',
+        description: 'Permission: income:read. Tiap baris: kode INC-, konteks (`contextType`: construction|rental|supply + kode & nama), periode, `status`, `totalAmount`, `paidAmount`, `paymentStatus` (unpaid|partially_paid|paid) — ketiganya DIHITUNG, tidak disimpan. `meta.summary`: total tagihan, total terbayar, total piutang dari record `verified` sesuai filter.',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' }, { $ref: '#/components/parameters/SearchParam' },
+          { in: 'query', name: 'contextType', schema: { type: 'string', enum: ['construction', 'rental', 'supply'] } },
+          { in: 'query', name: 'constructionProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'externalRentalProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'externalSupplyProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'verified', 'rejected', 'cancelled', 'voided'] } },
+          { in: 'query', name: 'paymentStatus', schema: { type: 'string', enum: ['unpaid', 'partially_paid', 'paid'] }, description: 'Hanya bermakna untuk status verified' },
+          { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' }, description: 'periodEnd ≥ startDate' },
+          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' }, description: 'periodEnd ≤ endDate' }],
+        responses: { 200: { description: 'Paginated' } },
+      },
       post: {
-        tags: ['Income Records'], summary: 'Buat income record', description: 'Role: admin. Construction: progress billing per sub-project. Rental: workhour-based. Supply: material receipt-based.',
-        requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['projectSourceType', 'billingPeriodStart', 'billingPeriodEnd', 'items'],
-          properties: {
-            projectSourceType: { type: 'string', enum: ['construction_project','external_rental','external_supply'] },
-            constructionProjectId: { type: 'integer' }, externalRentalProjectId: { type: 'integer' }, externalSupplyProjectId: { type: 'integer' },
-            billingPeriodStart: { type: 'string', format: 'date' }, billingPeriodEnd: { type: 'string', format: 'date' },
-            adminNotes: { type: 'string' },
-            items: { type: 'array', items: { type: 'object', required: ['incomeComponentType', 'sourceType', 'quantity', 'unit', 'rateSnapshot', 'subtotalAmount', 'rateSource'],
-              properties: {
-                incomeComponentType: { type: 'string', enum: ['material_income','equipment_income','contract_progress_income'] },
-                sourceType: { type: 'string', enum: ['material_receipt_item','equipment_workhour_log','contract_progress'] },
-                subProjectId: { type: 'integer', description: 'Wajib untuk contract_progress' },
-                materialReceiptItemId: { type: 'integer' }, equipmentWorkhourLogId: { type: 'integer' }, equipmentItemId: { type: 'integer' },
-                description: { type: 'string' }, quantity: { type: 'number' }, unit: { type: 'string' },
-                rateSnapshot: { type: 'number' }, subtotalAmount: { type: 'number' },
-                rateSource: { type: 'string', enum: ['manual_input','equipment_default_rate','manual_override','contract_reference'] },
-                rateNotes: { type: 'string' }
-              }
-            }}
-          }
-        }}}},
-        responses: { 201: { description: 'Created' } }
-      }
+        tags: ['Income Records'], summary: 'Buat income record (langsung antre Finance)',
+        description: 'Permission: income:create (Admin). Tanpa draf: lahir `submitted` dan masuk Approval Center tahap finance (F17). Satu record = SATU konteks × satu periode (F10). Konteks TIDAK perlu terbuka — tagihan termin akhir dibuat setelah tahapan/kontrak selesai (F18). **Konstruksi** (`subProjectId`): tanpa `items`; snapshot volume & nilai kontrak dihitung BE seperti `/billable`; 409 kalau tidak ada volume baru. **Rental**: `items[{ equipmentWorkhourLogId, unitRate, rateNotes? }]` — log milik kontrak ini; `rateNotes` WAJIB kalau `unitRate` ≠ `defaultHourlyRate` unit; satu tarif per unit dalam satu record (400 kalau berbeda); jam lembur ikut tarif yang sama (Q2). **Supply**: `items[{ materialReceiptId, unitRate }]` — harga jual manual; satu harga per jenis material dalam satu record. Baris sumber yang sudah ada di record aktif (submitted/verified) → 409. Kolom sistem (kode, status, snapshot, total) ditolak 400. Kode INC-NNNNNN.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['periodStart', 'periodEnd'], properties: {
+          subProjectId: { type: 'integer' }, externalRentalProjectId: { type: 'integer' }, externalSupplyProjectId: { type: 'integer' },
+          periodStart: { type: 'string', format: 'date' }, periodEnd: { type: 'string', format: 'date' },
+          notes: { type: 'string' },
+          items: { type: 'array', items: { type: 'object', properties: {
+            equipmentWorkhourLogId: { type: 'integer' }, materialReceiptId: { type: 'integer' },
+            unitRate: { type: 'number', exclusiveMinimum: 0 }, rateNotes: { type: 'string' } } } },
+        } } } } },
+        responses: { 201: { description: 'Detail record' }, 400: { description: 'Validasi / konteks tidak tepat satu / tarif berbeda dalam satu unit/material' }, 409: { description: 'Sumber sudah ditagih / tidak ada yang bisa ditagih' } },
+      },
     },
-    '/income/records/{id}': { get: { tags: ['Income Records'], summary: 'Detail + items + payments', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } } },
-    '/income/records/{id}/verify': { put: { tags: ['Income Records'], summary: 'Finance verify', description: 'Role: finance. Triggers GL journal.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Verified + journal created' } } } },
-    '/income/records/{id}/reject': { put: { tags: ['Income Records'], summary: 'Finance reject', description: 'Role: finance', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Rejected' } } } },
-    '/income/records/{incomeRecordId}/payments': {
-      get: { tags: ['Income Payments'], summary: 'List payments per income record', parameters: [{ in: 'path', name: 'incomeRecordId', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Array' } } },
-      post: { tags: ['Income Payments'], summary: 'Catat pembayaran client', description: 'Role: finance. Triggers GL journal.',
-        parameters: [{ in: 'path', name: 'incomeRecordId', required: true, schema: { type: 'integer' } }],
-        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['paymentDate', 'amount'], properties: { paymentDate: { type: 'string', format: 'date' }, amount: { type: 'number' }, payerName: { type: 'string' }, paymentMethod: { type: 'string' }, referenceNumber: { type: 'string' }, proofFile: { type: 'string', format: 'binary' } } } } } },
-        responses: { 201: { description: 'Created + journal' } } }
+    '/income-records/{id}': {
+      get: {
+        tags: ['Income Records'], summary: 'Detail income record',
+        description: 'Permission: income:read. Header + `progress` (konstruksi: snapshot volume, persen, nilai kontrak) atau `items[]` (rental: log, unit, jam, tarif, subtotal; supply: penerimaan, material, qty, harga, subtotal) + `payments[]` + `totalAmount`/`paidAmount`/`paymentStatus` (dihitung) + `journalEntries[]` (ringkas) + keputusan (`verifiedBy/At`, `financeNotes`, `cancelled*`, `voided*`).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } },
+      },
+      put: {
+        tags: ['Income Records'], summary: 'Ubah income record',
+        description: 'Permission: income:create, hanya pembuat, selama `submitted` (pola E30). Body sama dengan POST tanpa konteks (konteks tidak bisa diganti); `items` diganti seluruhnya; konstruksi: snapshot dihitung ulang dari `periodEnd` baru.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: { 200: { description: 'Berhasil diubah' }, 403: { description: 'Bukan pembuat' }, 409: { description: 'Status bukan submitted / sumber sudah ditagih' } },
+      },
     },
-    '/income/claimable-items': {
-      get: { tags: ['Equipment Income Claims'], summary: 'List equipment income items siap diklaim', description: 'Role: divisi_alat', responses: { 200: { description: 'Array of claimable items' } } }
+    '/income-records/{id}/cancel': {
+      put: { tags: ['Income Records'], summary: 'Batalkan (Admin pembuat)', description: 'Permission: income:create, hanya pembuat, selama `submitted`. Sumbernya terbuka lagi.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pembuat' }, 409: { description: 'Sudah diputuskan' } } },
     },
-    '/income/claims': {
-      get: { tags: ['Equipment Income Claims'], summary: 'List equipment income claims', parameters: [{ $ref: '#/components/parameters/PageParam' }, { in: 'query', name: 'status', schema: { type: 'string' } }], responses: { 200: { description: 'Paginated list' } } },
+    '/income-records/{id}/verify': {
+      put: { tags: ['Income Records'], summary: 'Verifikasi (Finance)', description: 'Permission: income:verify (Finance). `submitted` → `verified`. Jurnal otomatis bertanggal hari verifikasi: Dr Piutang Usaha / Cr Pendapatan Kontrak Konstruksi | Pendapatan Sewa Alat | Pendapatan Penjualan Material (F2, F3). Pembuat record tidak boleh memverifikasi (403, termasuk role rangkap).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Diverifikasi + jurnal' }, 403: { description: 'Pembuat sendiri' }, 409: { description: 'Status bukan submitted' } } },
+    },
+    '/income-records/{id}/reject': {
+      put: { tags: ['Income Records'], summary: 'Tolak (Finance)', description: 'Permission: income:verify. Alasan wajib. Final — sumbernya terbuka lagi, Admin membuat record baru.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string', description: 'Alasan — wajib' } } } } } }, responses: { 200: { description: 'Ditolak' }, 409: { description: 'Status bukan submitted' } } },
+    },
+    '/income-records/{id}/void': {
+      put: { tags: ['Income Records'], summary: 'Batalkan record yang sudah diverifikasi (koreksi)', description: 'Permission: income:verify (Finance). `verified` → `voided` + jurnal balik bertanggal hari ini (F6, F3). Syarat: tidak ada pembayaran aktif (void pembayarannya dulu) dan tidak ada log di klaim alat aktif/approved (F23) — 409. Koreksi = void lalu Admin membuat record baru.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan + jurnal balik' }, 409: { description: 'Status bukan verified / masih ada pembayaran / sudah diklaim alat' } } },
+    },
+    '/income-payments': {
+      get: {
+        tags: ['Income Payments'], summary: 'List pembayaran klien',
+        description: 'Permission: income:read. Termasuk yang di-void (`voidedAt` terisi; tidak dihitung ke paidAmount).',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'incomeRecordId', schema: { type: 'integer' } },
+          { in: 'query', name: 'voided', schema: { type: 'string', enum: ['true', 'false'] } },
+          { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } }],
+        responses: { 200: { description: 'Paginated' } },
+      },
       post: {
-        tags: ['Equipment Income Claims'], summary: 'Submit klaim pendapatan alat', description: 'Role: divisi_alat',
-        requestBody: { required: true, content: { 'application/json': { schema: {
-          type: 'object', required: ['claimType', 'periodStart', 'periodEnd', 'items'],
-          properties: {
-            claimType: { type: 'string', enum: ['regular', 'adjustment_only'] },
-            periodStart: { type: 'string', format: 'date' }, periodEnd: { type: 'string', format: 'date' },
-            items: { type: 'array', items: { type: 'object', properties: {
-              itemType: { type: 'string', enum: ['workhour_income', 'correction_adjustment'] },
-              incomeRecordItemId: { type: 'integer' }, equipmentItemId: { type: 'integer' },
-              workDate: { type: 'string', format: 'date' }, workhoursSnapshot: { type: 'number' },
-              hourlyRateSnapshot: { type: 'number' }, subtotalAmountSnapshot: { type: 'number' },
-              correctionRequestId: { type: 'integer' }, adjustmentAmount: { type: 'number' }
-            }}}
-          }
-        }}}},
-        responses: { 201: { description: 'Created' } }
-      }
+        tags: ['Income Payments'], summary: 'Catat pembayaran klien (Finance)',
+        description: 'Permission: income-payment:create (Finance). Dicatat = sah, tanpa verifikasi kedua (F15). Record harus `verified`; Σ pembayaran tidak di-void ≤ tagihan (409). PPh/potongan klien belum ditangani (F16) — lunas = Σ `amount` = tagihan. `paymentDate` = tanggal uang masuk rekening: tidak di masa depan, tidak di bulan tertutup (409). Jurnal bertanggal `paymentDate`: Dr Kas/Bank Induk Finance / Cr Piutang Usaha. Bukti opsional 0–10 file di `proofs` (PDF/JPG/PNG/WebP, maks 10 MB), tampil di folder sistem "Bukti Bayar Klien". Kode RCV-NNNNNN.',
+        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['incomeRecordId', 'paymentDate', 'amount'], properties: {
+          incomeRecordId: { type: 'integer' }, paymentDate: { type: 'string', format: 'date' },
+          amount: { type: 'number', exclusiveMinimum: 0 }, payerName: { type: 'string' },
+          paymentMethod: { type: 'string', enum: ['transfer', 'cash', 'giro', 'other'] }, referenceNumber: { type: 'string' }, notes: { type: 'string' },
+          proofs: { type: 'array', maxItems: 10, items: { type: 'string', format: 'binary' } },
+        } } } } },
+        responses: { 201: { description: 'Pembayaran + status bayar record terbaru' }, 400: { description: 'Validasi / file tidak sah' }, 409: { description: 'Record bukan verified / melebihi tagihan / bulan tertutup' } },
+      },
     },
-    '/income/claims/{id}': { get: { tags: ['Equipment Income Claims'], summary: 'Detail claim + items', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } } },
-    '/income/claims/{id}/approve': { put: { tags: ['Equipment Income Claims'], summary: 'Finance approve claim', description: 'Role: finance. Triggers GL journal + cash-in Kas Alat.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Approved + journal + cash transaction' } } } },
-    '/income/claims/{id}/reject': { put: { tags: ['Equipment Income Claims'], summary: 'Finance reject claim', description: 'Role: finance', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Rejected' } } } },
-
+    '/income-payments/{id}': {
+      get: { tags: ['Income Payments'], summary: 'Detail pembayaran', description: 'Permission: income:read. + `files[].fileId` (GET /files/{id}/url) + jurnal ringkas.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
+    },
+    '/income-payments/{id}/void': {
+      put: { tags: ['Income Payments'], summary: 'Batalkan pembayaran (koreksi)', description: 'Permission: income-payment:create. Jurnal balik bertanggal hari ini (F6, F3). 409 kalau record-nya menjadi dasar klaim alat aktif/approved (F20, F23).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan + jurnal balik' }, 409: { description: 'Sudah dibatalkan / sudah menjadi dasar klaim alat' } } },
+    },
+    '/equipment-income-claims/eligible': {
+      get: {
+        tags: ['Equipment Income Claims'], summary: 'Pratinjau jam kerja yang layak diklaim',
+        description: 'Permission: equipment-claim:create (Divisi Alat). Log tidak di-void, `workDate` dalam rentang, belum di klaim aktif (submitted/approved), DAN tagihannya lunas (F20): **rental** — log ada di item income record `verified` yang `paid`; tarif = `unitRate` item (100%, F21). **konstruksi** — log `internal_project` tahapan yang punya income record `verified` + `paid` dengan `periodEnd` ≥ `workDate`; tarif = `defaultHourlyRate` unit saat ini (F19). Hasil: `contexts[{ contextType, code, name, units[{ equipmentItemId, assetCode, hours, rate, amount, logCount }] }]`, `totalHours`, `totalAmount`, plus `pending[]` (log dalam rentang yang tagihannya belum lunas / belum ditagih — informasi) dan `missingRate[]` (unit konstruksi tanpa `defaultHourlyRate` — tidak bisa diklaim).',
+        parameters: [{ in: 'query', name: 'periodStart', required: true, schema: { type: 'string', format: 'date' } }, { in: 'query', name: 'periodEnd', required: true, schema: { type: 'string', format: 'date' } }],
+        responses: { 200: { description: 'Pratinjau' }, 400: { description: 'Periode tidak sah' } },
+      },
+    },
+    '/equipment-income-claims': {
+      get: {
+        tags: ['Equipment Income Claims'], summary: 'List klaim pendapatan alat',
+        description: 'Permission: equipment-claim:read. Tiap baris: kode EIC-, periode, status, `totalHours`, `totalAmount` (dihitung), pengaju.',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'approved', 'rejected', 'cancelled'] } },
+          { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } }],
+        responses: { 200: { description: 'Paginated' } },
+      },
+      post: {
+        tags: ['Equipment Income Claims'], summary: 'Ajukan klaim (langsung ke Finance)',
+        description: 'Permission: equipment-claim:create (Divisi Alat). SEMUA log layak (lihat /eligible) dengan `workDate` dalam rentang ikut utuh — tidak dipilih per baris (F22). Log dikunci FOR UPDATE: satu log satu klaim aktif; pengajuan bersamaan atas log yang sama → yang kalah 409. Tarif & jam disnapshot di item. Tanpa tahap Admin (ERD). Masuk Approval Center tahap finance. Kode EIC-NNNNNN.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['periodStart', 'periodEnd'], properties: {
+          periodStart: { type: 'string', format: 'date' }, periodEnd: { type: 'string', format: 'date' }, notes: { type: 'string' } } } } } },
+        responses: { 201: { description: 'Detail klaim' }, 400: { description: 'Periode tidak sah' }, 409: { description: 'Log sedang diklaim bersamaan' }, 422: { description: 'Tidak ada jam kerja yang layak diklaim' } },
+      },
+    },
+    '/equipment-income-claims/{id}': {
+      get: { tags: ['Equipment Income Claims'], summary: 'Detail klaim', description: 'Permission: equipment-claim:read. Item dikelompokkan konteks → unit → log (`workDate`, `hours`, `rate`, `amount`, `incomeRecordCode` untuk rental) + `cashTransaction` (baris Kas Alat setelah approved) + jurnal ringkas + keputusan Finance.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } } },
+    },
+    '/equipment-income-claims/{id}/cancel': {
+      put: { tags: ['Equipment Income Claims'], summary: 'Batalkan klaim (pengaju)', description: 'Permission: equipment-claim:create, hanya pengaju, selama `submitted`. Log terbuka lagi.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pengaju' }, 409: { description: 'Sudah diputuskan' } } },
+    },
+    '/equipment-income-claims/{id}/approve': {
+      put: { tags: ['Equipment Income Claims'], summary: 'Setujui klaim (Finance)', description: 'Permission: equipment-claim:approve (Finance). Satu transaksi: `submitted` → `approved`; cash-in Kas Alat (`sourceType` equipment_income_claim, kategori "Alokasi Dana dari Klaim Pendapatan", nominal = Σ item, tanggal = hari ini) dan jurnal Dr Beban Alokasi Dana Divisi Alat / Cr Kas/Bank Induk Finance. Klaim approved tidak bisa diubah/dibatalkan (F23). Pengaju tidak boleh menyetujui (403). Approve ganda → 409.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Disetujui + Kas Alat + jurnal' }, 403: { description: 'Pengaju sendiri' }, 409: { description: 'Status bukan submitted' } } },
+    },
+    '/equipment-income-claims/{id}/reject': {
+      put: { tags: ['Equipment Income Claims'], summary: 'Tolak klaim (Finance)', description: 'Permission: equipment-claim:approve. Alasan wajib. Final — log terbuka lagi untuk klaim berikutnya.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string', description: 'Alasan — wajib' } } } } } }, responses: { 200: { description: 'Ditolak' }, 409: { description: 'Status bukan submitted' } } },
+    },
     // ========================================
     // 7b. PEKERJA & LOG TENAGA KERJA — docs/skema-tenaga-kerja-harian.md P1–P11
     // ========================================
@@ -2612,7 +2705,7 @@ const swaggerSpec = {
           { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
           { in: 'query', name: 'fieldOperationalRequestId', schema: { type: 'integer' } },
           { in: 'query', name: 'urgent', schema: { type: 'string', enum: ['true', 'false'] }, description: 'true = hanya laporan tanpa pengajuan' },
-          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'validated', 'rejected', 'cancelled'] } },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'validated', 'rejected', 'cancelled', 'voided'] } },
           { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
           { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } }],
         responses: { 200: { description: 'Paginated' } },
@@ -2621,14 +2714,14 @@ const swaggerSpec = {
         tags: ['Kas Lapangan'], summary: 'Laporkan realisasi + unggah nota',
         description: 'Permission: field-cash:create (Lapangan). Tahapan belum ditutup (409). Dua bentuk (L1): (1) merujuk pengajuan `approved` milik tahapan yang sama — satu pengajuan boleh beberapa laporan; (2) MENDESAK tanpa pengajuan — `urgentReason` WAJIB. Mengirim keduanya / tidak keduanya → 400. Harga = harga NYATA di nota; boleh melebihi pengajuan (L2). Nota WAJIB 1–10 file di `receipts` (PDF/JPG/PNG/WebP, maks 10 MB; HEIC ditolak). Kode FER-NNNNNN dibuat sistem.',
         requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['subProjectId', 'reportDate', 'items', 'receipts'], properties: {
-          subProjectId: { type: 'integer' }, reportDate: { type: 'string', format: 'date', description: 'Tidak di masa depan' },
+          subProjectId: { type: 'integer' }, reportDate: { type: 'string', format: 'date', description: 'Tidak di masa depan, tidak di bulan buku tertutup (409, plan Finance F3b)' },
           fieldOperationalRequestId: { type: 'integer', description: 'Kosongkan untuk laporan mendesak' },
           urgentReason: { type: 'string', description: 'Wajib kalau tanpa pengajuan; dilarang kalau ada pengajuan' },
           notes: { type: 'string' },
           items: { type: 'string', description: 'JSON array: `[{ categoryId, expenseDate, itemName, quantity, unit, unitPrice, vendorName?, fieldOperationalRequestItemId?, notes? }]` — 1–100 baris; `fieldOperationalRequestItemId` harus milik pengajuan yang dirujuk' },
           receipts: { type: 'array', minItems: 1, maxItems: 10, items: { type: 'string', format: 'binary' } },
         } } } } },
-        responses: { 201: { description: 'Detail laporan' }, 400: { description: 'Validasi / nota tidak sah / pengajuan & urgentReason bertentangan' }, 409: { description: 'Tahapan ditutup / pengajuan belum approved atau milik tahapan lain' } },
+        responses: { 201: { description: 'Detail laporan' }, 400: { description: 'Validasi / nota tidak sah / pengajuan & urgentReason bertentangan' }, 409: { description: 'Tahapan ditutup / pengajuan belum approved atau milik tahapan lain / bulan buku tertutup' } },
       },
     },
     '/field-expense-reports/{id}': {
@@ -2650,12 +2743,16 @@ const swaggerSpec = {
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pelapor' }, 409: { description: 'Sudah diputuskan' } } },
     },
     '/field-expense-reports/{id}/validate': {
-      put: { tags: ['Kas Lapangan'], summary: 'Validasi laporan (Finance)', description: 'Permission: field-cash:approve (Finance). `submitted` → `validated`. Status ini = sumber jurnal Beban Operasional Lapangan (dibangun di modul GL).',
+      put: { tags: ['Kas Lapangan'], summary: 'Validasi laporan (Finance)', description: 'Permission: field-cash:approve (Finance). `submitted` → `validated` + jurnal otomatis bertanggal `reportDate`: Dr Beban Operasional Lapangan / Cr Kas/Bank Induk Finance sebesar Σ qty × harga (plan Finance F2, F3). 409 kalau `reportDate` di bulan buku tertutup.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Divalidasi' }, 403: { description: 'Pelapor sendiri' }, 409: { description: 'Status bukan submitted' } } },
     },
     '/field-expense-reports/{id}/reject': {
       put: { tags: ['Kas Lapangan'], summary: 'Tolak laporan (Finance)', description: 'Permission: field-cash:approve. Alasan wajib (mis. nota tidak terbaca). Final — Lapangan melapor ulang.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string', description: 'Alasan — wajib' } } } } } }, responses: { 200: { description: 'Ditolak' }, 409: { description: 'Status bukan submitted' } } },
+    },
+    '/field-expense-reports/{id}/void': {
+      put: { tags: ['Kas Lapangan'], summary: 'Batalkan laporan yang sudah divalidasi (koreksi, Finance)', description: 'Permission: field-cash:approve. `validated` → `voided` + jurnal balik bertanggal hari ini (plan Finance F6). 409 kalau tahapan sudah ditutup (arsip penutupan sudah mencatat statusnya). Koreksi = void lalu Lapangan melapor ulang. **Ditambahkan 16 Nov 2026** (aditif).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan + jurnal balik' }, 409: { description: 'Status bukan validated / tahapan ditutup' } } },
     },
     '/labor-wage-claims': {
       get: {
@@ -2707,18 +2804,18 @@ const swaggerSpec = {
         parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
           { in: 'query', name: 'laborWageClaimId', schema: { type: 'integer' } },
           { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
-          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'validated', 'rejected', 'cancelled'] } }],
+          { in: 'query', name: 'status', schema: { type: 'string', enum: ['submitted', 'validated', 'rejected', 'cancelled', 'voided'] } }],
         responses: { 200: { description: 'Paginated' } },
       },
       post: {
         tags: ['Upah Pekerja'], summary: 'Unggah bukti bayar upah',
         description: 'Permission: labor-claim:create (Lapangan). Klaim harus `approved`; satu bukti AKTIF (submitted/validated) per klaim (409). `paidAmount` boleh ≠ total klaim — selisih ditampilkan (L8). File 1–10 di `proofs` (PDF/JPG/PNG/WebP, maks 10 MB). Kode LPP-NNNNNN.',
         requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['laborWageClaimId', 'paymentDate', 'paidAmount', 'proofs'], properties: {
-          laborWageClaimId: { type: 'integer' }, paymentDate: { type: 'string', format: 'date', description: 'Tidak di masa depan' },
+          laborWageClaimId: { type: 'integer' }, paymentDate: { type: 'string', format: 'date', description: 'Tidak di masa depan, tidak di bulan buku tertutup (409, plan Finance F3b)' },
           paidAmount: { type: 'number', exclusiveMinimum: 0 }, receiverName: { type: 'string', description: 'Mis. mandor penerima' }, notes: { type: 'string' },
           proofs: { type: 'array', minItems: 1, maxItems: 10, items: { type: 'string', format: 'binary' } },
         } } } } },
-        responses: { 201: { description: 'Detail bukti' }, 400: { description: 'Validasi / file tidak sah' }, 409: { description: 'Klaim belum approved / sudah punya bukti aktif / tahapan ditutup' } },
+        responses: { 201: { description: 'Detail bukti' }, 400: { description: 'Validasi / file tidak sah' }, 409: { description: 'Klaim belum approved / sudah punya bukti aktif / tahapan ditutup / bulan buku tertutup' } },
       },
     },
     '/labor-payment-proofs/{id}': {
@@ -2730,65 +2827,186 @@ const swaggerSpec = {
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan' }, 403: { description: 'Bukan pengunggah' }, 409: { description: 'Sudah diputuskan' } } },
     },
     '/labor-payment-proofs/{id}/validate': {
-      put: { tags: ['Upah Pekerja'], summary: 'Validasi bukti (Finance)', description: 'Permission: labor-claim:approve (Finance). `submitted` → `validated` = klaim LUNAS; sumber jurnal Beban Upah Harian Project (modul GL).',
+      put: { tags: ['Upah Pekerja'], summary: 'Validasi bukti (Finance)', description: 'Permission: labor-claim:approve (Finance). `submitted` → `validated` = klaim LUNAS + jurnal otomatis bertanggal `paymentDate`: Dr Beban Upah Harian Project / Cr Kas/Bank Induk Finance sebesar `paidAmount` (plan Finance F2, F3). 409 kalau `paymentDate` di bulan buku tertutup.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } }, responses: { 200: { description: 'Divalidasi' }, 403: { description: 'Pengunggah sendiri' }, 409: { description: 'Status bukan submitted' } } },
     },
     '/labor-payment-proofs/{id}/reject': {
       put: { tags: ['Upah Pekerja'], summary: 'Tolak bukti (Finance)', description: 'Permission: labor-claim:approve. Alasan wajib. Final; Lapangan mengunggah bukti baru untuk klaim yang sama.',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['notes'], properties: { notes: { type: 'string', description: 'Alasan — wajib' } } } } } }, responses: { 200: { description: 'Ditolak' }, 409: { description: 'Status bukan submitted' } } },
     },
-
-    // ========================================
-    // 9. FINANCE ACCOUNTING
-    // ========================================
-    '/finance-accounting/coa': {
-      get: { tags: ['Chart of Accounts'], summary: 'List COA', parameters: [{ in: 'query', name: 'accountType', schema: { type: 'string', enum: ['asset','liability','equity','revenue','expense'] } }, { in: 'query', name: 'isActive', schema: { type: 'boolean' } }], responses: { 200: { description: 'Array' } } },
-      post: { tags: ['Chart of Accounts'], summary: 'Tambah akun', description: 'Role: finance',
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['accountCode', 'accountName', 'accountType', 'normalBalance'], properties: { accountCode: { type: 'string' }, accountName: { type: 'string' }, accountType: { type: 'string', enum: ['asset','liability','equity','revenue','expense'] }, normalBalance: { type: 'string', enum: ['debit','credit'] }, parentAccountId: { type: 'integer' }, isDivisionAccount: { type: 'boolean' } } } } } },
-        responses: { 201: { description: 'Created' } } }
-    },
-    '/finance-accounting/coa/{id}': {
-      put: { tags: ['Chart of Accounts'], summary: 'Update akun', description: 'Role: finance', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object' } } } }, responses: { 200: { description: 'Updated' } } },
-      delete: { tags: ['Chart of Accounts'], summary: 'Nonaktifkan akun', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Deactivated' } } }
-    },
-    '/finance-accounting/journals': {
-      get: { tags: ['Journal Entries'], summary: 'List jurnal', parameters: [ { $ref: '#/components/parameters/PageParam' }, { in: 'query', name: 'ledgerScope', schema: { type: 'string' } }, { in: 'query', name: 'status', schema: { type: 'string', enum: ['draft','posted','cancelled'] } }, { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } }, { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } } ], responses: { 200: { description: 'Paginated list' } } },
-      post: { tags: ['Journal Entries'], summary: 'Manual journal entry', description: 'Role: finance',
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['journalDate', 'lines'], properties: { journalDate: { type: 'string', format: 'date' }, description: { type: 'string' }, lines: { type: 'array', items: { type: 'object', required: ['accountId'], properties: { accountId: { type: 'integer' }, debitAmount: { type: 'number', default: 0 }, creditAmount: { type: 'number', default: 0 }, description: { type: 'string' } } } } } } } } },
-        responses: { 201: { description: 'Created as draft' } } }
-    },
-    '/finance-accounting/journals/{id}': { get: { tags: ['Journal Entries'], summary: 'Detail jurnal + lines', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } } },
-    '/finance-accounting/journals/{id}/post': { put: { tags: ['Journal Entries'], summary: 'Post jurnal', description: 'Role: finance', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Posted' } } } },
-    '/finance-accounting/corrections': {
-      get: { tags: ['Financial Corrections'], summary: 'List corrections', parameters: [{ $ref: '#/components/parameters/PageParam' }], responses: { 200: { description: 'Paginated list' } } },
-      post: { tags: ['Financial Corrections'], summary: 'Buat correction request', description: 'Role: finance',
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['sourceType', 'sourceId', 'correctionMethod', 'reason'], properties: { sourceType: { type: 'string' }, sourceId: { type: 'integer' }, correctionMethod: { type: 'string', enum: ['reverse_and_replace','delta_adjustment'] }, originalAmount: { type: 'number' }, correctedAmount: { type: 'number' }, reason: { type: 'string' } } } } } },
-        responses: { 201: { description: 'Created' } } }
+    '/labor-payment-proofs/{id}/void': {
+      put: { tags: ['Upah Pekerja'], summary: 'Batalkan bukti yang sudah divalidasi (koreksi, Finance)', description: 'Permission: labor-claim:approve. `validated` → `voided` + jurnal balik bertanggal hari ini (plan Finance F6); klaimnya kembali "approved tanpa bukti sah" dan Lapangan mengunggah bukti baru. 409 kalau tahapan sudah ditutup. **Ditambahkan 16 Nov 2026** (aditif).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan + jurnal balik' }, 409: { description: 'Status bukan validated / tahapan ditutup' } } },
     },
 
     // ========================================
-    // 10. PAYROLL
+    // 9. FINANCE ACCOUNTING / GL — docs/claude_knowledge/plan-divisi-finance.md F1–F9, F24–F25
+    // Kontrak beku 16 Nov 2026 (menggantikan placeholder /finance-accounting/*).
+    // Jurnal HANYA dibuat sistem dari aksi sumber — tidak ada input debit-kredit bebas.
     // ========================================
-    '/payroll/employees': {
-      get: { tags: ['Employees'], summary: 'List karyawan tetap', parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/SearchParam' }], responses: { 200: { description: 'Paginated list' } } },
-      post: { tags: ['Employees'], summary: 'Tambah karyawan', description: 'Role: admin',
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['employeeCode', 'fullName', 'position', 'joinDate'], properties: { employeeCode: { type: 'string' }, fullName: { type: 'string' }, position: { type: 'string' }, department: { type: 'string' }, joinDate: { type: 'string', format: 'date' }, baseSalary: { type: 'number' }, bankAccountNo: { type: 'string' }, bankName: { type: 'string' } } } } } },
-        responses: { 201: { description: 'Created' } } }
+    '/chart-of-accounts': {
+      get: { tags: ['Chart of Accounts'], summary: 'Daftar akun (COA)', description: 'Permission: coa:read. Isi dari seeder saja, tanpa endpoint kelola (F4). Tiap akun: `accountCode` (mis. 1-1100), `accountName`, `accountType`, `normalBalance` (diturunkan dari jenis), `isActive`.',
+        parameters: [{ in: 'query', name: 'accountType', schema: { type: 'string', enum: ['asset', 'liability', 'equity', 'revenue', 'expense'] } }, { in: 'query', name: 'isActive', schema: { type: 'string', enum: ['true', 'false'] } }],
+        responses: { 200: { description: 'Array akun' } } },
     },
-    '/payroll/employees/{id}': {
-      get: { tags: ['Employees'], summary: 'Detail karyawan', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
-      put: { tags: ['Employees'], summary: 'Update karyawan', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { content: { 'application/json': { schema: { type: 'object' } } } }, responses: { 200: { description: 'Updated' } } }
+    '/journal-entries': {
+      get: {
+        tags: ['Journal Entries'], summary: 'Daftar jurnal',
+        description: 'Permission: journal:read. Tiap baris: kode JRN-, `journalDate`, `description`, `source { type, id, code, detailPath }`, `totalAmount` (Σ debit), `isReversal`, `reversedBy` (kode jurnal balik atau null), konteks project. Semua jurnal sah sejak dibuat (tanpa draf/post, F2).',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' }, { $ref: '#/components/parameters/SearchParam' },
+          { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'accountId', schema: { type: 'integer' }, description: 'Jurnal yang punya baris di akun ini' },
+          { in: 'query', name: 'sourceType', schema: { type: 'string', enum: ['income_record', 'income_payment', 'equipment_income_claim', 'material_request', 'field_expense_report', 'labor_payment_proof', 'payroll', 'manual_expense', 'journal_adjustment', 'opening_balance'] } },
+          { in: 'query', name: 'constructionProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'subProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'externalRentalProjectId', schema: { type: 'integer' } },
+          { in: 'query', name: 'externalSupplyProjectId', schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Paginated' } },
+      },
     },
-    '/payroll/periods': {
-      get: { tags: ['Payroll'], summary: 'List periode payroll', responses: { 200: { description: 'Array' } } },
-      post: { tags: ['Payroll'], summary: 'Buat periode payroll', description: 'Role: finance',
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['periodCode', 'periodName', 'startDate', 'endDate'], properties: { periodCode: { type: 'string' }, periodName: { type: 'string' }, startDate: { type: 'string', format: 'date' }, endDate: { type: 'string', format: 'date' } } } } } },
-        responses: { 201: { description: 'Created' } } }
+    '/journal-entries/{id}': {
+      get: { tags: ['Journal Entries'], summary: 'Detail jurnal', description: 'Permission: journal:read. Header + `lines[{ account { code, name }, debit, credit, description }]` (Σ debit = Σ kredit) + `source` + `reversalOf` / `reversedBy` + `adjustments[]` (F7a).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } } },
     },
-    '/payroll/periods/{id}/calculate': { post: { tags: ['Payroll'], summary: 'Hitung gaji semua karyawan', description: 'Role: finance', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Calculated' } } } },
-    '/payroll/periods/{id}/approve': { put: { tags: ['Payroll'], summary: 'Approve payroll', description: 'Role: finance', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Approved' } } } },
-    '/payroll/periods/{id}/pay': { put: { tags: ['Payroll'], summary: 'Tandai sudah dibayar', description: 'Role: finance. Triggers GL journal.', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Paid + journal' } } } },
-    '/payroll/periods/{id}/slips': { get: { tags: ['Payroll'], summary: 'List slip gaji', parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Array of salary slips' } } } }
+    '/journal-entries/{id}/adjustments': {
+      post: { tags: ['Journal Entries'], summary: 'Catat selisih biaya aktual (penyesuaian jurnal sumber)', description: 'Permission: journal:adjust (Finance). HANYA untuk jurnal bersumber `material_request` — nominalnya estimasi Admin (RM-3, F7a). Sistem membuat jurnal baru (`sourceType` journal_adjustment) dengan AKUN YANG SAMA PERSIS seperti jurnal asal; hanya nominalnya: `amount` > 0 menambah beban, < 0 mengurangi. Akun tidak bisa dipilih. `adjustmentDate` = tanggal pembayaran aktual: tidak di masa depan, tidak di bulan tertutup. Total penyesuaian tidak boleh membuat beban jurnal asal negatif (409).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['amount', 'adjustmentDate', 'reason'], properties: { amount: { type: 'number', description: '≠ 0; boleh negatif' }, adjustmentDate: { type: 'string', format: 'date' }, reason: { type: 'string' } } } } } },
+        responses: { 201: { description: 'Jurnal penyesuaian' }, 400: { description: 'amount 0 / validasi' }, 409: { description: 'Bukan jurnal request material / jurnal balik / bulan tertutup / beban jadi negatif' } } },
+    },
+    '/general-ledger/accounts/{accountId}': {
+      get: { tags: ['Journal Entries'], summary: 'Buku besar per akun', description: 'Permission: journal:read. `openingBalance` (saldo sebelum `startDate`) + `entries[{ journalDate, journalCode, description, source, debit, credit, runningBalance }]` + `closingBalance`. Saldo DIHITUNG saat dibaca, sisi normal mengikuti jenis akun (F25).',
+        parameters: [{ in: 'path', name: 'accountId', required: true, schema: { type: 'integer' } }, { in: 'query', name: 'startDate', required: true, schema: { type: 'string', format: 'date' } }, { in: 'query', name: 'endDate', required: true, schema: { type: 'string', format: 'date' } }],
+        responses: { 200: { description: 'Buku besar' }, 404: { description: 'Akun tidak ditemukan' } } },
+    },
+    '/general-ledger/trial-balance': {
+      get: { tags: ['Journal Entries'], summary: 'Neraca saldo per tanggal', description: 'Permission: journal:read. Per akun: `debit`, `credit`, `balance` s.d. `date`; `totals` debit = kredit.',
+        parameters: [{ in: 'query', name: 'date', required: true, schema: { type: 'string', format: 'date' } }], responses: { 200: { description: 'Neraca saldo' } } },
+    },
+    '/accounting-periods': {
+      get: { tags: ['Accounting Periods'], summary: 'Daftar bulan buku', description: 'Permission: journal:read. Dari bulan jurnal pertama s.d. bulan berjalan: `period` (YYYY-MM), `status` open|closed (DITURUNKAN dari penutupan aktif), `closedBy/At`, riwayat `reopened*`, dan `blockers` (dokumen menunggu keputusan bertanggal bulan itu: laporan realisasi `submitted`, bukti bayar upah `submitted`, payroll `draft`/`finalized`).',
+        responses: { 200: { description: 'Array bulan' } } },
+    },
+    '/accounting-periods/{period}/close': {
+      put: { tags: ['Accounting Periods'], summary: 'Tutup buku satu bulan (Finance)', description: 'Permission: accounting-period:close (Finance). Hanya bulan yang SUDAH LEWAT; berurutan (bulan sebelumnya wajib tertutup, kecuali bulan pertama GL). 409 selama `blockers` > 0. Sesudahnya tidak ada jurnal maupun dokumen bertanggal bulan itu yang bisa dibuat (F3b).',
+        parameters: [{ in: 'path', name: 'period', required: true, schema: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$', example: '2026-11' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { notes: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Ditutup' }, 400: { description: 'Format periode' }, 409: { description: 'Belum lewat / bulan sebelumnya belum ditutup / masih ada dokumen menunggu / sudah tertutup' } } },
+    },
+    '/accounting-periods/{period}/reopen': {
+      put: { tags: ['Accounting Periods'], summary: 'Buka kembali bulan tertutup terakhir', description: 'Permission: accounting-period:close. Hanya bulan tertutup TERAKHIR; alasan wajib; riwayat penutupan tetap tersimpan.',
+        parameters: [{ in: 'path', name: 'period', required: true, schema: { type: 'string', example: '2026-10' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Dibuka kembali' }, 409: { description: 'Bukan bulan tertutup terakhir / belum tertutup' } } },
+    },
+    '/manual-expenses': {
+      get: { tags: ['Manual Expenses'], summary: 'Daftar pengeluaran manual Finance', description: 'Permission: manual-expense:read. Termasuk yang di-void.',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' }, { $ref: '#/components/parameters/SearchParam' },
+          { in: 'query', name: 'startDate', schema: { type: 'string', format: 'date' } }, { in: 'query', name: 'endDate', schema: { type: 'string', format: 'date' } },
+          { in: 'query', name: 'voided', schema: { type: 'string', enum: ['true', 'false'] } }],
+        responses: { 200: { description: 'Paginated' } } },
+      post: {
+        tags: ['Manual Expenses'], summary: 'Catat pengeluaran manual (langsung menjurnal)',
+        description: 'Permission: manual-expense:create (Finance). Untuk pengeluaran yang belum punya modul sendiri (F9). Tanpa draf & tanpa kategori. Jurnal bertanggal `expenseDate`: Dr Beban Pengeluaran Manual Finance / Cr Kas/Bank Induk Finance. `expenseDate` tidak di masa depan, tidak di bulan tertutup. Lampiran WAJIB 1–10 di `attachments` (PDF/JPG/PNG/WebP, maks 10 MB). Kode MEX-NNNNNN.',
+        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['expenseDate', 'amount', 'description', 'reason', 'attachments'], properties: {
+          expenseDate: { type: 'string', format: 'date' }, amount: { type: 'number', exclusiveMinimum: 0 },
+          payeeName: { type: 'string' }, paymentMethod: { type: 'string', enum: ['transfer', 'cash', 'giro', 'other'] },
+          description: { type: 'string' }, reason: { type: 'string', description: 'Kenapa lewat pengeluaran manual' },
+          attachments: { type: 'array', minItems: 1, maxItems: 10, items: { type: 'string', format: 'binary' } },
+        } } } } },
+        responses: { 201: { description: 'Detail + jurnal' }, 400: { description: 'Validasi / file tidak sah' }, 409: { description: 'Bulan tertutup' } },
+      },
+    },
+    '/manual-expenses/{id}': {
+      get: { tags: ['Manual Expenses'], summary: 'Detail pengeluaran manual', description: 'Permission: manual-expense:read. + `attachments[].fileId` + jurnal ringkas.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
+    },
+    '/manual-expenses/{id}/void': {
+      put: { tags: ['Manual Expenses'], summary: 'Batalkan pengeluaran manual (koreksi)', description: 'Permission: manual-expense:create. Jurnal balik bertanggal hari ini (F6). Koreksi nominal = void lalu catat ulang.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan + jurnal balik' }, 409: { description: 'Sudah dibatalkan' } } },
+    },
+
+    // ========================================
+    // 10. PAYROLL KARYAWAN TETAP — docs/claude_knowledge/plan-divisi-finance.md F26–F29
+    // Kontrak beku 16 Nov 2026 (menggantikan placeholder /payroll/*).
+    // Pekerja harian/kontrak tahapan BUKAN di sini — lihat tag Pekerja & Upah Pekerja.
+    // ========================================
+    '/employees': {
+      get: {
+        tags: ['Employees'], summary: 'Daftar karyawan tetap',
+        description: 'Permission: employee:read. Tanpa nominal gaji (itu `compensation:read`, F29). `isActive` DITURUNKAN dari `endDate` (null atau ≥ hari ini); `user` = akun sistem yang tertaut (lewat PUT /users/{id}/employee) atau null.',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' }, { $ref: '#/components/parameters/SearchParam' },
+          { in: 'query', name: 'active', schema: { type: 'string', enum: ['true', 'false'] } },
+          { in: 'query', name: 'department', schema: { type: 'string', enum: ['kantor', 'finance', 'divisi_alat', 'lapangan'] } }],
+        responses: { 200: { description: 'Paginated' } },
+      },
+      post: {
+        tags: ['Employees'], summary: 'Tambah karyawan (Admin)',
+        description: 'Permission: employee:create (Admin). `employeeCode` dibuat sistem EMP-NNNN (dikirim → 400). Rekening = acuan transfer di luar sistem.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['fullName', 'department', 'joinDate'], properties: {
+          fullName: { type: 'string' }, department: { type: 'string', enum: ['kantor', 'finance', 'divisi_alat', 'lapangan'] }, positionName: { type: 'string' },
+          joinDate: { type: 'string', format: 'date' }, bankName: { type: 'string' }, accountNumber: { type: 'string' }, accountName: { type: 'string' }, notes: { type: 'string' },
+        } } } } },
+        responses: { 201: { description: 'Karyawan' }, 400: { description: 'Validasi' } },
+      },
+    },
+    '/employees/{id}': {
+      get: { tags: ['Employees'], summary: 'Detail karyawan', description: 'Permission: employee:read. Pemegang `compensation:read` juga menerima `currentCompensation`.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' }, 404: { description: 'Tidak ditemukan' } } },
+      put: { tags: ['Employees'], summary: 'Ubah karyawan / catat keluar (Admin)', description: 'Permission: employee:update. Field sama dengan POST + `endDate` & `endReason` (karyawan keluar; `endDate` ≥ `joinDate`). Tidak ada hapus — keluar = isi `endDate`.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { endDate: { type: 'string', format: 'date', nullable: true }, endReason: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Diubah' }, 400: { description: 'Validasi' } } },
+    },
+    '/employee-compensations': {
+      get: { tags: ['Employees'], summary: 'Riwayat gaji pokok', description: 'Permission: compensation:read (Finance, super_admin). Gaji berlaku pada suatu tanggal = baris dengan `effectiveStartDate` terbaru ≤ tanggal itu; `isCurrent` diturunkan (tanpa tanggal akhir & tanpa status).',
+        parameters: [{ in: 'query', name: 'employeeId', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Array riwayat' } } },
+      post: { tags: ['Employees'], summary: 'Tetapkan gaji pokok baru (Finance)', description: 'Permission: compensation:create (Finance). Kenaikan gaji = baris baru, bukan mengubah baris lama. `effectiveStartDate` yang sama untuk karyawan yang sama → 409. Baris yang sudah dipakai payroll tidak bisa diubah/dihapus (tidak ada endpoint ubah).',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['employeeId', 'baseSalary', 'effectiveStartDate'], properties: { employeeId: { type: 'integer' }, baseSalary: { type: 'number', exclusiveMinimum: 0 }, effectiveStartDate: { type: 'string', format: 'date' }, notes: { type: 'string' } } } } } },
+        responses: { 201: { description: 'Gaji tercatat' }, 409: { description: 'Tanggal berlaku sudah ada' } } },
+    },
+    '/payrolls': {
+      get: { tags: ['Payroll'], summary: 'Daftar payroll bulanan', description: 'Permission: payroll:read. Tiap baris: kode PRL-, `year`, `month`, status, `employeeCount`, `totalEarnings`, `totalDeductions`, `totalNet` (semua dihitung), `replacesPayroll`.',
+        parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/LimitParam' },
+          { in: 'query', name: 'year', schema: { type: 'integer' } }, { in: 'query', name: 'status', schema: { type: 'string', enum: ['draft', 'finalized', 'paid', 'cancelled', 'voided'] } }],
+        responses: { 200: { description: 'Paginated' } } },
+      post: { tags: ['Payroll'], summary: 'Buat payroll bulan (draft)', description: 'Permission: payroll:create (Finance). Mengisi semua karyawan aktif pada bulan itu yang punya gaji berlaku: satu item per karyawan + komponen "Gaji Pokok" (dibuat sistem, terkunci). Karyawan aktif tanpa gaji berlaku dilaporkan di `meta.skipped` (tidak diam-diam dilewati). Satu payroll aktif (selain cancelled/voided) per bulan → 409. Pengganti payroll yang di-void: kirim `replacesPayrollId` (harus `voided`, bulan sama). Pajak/BPJS tidak dihitung (F27). Kode PRL-NNNNNN.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['year', 'month'], properties: { year: { type: 'integer' }, month: { type: 'integer', minimum: 1, maximum: 12 }, replacesPayrollId: { type: 'integer' }, notes: { type: 'string' } } } } } },
+        responses: { 201: { description: 'Payroll draft + meta.skipped' }, 409: { description: 'Sudah ada payroll aktif bulan itu / replacesPayrollId tidak sah' } } },
+    },
+    '/payrolls/{id}': {
+      get: { tags: ['Payroll'], summary: 'Detail payroll', description: 'Permission: payroll:read. + `items[{ employee, compensationId, components[{ id, componentType, componentName, amount, isSystem }], earnings, deductions, net }]` + `files[]` + jurnal ringkas + aktor (`finalized*`, `paid*`, `cancelled*`, `voided*`).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Detail' } } },
+    },
+    '/payrolls/{id}/regenerate': {
+      put: { tags: ['Payroll'], summary: 'Tarik ulang karyawan & gaji (draft)', description: 'Permission: payroll:create. Hanya `draft`. Menambah karyawan aktif baru, membuang yang tidak aktif lagi, memperbarui Gaji Pokok ke gaji berlaku; komponen manual karyawan yang tetap ada DIPERTAHANKAN.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Payroll + meta.skipped' }, 409: { description: 'Bukan draft' } } },
+    },
+    '/payrolls/{id}/items/{itemId}/components': {
+      put: { tags: ['Payroll'], summary: 'Ganti komponen manual satu karyawan (draft)', description: 'Permission: payroll:create. Hanya `draft`. Mengganti SELURUH komponen manual item itu (Gaji Pokok tidak bisa diubah/dihapus). Contoh: tunjangan, potongan kasbon, pro-rata (F27). Net per karyawan tidak boleh negatif (400).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }, { in: 'path', name: 'itemId', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['components'], properties: { components: { type: 'array', maxItems: 20, items: { type: 'object', required: ['componentType', 'componentName', 'amount'], properties: { componentType: { type: 'string', enum: ['earning', 'deduction'] }, componentName: { type: 'string' }, amount: { type: 'number', exclusiveMinimum: 0 }, notes: { type: 'string' } } } } } } } } },
+        responses: { 200: { description: 'Item terbaru' }, 400: { description: 'Validasi / net negatif' }, 409: { description: 'Bukan draft' } } },
+    },
+    '/payrolls/{id}/finalize': {
+      put: { tags: ['Payroll'], summary: 'Kunci nominal (Finance)', description: 'Permission: payroll:create. `draft` → `finalized`; nominal terkunci (bahan transfer bank). Tanpa jurnal.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], responses: { 200: { description: 'Dikunci' }, 409: { description: 'Bukan draft / tanpa karyawan' } } },
+    },
+    '/payrolls/{id}/cancel': {
+      put: { tags: ['Payroll'], summary: 'Batalkan payroll belum dibayar', description: 'Permission: payroll:create. `draft`/`finalized` → `cancelled`. Bulan itu bisa dibuat payroll baru.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan' }, 409: { description: 'Sudah dibayar / dibatalkan' } } },
+    },
+    '/payrolls/{id}/pay': {
+      put: { tags: ['Payroll'], summary: 'Tandai sudah dibayar (Finance)', description: 'Permission: payroll:pay. `finalized` → `paid`. Jurnal bertanggal `paymentDate`: Dr Beban Gaji Karyawan Tetap / Cr Kas/Bank Induk Finance sebesar total net. `paymentDate` tidak di masa depan, tidak di bulan tertutup. Bukti opsional 0–10 file di `proofs`. Tanpa pemisahan tugas (ERD: Finance sendiri, F28).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['paymentDate'], properties: { paymentDate: { type: 'string', format: 'date' }, paymentReference: { type: 'string' }, notes: { type: 'string' }, proofs: { type: 'array', maxItems: 10, items: { type: 'string', format: 'binary' } } } } } } },
+        responses: { 200: { description: 'Dibayar + jurnal' }, 409: { description: 'Bukan finalized / bulan tertutup' } } },
+    },
+    '/payrolls/{id}/void': {
+      put: { tags: ['Payroll'], summary: 'Batalkan payroll yang sudah dibayar (koreksi)', description: 'Permission: payroll:pay. `paid` → `voided` + jurnal balik bertanggal hari ini (F6). Koreksi = buat payroll pengganti bulan sama dengan `replacesPayrollId`, lalu finalize & pay ulang.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: 'Dibatalkan + jurnal balik' }, 409: { description: 'Bukan paid' } } },
+    },
   }
 };
 

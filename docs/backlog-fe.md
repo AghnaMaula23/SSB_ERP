@@ -897,3 +897,22 @@ Rute `#/finance/*`, kartu Divisi Finance aktif untuk pemegang `*:approve` Financ
 - **Buku Kas Alat** — `/api/equipment/cash/*` baca saja (`cash:read`). Bukan General Ledger.
 - **Chart of Accounts, General Ledger, Verifikasi Pendapatan** — "Soon": `/api/finance-accounting` dan `/api/income`
   belum dibangun. Sepakati kontraknya dulu sebelum layar dibuat (aturan E21).
+
+## E32. Kontrak Divisi Finance beku (16 November 2026)
+
+Rencana: `docs/claude_knowledge/plan-divisi-finance.md` (keputusan F1–F29, Q1–Q3). Kontrak di Swagger: tag
+*Income Records*, *Income Payments*, *Equipment Income Claims*, *Chart of Accounts*, *Journal Entries*,
+*Accounting Periods*, *Manual Expenses*, *Employees*, *Payroll*. Path lama `/api/income/*`,
+`/api/finance-accounting/*`, `/api/payroll/*` **dihapus** — jangan dipakai. Layar dibangun setelah backend
+fasenya ter-deploy; tanpa mock (aturan E21).
+
+**MEMUTUS FE (kecil, aditif):**
+- Status baru `voided` ("Dibatalkan setelah sah") pada laporan realisasi (`/field-expense-reports`) dan bukti bayar
+  upah (`/labor-payment-proofs`), plus `PUT /:id/void { reason }` (Finance). Daftar & badge status perlu label ini.
+- Laporan realisasi & bukti bayar upah bertanggal di bulan buku yang sudah ditutup → 409; tampilkan pesannya.
+- Cabut validasi progress, batal jam kerja, dan batal penerimaan supply bisa 409 kalau barisnya sudah ditagih
+  (income record aktif) atau diklaim alat — tampilkan pesannya.
+
+**Mock yang akan diganti** (bagian 7 rencana): `admin/income/services/incomeService.js`,
+`incomeSourceService.js` (form tidak lagi menebak tarif & volume — pakai `GET /income-records/billable`),
+`alat/services/incomeClaimService.js`. Form income konstruksi hanya berisi progress (tanpa baris alat/material, F19).
