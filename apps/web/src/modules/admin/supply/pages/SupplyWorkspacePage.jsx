@@ -7,9 +7,10 @@ import SupplyDetailPage from './SupplyDetailPage.jsx';
 import { createSupplyProject, getSupplyProject, listSupplyProjects, updateSupplyProject } from '../services/supplyService.js';
 import { isDemoId, listDemoSupplyProjects, updateDemoSupplyProject } from '../services/demoSupplyService.js';
 import { hasPermission } from '../../../../services/permissions.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { parseSupplyRoute } from '../utils/supplyRoute.js';
 
-function BackPanel({ icon = '🔒', title, children, href = '#/admin/supply' }) {
+function BackPanel({ icon = '🔒', title, children, href = `#/${divisionPrefix()}/supply` }) {
   return <EmptyPanel icon={icon} title={title} action={<a href={href} className="btn btn-secondary text-xs">← Kembali</a>}>{children}</EmptyPanel>;
 }
 
@@ -17,7 +18,7 @@ function BackPanel({ icon = '🔒', title, children, href = '#/admin/supply' }) 
  * Menu Supply Divisi Admin. Tanpa panel samping: kontrak dipilih di halaman
  * awal, lalu bisa diganti dari pemilih di atas halaman detail.
  */
-export default function SupplyWorkspacePage({ route, onNavigate, onBackToModules, onSignOut }) {
+export default function SupplyWorkspacePage({ route, onNavigate, onBackToModules, onSignOut, Layout = AdminLayout }) {
   const selection = parseSupplyRoute(route) || { projectId: null, form: null };
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,8 +79,8 @@ export default function SupplyWorkspacePage({ route, onNavigate, onBackToModules
         <SupplyProjectFormPage
           key={route}
           onSubmitForm={createSupplyProject}
-          onCancel={() => onNavigate('admin/supply')}
-          onSaved={(saved) => { upsertProject(saved); goWithNotice(`admin/supply/${saved.id}`, `Kontrak ${saved.projectCode} dibuat.`); }}
+          onCancel={() => onNavigate(`${divisionPrefix()}/supply`)}
+          onSaved={(saved) => { upsertProject(saved); goWithNotice(`${divisionPrefix()}/supply/${saved.id}`, `Kontrak ${saved.projectCode} dibuat.`); }}
         />
       );
     }
@@ -91,7 +92,7 @@ export default function SupplyWorkspacePage({ route, onNavigate, onBackToModules
       return <BackPanel icon="🔎" title="Kontrak tidak ditemukan">Kontrak ini mungkin tidak ada atau Anda tidak punya akses.</BackPanel>;
     }
 
-    const detail = `admin/supply/${project.id}`;
+    const detail = `${divisionPrefix()}/supply/${project.id}`;
     const isFinal = ['completed', 'cancelled'].includes(project.status);
 
     if (selection.form === 'project-edit') {
@@ -122,8 +123,8 @@ export default function SupplyWorkspacePage({ route, onNavigate, onBackToModules
   };
 
   return (
-    <AdminLayout active="supply" onNavigate={onNavigate} onBackToModules={onBackToModules} onSignOut={onSignOut}>
+    <Layout active="supply" onNavigate={onNavigate} onBackToModules={onBackToModules} onSignOut={onSignOut}>
       {renderContent()}
-    </AdminLayout>
+    </Layout>
   );
 }

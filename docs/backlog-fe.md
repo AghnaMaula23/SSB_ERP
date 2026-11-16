@@ -897,3 +897,18 @@ Rute `#/finance/*`, kartu Divisi Finance aktif untuk pemegang `*:approve` Financ
 - **Buku Kas Alat** — `/api/equipment/cash/*` baca saja (`cash:read`). Bukan General Ledger.
 - **Chart of Accounts, General Ledger, Verifikasi Pendapatan** — "Soon": `/api/finance-accounting` dan `/api/income`
   belum dibangun. Sepakati kontraknya dulu sebelum layar dibuat (aturan E21).
+
+## E32. Finance lengkap (data contoh), Supply Lapangan, manajemen akun, keuangan project (16 November 2026)
+
+- **Finance** — Gaji Bulanan Staf, Chart of Accounts, General Ledger (+ jurnal manual), dan Verifikasi Pendapatan kini
+  berisi **data contoh** (`modules/finance/services/financeMockService.js`, kunci `finance_mock_*`, dibersihkan saat sign out).
+  Verifikasi Pendapatan membaca tagihan menu Income Admin (`decideIncomeRecord`) dan menulis jurnal contoh; bayar gaji
+  staf juga. Saat backend Finance Accounting/Payroll/Income ada, ganti isi fungsi di file itu — halaman tidak perlu diubah.
+- **Lapangan → Supply** — halaman Supply Admin dipakai Lapangan (pola `divisionPrefix` sama dengan Project/Rental), plus
+  tombol ke Request Material untuk mencatat request & surat jalan supply.
+- **Manajemen Akun** (`#/akun`, kartu untuk pemegang `user:create`) — buat akun (`POST /auth/register` lalu
+  `PUT /users/:id/roles`), ubah nama/email/reset password/nonaktifkan lewat endpoint baru `PUT /api/users/:id`.
+  Tidak ada hapus akun: dokumen merujuk pembuatnya.
+- **Files → Keuangan Project** (`admin/files/:type/:id/keuangan`) — pengeluaran nyata per project (request material
+  approved, laporan kas lapangan tervalidasi, klaim upah approved) dan pemasukan dari Income (data contoh). Rental belum
+  punya pengeluaran per kontrak di backend.

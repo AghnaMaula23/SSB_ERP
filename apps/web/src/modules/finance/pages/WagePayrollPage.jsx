@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import ResponsiveTable from '../../../components/ResponsiveTable.jsx';
-import { Breadcrumb, EmptyPanel, MetricCard, Notice, PageHeader, StatusBadge } from '../../admin/project/components/ProjectUi.jsx';
+import { Breadcrumb, MetricCard, Notice, PageHeader, StatusBadge } from '../../admin/project/components/ProjectUi.jsx';
 import { FilterChips, Pager } from '../../admin/approvals/components/ApprovalUi.jsx';
 import { formatCurrency, formatDate, todayIso } from '../../admin/project/utils/projectFormat.js';
 import { downloadCsv } from '../../../utils/csv.js';
@@ -8,13 +8,14 @@ import { useRecord } from '../../lapangan/hooks/useFieldData.js';
 import { PROOF_STATUS, REQUEST_STATUS, stageLabel, statusOptions } from '../../lapangan/utils/fieldFormat.js';
 import { fetchAllPages } from '../services/financeService.js';
 import { monthBounds } from '../utils/financeFormat.js';
+import StaffPayrollTab from './StaffPayrollTab.jsx';
 
 const PAGE_SIZE = 10;
 const PENDING = ['submitted', 'waiting_finance_approval'];
 
 /**
  * Gaji & Upah. Upah harian pekerja/mandor dari klaim upah Lapangan (API ada);
- * gaji bulanan staf menunggu modul Payroll Karyawan — tidak dibuatkan data contoh.
+ * gaji bulanan staf memakai data contoh sampai modul Payroll Karyawan ada.
  */
 export default function WagePayrollPage() {
   const [tab, setTab] = useState('harian');
@@ -89,10 +90,7 @@ export default function WagePayrollPage() {
       </nav>
 
       {tab === 'staf' ? (
-        <EmptyPanel icon="🗓️" title="Gaji bulanan staf belum tersedia">
-          Payroll karyawan (gaji pokok, tunjangan, potongan/BPJS) menunggu backend modul Payroll Karyawan
-          (<code className="font-mono">/api/payroll</code> masih dikomentari di <code className="font-mono">app.js</code>). Layar ini aktif begitu kontraknya tersedia.
-        </EmptyPanel>
+        <StaffPayrollTab key={month} month={month} />
       ) : (
         <section className="card-panel overflow-hidden" aria-label="Daftar klaim upah">
           <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">

@@ -10,6 +10,7 @@ import { parseFilesRoute } from './modules/admin/files/utils/filesRoute.js';
 import FieldLayout from './modules/lapangan/components/FieldLayout.jsx';
 import { parseFieldRoute } from './modules/lapangan/utils/fieldRoute.js';
 import { parseFinanceRoute } from './modules/finance/utils/financeRoute.js';
+import { parseAccountRoute } from './modules/accounts/utils/accountRoute.js';
 import { clearSession, getCurrentUser } from './services/auth.js';
 
 // Tiap halaman dimuat saat dibuka, bukan semuanya sekaligus saat aplikasi mulai.
@@ -35,6 +36,7 @@ const ApprovalWorkspacePage = lazy(() => import('./modules/admin/approvals/pages
 const FilesWorkspacePage = lazy(() => import('./modules/admin/files/pages/FilesWorkspacePage.jsx'));
 const FieldWorkspacePage = lazy(() => import('./modules/lapangan/pages/FieldWorkspacePage.jsx'));
 const FinanceWorkspacePage = lazy(() => import('./modules/finance/pages/FinanceWorkspacePage.jsx'));
+const AccountWorkspacePage = lazy(() => import('./modules/accounts/pages/AccountWorkspacePage.jsx'));
 
 function getInitialRoute() {
   const route = window.location.hash.replace(/^#\/?/, '').split('?')[0].replace(/\/+$/, '');
@@ -75,7 +77,8 @@ function isKnownRoute(route) {
     parseApprovalRoute(route) !== null ||
     parseFilesRoute(route) !== null ||
     parseFieldRoute(route) !== null ||
-    parseFinanceRoute(route) !== null;
+    parseFinanceRoute(route) !== null ||
+    parseAccountRoute(route) !== null;
 }
 
 function AppLoading() {
@@ -226,13 +229,15 @@ export default function App() {
   if (parseProjectRoute(route))
     return <ProjectWorkspacePage {...layoutProps} route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseSupplyRoute(route))
-    return <SupplyWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+    return <SupplyWorkspacePage {...layoutProps} route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseRentalRoute(route))
     return <RentalWorkspacePage {...layoutProps} route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseIncomeRoute(route))
     return <IncomeWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseApprovalRoute(route))
     return <ApprovalWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (parseAccountRoute(route))
+    return <AccountWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseFinanceRoute(route))
     return <FinanceWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseFieldRoute(route))

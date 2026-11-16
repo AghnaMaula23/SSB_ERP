@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Breadcrumb, EmptyPanel, LoadingPanel, MetricCard, MockBanner, PageHeader, StatusBadge } from '../../project/components/ProjectUi.jsx';
 import { formatDate } from '../../project/utils/projectFormat.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { SUPPLY_STATUS } from '../utils/supplyFormat.js';
 
 /**
@@ -27,7 +28,7 @@ export default function SupplyProjectPickerPage({ projects, loading, error, canC
       <PageHeader
         title="Kontrak Supplier"
         subtitle="SSB sebagai supplier material ke client eksternal. Pilih kontrak untuk melihat rekap ritase pengirimannya."
-        actions={canCreate && <a href="#/admin/supply/new" className="btn btn-primary text-xs">+ Tambah Transaksi</a>}
+        actions={canCreate && <a href={`#/${divisionPrefix()}/supply/new`} className="btn btn-primary text-xs">+ Tambah Transaksi</a>}
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -62,7 +63,7 @@ export default function SupplyProjectPickerPage({ projects, loading, error, canC
       {loading ? (
         <LoadingPanel>Memuat kontrak supply...</LoadingPanel>
       ) : projects.length === 0 ? (
-        <EmptyPanel icon="🚚" title="Belum ada kontrak supply" action={canCreate && <a href="#/admin/supply/new" className="btn btn-primary text-xs">+ Tambah Transaksi</a>}>
+        <EmptyPanel icon="🚚" title="Belum ada kontrak supply" action={canCreate && <a href={`#/${divisionPrefix()}/supply/new`} className="btn btn-primary text-xs">+ Tambah Transaksi</a>}>
           Buat transaksi supply pertama: client, nama proyek, dan periode kontraknya.
         </EmptyPanel>
       ) : filtered.length === 0 ? (
@@ -70,7 +71,7 @@ export default function SupplyProjectPickerPage({ projects, loading, error, canC
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((project) => (
-            <a key={project.id} href={`#/admin/supply/${project.id}`} className="card-panel group flex flex-col p-5 transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md">
+            <a key={project.id} href={`#/${divisionPrefix()}/supply/${project.id}`} className="card-panel group flex flex-col p-5 transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md">
               <div className="flex items-start justify-between gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-lg" aria-hidden="true">🚚</span>
                 <div className="flex items-center gap-1.5">

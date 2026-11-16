@@ -319,6 +319,13 @@ const swaggerSpec = {
       }
     },
     '/users/{id}': {
+      put: {
+        tags: ['Users'], summary: 'Ubah akun (nama, email, aktif, reset password)',
+        description: 'Permission: user:update. Username tidak bisa diubah. Akun tidak dihapus — nonaktifkan dengan isActive: false. Akun sendiri tidak bisa dinonaktifkan (403); super_admin aktif terakhir tidak bisa dinonaktifkan (409).',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { fullName: { type: 'string' }, email: { type: 'string' }, isActive: { type: 'boolean' }, password: { type: 'string', minLength: 8 } } } } } },
+        responses: { 200: { description: 'Akun diperbarui' }, 403: { description: 'Akun sendiri' }, 409: { description: 'Email dipakai / super_admin terakhir' } },
+      },
       get: {
         tags: ['Users'], summary: 'Detail user + roles + permissions', description: 'Permission: user:read',
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],

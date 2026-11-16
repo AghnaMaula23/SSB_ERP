@@ -1,4 +1,5 @@
 import { apiRequest } from './api.js';
+import { FINANCE_MOCK_KEYS } from '../modules/finance/services/financeMockService.js';
 
 export function saveSession(token, user) {
   localStorage.setItem('token', token);
@@ -32,6 +33,8 @@ export function clearSession() {
   localStorage.removeItem('admin_mock_income_records');
   localStorage.removeItem('admin_mock_field_cash');
   localStorage.removeItem('admin_mock_files');
+  // Data contoh Finance (COA, GL, payroll staf, pendapatan alat)
+  FINANCE_MOCK_KEYS.forEach((key) => localStorage.removeItem(key));
   // Sisa penyimpanan lokal modul Files lama (sebelum /api/project-files).
   if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase('constructerp-files');
 }

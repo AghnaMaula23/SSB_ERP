@@ -8,6 +8,7 @@ const SYSTEM_KEYS = ['delivery-notes', 'receipt-proofs', 'field-expense-receipts
  *   admin/files                                            daftar project
  *   admin/files/:type/:projectId                           direktori project (folder & tahapan)
  *   admin/files/:type/:projectId/trash                     sampah project
+ *   admin/files/:type/:projectId/keuangan                  pemasukan & pengeluaran project
  *   admin/files/:type/:projectId/new                       folder baru tingkat project
  *   admin/files/:type/:projectId/sub/:subId/new            folder baru di satu tahapan
  *   admin/files/:type/:projectId/system/:key[/sub/:subId]  folder sistem (baca-saja)
@@ -29,6 +30,7 @@ export function parseFilesRoute(route) {
 
   if (rest.length === 2) return { ...base, view: 'project' };
   if (rest.length === 3 && section === 'trash') return { ...base, view: 'trash' };
+  if (rest.length === 3 && section === 'keuangan') return { ...base, view: 'finance' };
   if (rest.length === 3 && section === 'new') return { ...base, view: 'folder-new', subProjectId: null };
   if (section === 'sub' && rest.length === 5 && isId(a) && b === 'new' && type === 'construction') {
     return { ...base, view: 'folder-new', subProjectId: Number(a) };
@@ -52,6 +54,7 @@ export const filesHref = {
   projects: () => '#/admin/files',
   project: (type, projectId) => `#/admin/files/${type}/${projectId}`,
   trash: (type, projectId) => `#/admin/files/${type}/${projectId}/trash`,
+  finance: (type, projectId) => `#/admin/files/${type}/${projectId}/keuangan`,
   newFolder: (type, projectId, subProjectId) => (subProjectId
     ? `#/admin/files/${type}/${projectId}/sub/${subProjectId}/new`
     : `#/admin/files/${type}/${projectId}/new`),

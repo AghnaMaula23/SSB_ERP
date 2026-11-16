@@ -3,15 +3,15 @@ import { Notice } from '../../admin/project/components/ProjectUi.jsx';
 import { hasPermission } from '../../../services/permissions.js';
 import { FINANCE_TABS } from '../utils/financeRoute.js';
 
-// Menu Divisi Finance. Item tanpa `route` = backend belum ada (Payroll Karyawan,
-// Finance Accounting, Income): tampil "Soon", tanpa data contoh (backlog E21/E27).
+// Menu Divisi Finance. Gaji staf, COA, GL, dan Pendapatan memakai data contoh
+// (financeMockService) sampai backend Payroll, Finance Accounting & Income ada.
 const RAIL_ITEMS = [
   { key: 'approvals', label: 'Approvals', icon: '✅', route: 'finance/approvals' },
   { key: 'upah', label: 'Gaji & Upah', icon: '👷', route: 'finance/upah' },
   { key: 'kas-alat', label: 'Buku Kas Alat', icon: '📒', route: 'finance/kas-alat' },
-  { key: 'coa', label: 'Chart of Accounts', icon: '🗂️' },
-  { key: 'gl', label: 'General Ledger', icon: '📚' },
-  { key: 'pendapatan', label: 'Verifikasi Pendapatan', icon: '💰' },
+  { key: 'coa', label: 'Chart of Accounts', icon: '🗂️', route: 'finance/coa' },
+  { key: 'gl', label: 'General Ledger', icon: '📚', route: 'finance/gl' },
+  { key: 'pendapatan', label: 'Verifikasi Pendapatan', icon: '💰', route: 'finance/pendapatan' },
 ];
 
 const BRAND = { title: 'Divisi Finance', subtitle: 'Finance Workspace' };
