@@ -5,6 +5,8 @@ import { DELIVERY_COLUMNS, SUPPLY_STATUS, totalsByUnit } from '../utils/supplyFo
 import { changeSupplyProjectStatus } from '../services/supplyService.js';
 import { changeDemoSupplyStatus } from '../services/demoSupplyService.js';
 import { getDeliveryNoteUrl, listProjectDeliveries } from '../services/deliveryService.js';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
+import { hasPermission } from '../../../../services/permissions.js';
 import { downloadCsv } from '../../../../utils/csv.js';
 
 const COLUMN_PREF_KEY = 'admin-supply-columns';
@@ -185,12 +187,12 @@ export default function SupplyDetailPage({ project, projects, permissions, initi
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Breadcrumb items={[{ label: 'Supply', href: '#/admin/supply' }, { label: project.clientName || 'Kontrak' }, { label: 'Rekap Ritase' }]} />
+        <Breadcrumb items={[{ label: 'Supply', href: `#/${divisionPrefix()}/supply` }, { label: project.clientName || 'Kontrak' }, { label: 'Rekap Ritase' }]} />
         <label className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
           Kontrak
           <select
             value={project.id}
-            onChange={(event) => onNavigate(`admin/supply/${event.target.value}`)}
+            onChange={(event) => onNavigate(`${divisionPrefix()}/supply/${event.target.value}`)}
             className="input-control h-9 w-full max-w-sm text-xs normal-case tracking-normal sm:w-80"
             aria-label="Ganti kontrak supply"
           >
@@ -217,7 +219,10 @@ export default function SupplyDetailPage({ project, projects, permissions, initi
         <div className="flex shrink-0 flex-wrap gap-2">
           <ColumnsMenu hidden={hidden} onChange={changeHidden} />
           <button type="button" onClick={exportCsv} disabled={filtered.length === 0} className="btn btn-secondary text-xs">↓ Export CSV</button>
-          {permissions.updateProject && !isFinal && <a href={`#/admin/supply/${project.id}/edit`} className="btn btn-secondary text-xs">✎ Ubah</a>}
+          {permissions.updateProject && !isFinal && <a href={`#/${divisionPrefix()}/supply/${project.id}/edit`} className="btn btn-secondary text-xs">✎ Ubah</a>}
+          {/* Lapangan mencatat request material & surat jalan supply di menunya sendiri. */}
+          {divisionPrefix() === 'lapangan' && !isFinal && !project.isDemo && hasPermission('material-request:create') && <a href="#/lapangan/material/new" className="btn btn-primary text-xs">+ Ajukan Material</a>}
+          {divisionPrefix() === 'lapangan' && <a href="#/lapangan/material" className="btn btn-secondary text-xs">Surat Jalan & Penerimaan</a>}
           {['planned', 'cancelled', 'active', 'completed'].filter((status) => transitions.includes(status)).map((status) => (
             <button key={status} type="button" disabled={busy} onClick={() => runStatus(status)} className={STATUS_ACTIONS[status].className}>{STATUS_ACTIONS[status].label}</button>
           ))}

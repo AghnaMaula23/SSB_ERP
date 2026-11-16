@@ -12,7 +12,7 @@
 export function parseSupplyRoute(route) {
   const empty = { projectId: null, form: null };
   const parts = String(route).split('/');
-  if (parts[0] !== 'admin' || parts[1] !== 'supply') return null;
+  if ((parts[0] !== 'admin' && parts[0] !== 'lapangan') || parts[1] !== 'supply') return null;
   const rest = parts.slice(2);
   const isId = (value) => /^\d+$/.test(value || '');
 

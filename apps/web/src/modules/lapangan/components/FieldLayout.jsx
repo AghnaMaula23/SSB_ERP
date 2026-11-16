@@ -2,10 +2,11 @@ import DivisionLayout from '../../../components/DivisionLayout.jsx';
 import { Notice } from '../../admin/project/components/ProjectUi.jsx';
 import { hasPermission } from '../../../services/permissions.js';
 
-// Menu utama Divisi Lapangan. Project & Rental memakai halaman yang sama dengan
+// Menu utama Divisi Lapangan. Project, Supply & Rental memakai halaman yang sama dengan
 // Admin (tombolnya disaring per permission); sisanya milik modul ini.
 const RAIL_ITEMS = [
   { key: 'project', label: 'Project', icon: '🏗️', route: 'lapangan/projects' },
+  { key: 'supply', label: 'Supply', icon: '🚚', route: 'lapangan/supply' },
   { key: 'rental', label: 'Rental', icon: '🛠️', route: 'lapangan/rental' },
   { key: 'material', label: 'Request Material', icon: '🧱', route: 'lapangan/material' },
   { key: 'alat', label: 'Request Alat', icon: '🚜', route: 'lapangan/alat' },

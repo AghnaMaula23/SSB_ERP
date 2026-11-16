@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 
@@ -158,4 +159,34 @@ const removeRole = async (userId, roleId, actorId) => {
   return shapeUser(await findUserOrFail(userId));
 };
 
-module.exports = { list, getById, setRoles, addRole, removeRole };
+/**
+ * Ubah data akun: nama, email, aktif/nonaktif, dan reset password. Akun tidak
+ * dihapus — terlalu banyak dokumen merujuk pembuatnya — jadi "hapus" = nonaktif.
+ * Akun sendiri tidak bisa dinonaktifkan, dan super_admin aktif terakhir tidak
+ * boleh hilang (sama dengan aturan role di atas).
+ */
+const update = async (userId, { fullName, email, isActive, password }, actorId) => {
+  const user = await findUserOrFail(userId);
+  if (isActive === false && userId === actorId) throw httpError('Akun sendiri tidak bisa dinonaktifkan', 403);
+  if (isActive === false && user.isActive && user.userRoles.some((ur) => ur.role.code === SUPER_ADMIN)) {
+    const activeSuperAdmins = await prisma.userRole.count({ where: { role: { code: SUPER_ADMIN }, user: { isActive: true } } });
+    if (activeSuperAdmins <= 1) throw httpError('super_admin aktif terakhir tidak bisa dinonaktifkan', 409);
+  }
+  if (email && email !== user.email) {
+    const taken = await prisma.user.findFirst({ where: { email, NOT: { id: userId } }, select: { id: true } });
+    if (taken) throw httpError('Email sudah dipakai akun lain', 409);
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      ...(fullName !== undefined && { fullName: fullName.trim() }),
+      ...(email !== undefined && { email: email.trim() }),
+      ...(isActive !== undefined && { isActive }),
+      ...(password && { password: await bcrypt.hash(password, 12) }),
+    },
+  });
+  return shapeUser(await findUserOrFail(userId));
+};
+
+module.exports = { list, getById, update, setRoles, addRole, removeRole };
