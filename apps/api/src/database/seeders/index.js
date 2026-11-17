@@ -9,6 +9,7 @@ const { seedWorkflowDemo } = require('./workflow.seed.js');
 // Prisma di src/config/database.js — koneksi terpisah dari `prisma` di atas,
 // jadi ikut ditutup manual saat proses seed selesai (lihat main().finally di bawah).
 const appPrisma = require('../../config/database.js');
+const { CHART_OF_ACCOUNTS } = require('../../modules/finance-accounting/accounts.js');
 
 const ROLES = [
   { code: 'super_admin',  name: 'Super Admin' },
@@ -128,6 +129,12 @@ const PERMISSIONS = [
   { module: 'labor-claim', action: 'create',   label: 'Ajukan klaim upah & unggah bukti bayar, batalkan milik sendiri' },
   { module: 'labor-claim', action: 'validate', label: 'Validasi Admin: periksa kehadiran & upah, teruskan atau tolak klaim' },
   { module: 'labor-claim', action: 'approve',  label: 'Finance: setujui/tolak klaim upah, validasi/tolak bukti bayar' },
+  // Finance Accounting / GL (docs/claude_knowledge/plan-divisi-finance.md G1). Jurnal
+  // lahir dari aksi sumber — tidak ada permission "buat jurnal".
+  { module: 'coa',               action: 'read',   label: 'Lihat daftar akun (COA)' },
+  { module: 'journal',           action: 'read',   label: 'Lihat jurnal, buku besar, dan status tutup buku' },
+  { module: 'journal',           action: 'adjust', label: 'Catat selisih biaya aktual pada jurnal request material' },
+  { module: 'accounting-period', action: 'close',  label: 'Tutup dan buka kembali buku bulanan' },
 ];
 
 // Kategori kas Divisi Alat. Data master, bukan data demo — sistem tidak bisa
@@ -228,7 +235,9 @@ const ROLE_PERMISSIONS = {
     // Finance memutuskan izin belanja lapangan (dan kelak memvalidasi laporannya)
     'field-cash:read', 'field-cash:approve',
     // Finance menyetujui klaim upah dan memvalidasi bukti bayarnya (sumber jurnal GL)
-    'labor-claim:read', 'labor-claim:approve'],
+    'labor-claim:read', 'labor-claim:approve',
+    // Pemilik GL: membaca jurnal, mencatat selisih biaya material, menutup buku bulanan
+    'coa:read', 'journal:read', 'journal:adjust', 'accounting-period:close'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
@@ -394,6 +403,13 @@ async function main() {
   for (const category of FIELD_EXPENSE_CATEGORIES) {
     const { categoryCode, ...fields } = category;
     await prisma.fieldExpenseCategory.upsert({ where: { categoryCode }, update: fields, create: category });
+  }
+
+  // Sebelum seeder alur kerja: validasi/approve demo di bawah langsung menjurnal
+  console.log('Seeding chart of accounts...');
+  for (const account of CHART_OF_ACCOUNTS) {
+    const { accountCode, ...fields } = account;
+    await prisma.chartOfAccount.upsert({ where: { accountCode }, update: fields, create: account });
   }
 
   console.log('Seeding demo data Divisi Alat...');

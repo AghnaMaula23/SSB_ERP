@@ -56,9 +56,10 @@ app.use('/api/labor-payment-proofs',       require('./modules/labor/labor-paymen
 app.use('/api/equipment/purchase-requests', require('./modules/divisi-alat/purchase-request.routes.js'));
 app.use('/api/equipment/cash',      require('./modules/divisi-alat/cash.routes.js'));
 app.use('/api/equipment',          require('./modules/divisi-alat/divisi-alat.routes.js'));
-// app.use('/api/income',             require('./modules/income/income.routes.js'));
-// app.use('/api/finance-accounting', require('./modules/finance-accounting/finance-accounting.routes.js'));
-// app.use('/api/payroll',            require('./modules/payroll/payroll.routes.js'));
+// Divisi Finance — docs/claude_knowledge/plan-divisi-finance.md (G1: inti GL)
+app.use('/api/chart-of-accounts',  require('./modules/finance-accounting/chart-of-account.routes.js'));
+app.use('/api/journal-entries',    require('./modules/finance-accounting/journal.routes.js'));
+app.use('/api/accounting-periods', require('./modules/finance-accounting/accounting-period.routes.js'));
 
 // Error Handling
 app.use(notFound);

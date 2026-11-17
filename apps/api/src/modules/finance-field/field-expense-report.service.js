@@ -7,15 +7,20 @@ const { assertContextOpen } = require('../project/context-lock.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 const fileService = require('../file/file.service.js');
 const { assertCategories, requestedAmountsOf } = require('./field-operational-request.service.js');
+const { postJournal, reverseJournal } = require('../finance-accounting/journal.service.js');
+const { assertPeriodOpen } = require('../finance-accounting/accounting-period.service.js');
+const { ACCOUNTS } = require('../finance-accounting/accounts.js');
 
 // ============================================================
 // KAS LAPANGAN — LAPORAN REALISASI + NOTA (docs/plan-divisi-lapangan.md L1, L2, L4).
 //
 // Alur status: submitted --Finance--> validated | rejected
 //              submitted --pelapor--> cancelled
+//              validated --Finance--> voided (koreksi: jurnal dibalik, plan Finance F6)
 // Tanpa tahap Admin: laporan adalah bukti belanja yang sudah terjadi, yang
 // diperiksa Finance terhadap nota. `validated` = sumber jurnal Beban Operasional
-// Lapangan (GL, belum dibangun). Koreksi = batalkan/ditolak lalu lapor ulang.
+// Lapangan — jurnalnya lahir di transaksi validasi, bertanggal report_date (plan
+// Finance F2, F3). Koreksi = batalkan/ditolak/void lalu lapor ulang.
 //
 // Dua bentuk (L1): merujuk pengajuan `approved` tahapan yang sama, atau MENDESAK
 // tanpa pengajuan dengan urgentReason wajib. Harga = harga nota; boleh melebihi
@@ -39,6 +44,7 @@ const DETAIL_INCLUDE = {
   submittedByUser: { select: ACTOR_SELECT },
   validatedByUser: { select: ACTOR_SELECT },
   cancelledByUser: { select: ACTOR_SELECT },
+  voidedByUser: { select: ACTOR_SELECT },
   items: { include: { category: { select: CATEGORY_SELECT } }, orderBy: { id: 'asc' } },
   receipts: { include: { file: true }, orderBy: { id: 'asc' } },
 };
@@ -101,6 +107,9 @@ const shapeDetail = async (row) => {
     cancelledBy: shapeActor(row.cancelledByUser),
     cancelledAt: row.cancelledAt,
     cancelReason: row.cancelReason,
+    voidedBy: shapeActor(row.voidedByUser),
+    voidedAt: row.voidedAt,
+    voidReason: row.voidReason,
     items,
     receipts: row.receipts.map(({ file }) => {
       const { id, ...rest } = fileService.shapeFile(file);
@@ -216,6 +225,7 @@ const create = async (payload, uploads, userId) => {
 
   const row = await fileService.withUploadedFiles(uploads, { prefix: FILE_PREFIX, userId }, async (tx, files) => {
     await assertContextOpen(tx, { subProjectId });
+    await assertPeriodOpen(tx, reportDate, 'Tanggal laporan');
     const reportCode = await nextDocumentNumber(tx, REPORT_DOC_TYPE, { pad: REPORT_DOC_PAD });
     const created = await tx.fieldExpenseReport.create({
       data: {
@@ -276,6 +286,7 @@ const update = async (id, payload, userId) => {
 
   const updated = await prisma.$transaction(async (tx) => {
     await assertContextOpen(tx, { subProjectId: row.subProjectId });
+    await assertPeriodOpen(tx, reportDate, 'Tanggal laporan');
     await claimTransition(tx.fieldExpenseReport, { id, status: 'submitted' }, {
       reportDate, urgentReason, notes: payload.notes?.trim() || null,
     });
@@ -312,13 +323,45 @@ const cancel = async (id, { reason }, userId) => {
 // KEPUTUSAN FINANCE — tanpa mengubah nominal
 // ============================================================
 
-const transition = async (row, data) => {
+/** `after(tx)` berjalan di transaksi yang sama setelah status berpindah — tempat jurnal ditulis. */
+const transition = async (row, data, { from = 'submitted', after } = {}) => {
   const updated = await prisma.$transaction(async (tx) => {
     await assertContextOpen(tx, { subProjectId: row.subProjectId });
-    await claimTransition(tx.fieldExpenseReport, { id: row.id, status: 'submitted' }, data);
+    await claimTransition(tx.fieldExpenseReport, { id: row.id, status: from }, data);
+    if (after) await after(tx);
     return findOrFail(row.id, tx);
   });
   return shapeDetail(updated);
+};
+
+/**
+ * Jurnal Beban Operasional Lapangan (plan Finance 1c): Dr Beban Operasional Lapangan /
+ * Cr Kas/Bank, bertanggal report_date. Total dibaca DI DALAM transaksi validasi —
+ * baris yang diubah pelapor bersamaan sudah terkunci oleh claimTransition. Total 0
+ * tidak menjurnal. Dipakai juga skrip backfill (gl-backfill.js).
+ */
+const postReportJournal = async (tx, reportId, userId) => {
+  const report = await tx.fieldExpenseReport.findUnique({
+    where: { id: reportId },
+    select: { reportCode: true, reportDate: true, subProjectId: true,
+      subProject: { select: { subProjectType: true, constructionProjectId: true, constructionProject: { select: { projectCode: true } } } } },
+  });
+  const [{ amount }] = await tx.$queryRaw`
+    SELECT COALESCE(SUM(ROUND(quantity * unit_price, 2)), 0) AS amount
+    FROM field_expense_report_items WHERE field_expense_report_id = ${reportId}`;
+  const total = toNumber(amount);
+  if (total <= 0) return null;
+  return postJournal(tx, {
+    sourceType: 'field_expense_report', sourceId: reportId,
+    journalDate: report.reportDate,
+    description: `Realisasi kas lapangan ${report.reportCode} — ${report.subProject.constructionProject.projectCode} ${report.subProject.subProjectType}`,
+    lines: [
+      { account: ACCOUNTS.EXPENSE_FIELD_OPERATIONS, debit: total },
+      { account: ACCOUNTS.CASH, credit: total },
+    ],
+    context: { constructionProjectId: report.subProject.constructionProjectId, subProjectId: report.subProjectId },
+    userId,
+  });
 };
 
 const assertFinanceQueue = (row, userId, action) => {
@@ -329,7 +372,8 @@ const assertFinanceQueue = (row, userId, action) => {
 const validate = async (id, { notes }, userId) => {
   const row = await findOrFail(id);
   assertFinanceQueue(row, userId, 'memvalidasinya');
-  return transition(row, { status: 'validated', validatedBy: userId, validatedAt: new Date(), financeNotes: notes?.trim() || null });
+  return transition(row, { status: 'validated', validatedBy: userId, validatedAt: new Date(), financeNotes: notes?.trim() || null },
+    { after: (tx) => postReportJournal(tx, row.id, userId) });
 };
 
 const reject = async (id, { notes }, userId) => {
@@ -339,4 +383,20 @@ const reject = async (id, { notes }, userId) => {
   return transition(row, { status: 'rejected', validatedBy: userId, validatedAt: new Date(), financeNotes: notes.trim() });
 };
 
-module.exports = { list, getById, create, update, cancel, validate, reject };
+/**
+ * Koreksi setelah sah (plan Finance F6): validated → voided + jurnal balik bertanggal hari
+ * ini. Tahapan yang sudah ditutup menolak (arsipnya sudah mencatat status ini). Pelapor
+ * tidak boleh membatalkan laporannya sendiri walau memegang role Finance.
+ */
+const voidReport = async (id, { reason }, userId) => {
+  const row = await findOrFail(id);
+  if (row.status !== 'validated') throw httpError(`Laporan berstatus "${row.status}" — hanya laporan tervalidasi yang bisa dibatalkan sebagai koreksi`, 409);
+  if (row.submittedBy === userId) throw httpError('Anda melaporkan realisasi ini, jadi tidak boleh membatalkannya sendiri', 403);
+  if (!reason?.trim()) throw httpError('Alasan pembatalan wajib diisi', 400);
+  return transition(row, { status: 'voided', voidedBy: userId, voidedAt: new Date(), voidReason: reason.trim() }, {
+    from: 'validated',
+    after: (tx) => reverseJournal(tx, { sourceType: 'field_expense_report', sourceId: row.id, reason: reason.trim(), userId }),
+  });
+};
+
+module.exports = { list, getById, create, update, cancel, validate, reject, voidReport, postReportJournal };

@@ -85,6 +85,11 @@ model User {
   wageProofsSubmitted             FieldLaborWagePaymentProof[] @relation("WageProofSubmittedBy")
   wageProofsValidated             FieldLaborWagePaymentProof[] @relation("WageProofValidatedBy")
   wageProofsCancelled             FieldLaborWagePaymentProof[] @relation("WageProofCancelledBy")
+  fieldReportsVoided              FieldExpenseReport[]         @relation("FieldReportVoidedBy")
+  wageProofsVoided                FieldLaborWagePaymentProof[] @relation("WageProofVoidedBy")
+  journalEntriesCreated           JournalEntry[]               @relation("JournalCreatedBy")
+  periodClosingsClosed            AccountingPeriodClosing[]    @relation("PeriodClosedBy")
+  periodClosingsReopened          AccountingPeriodClosing[]    @relation("PeriodReopenedBy")
 
   @@map("users")
 }
@@ -943,6 +948,7 @@ model ConstructionProject {
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
+  journalEntries  JournalEntry[]
 
   @@index([status])
   @@map("construction_projects")
@@ -974,6 +980,7 @@ model ExternalRentalProject {
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
+  journalEntries  JournalEntry[]
 
   @@index([status])
   @@map("external_rental_projects")
@@ -1002,6 +1009,7 @@ model ExternalSupplyProject {
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
+  journalEntries  JournalEntry[]
 
   @@index([status])
   @@map("external_supply_projects")
@@ -1051,6 +1059,7 @@ model SubProject {
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
+  journalEntries  JournalEntry[]
 
   // Satu construction project hanya boleh punya satu tahapan per tipe
   @@unique([constructionProjectId, subProjectType])
@@ -2072,11 +2081,14 @@ model FieldOperationalRequestItem {
 
 /// Laporan realisasi: `validated` = sumber jurnal Beban Operasional Lapangan (GL,
 /// belum dibangun). Ditolak/dibatalkan = final; koreksi = lapor ulang.
+/// `voided` = dibatalkan SETELAH divalidasi (koreksi Finance, plan Finance F6): jurnalnya
+/// dibalik, jejak validasi tetap. Beda dengan `cancelled` (dibatalkan pelapor sebelum diputuskan).
 enum FieldExpenseReportStatus {
   submitted
   validated
   rejected
   cancelled
+  voided
 
   @@map("field_expense_report_status")
 }
@@ -2104,10 +2116,14 @@ model FieldExpenseReport {
   cancelledBy  Int?      @map("cancelled_by")
   cancelledAt  DateTime? @map("cancelled_at")
   cancelReason String?   @map("cancel_reason") @db.Text
+  voidedBy     Int?      @map("voided_by")
+  voidedAt     DateTime? @map("voided_at")
+  voidReason   String?   @map("void_reason") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  voidedByUser    User?                    @relation("FieldReportVoidedBy", fields: [voidedBy], references: [id], onDelete: Restrict)
   request         FieldOperationalRequest? @relation(fields: [fieldOperationalRequestId], references: [id], onDelete: Restrict)
   subProject      SubProject               @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
   submittedByUser User                     @relation("FieldReportSubmittedBy", fields: [submittedBy], references: [id])
@@ -2254,11 +2270,14 @@ model FieldLaborWageClaimItem {
 
 /// `validated` = klaim LUNAS dan sumber jurnal Beban Upah Harian Project (GL,
 /// belum dibangun). Ditolak/dibatalkan = final; unggah bukti baru.
+/// `voided` = dibatalkan setelah divalidasi (plan Finance F6); klaimnya kembali "approved
+/// tanpa bukti sah" dan Lapangan mengunggah bukti baru.
 enum LaborPaymentProofStatus {
   submitted
   validated
   rejected
   cancelled
+  voided
 
   @@map("labor_payment_proof_status")
 }
@@ -2283,10 +2302,14 @@ model FieldLaborWagePaymentProof {
   cancelledBy  Int?      @map("cancelled_by")
   cancelledAt  DateTime? @map("cancelled_at")
   cancelReason String?   @map("cancel_reason") @db.Text
+  voidedBy     Int?      @map("voided_by")
+  voidedAt     DateTime? @map("voided_at")
+  voidReason   String?   @map("void_reason") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  voidedByUser    User?                            @relation("WageProofVoidedBy", fields: [voidedBy], references: [id], onDelete: Restrict)
   claim           FieldLaborWageClaim              @relation(fields: [fieldLaborWageClaimId], references: [id], onDelete: Restrict)
   submittedByUser User                             @relation("WageProofSubmittedBy", fields: [submittedBy], references: [id])
   validatedByUser User?                            @relation("WageProofValidatedBy", fields: [validatedBy], references: [id], onDelete: Restrict)
@@ -2310,4 +2333,138 @@ model FieldLaborWagePaymentProofFile {
 
   @@index([fieldLaborWagePaymentProofId])
   @@map("field_labor_wage_payment_proof_files")
+}
+
+// ============================================================
+// FINANCE ACCOUNTING / GL — docs/claude_knowledge/plan-divisi-finance.md (G1)
+// Jurnal HANYA lahir dari aksi sumber lewat finance-accounting/journal.service.js
+// (postJournal / reverseJournal). Tidak ada input debit-kredit bebas (ERD, F2).
+// ============================================================
+
+/// Saldo normal TIDAK disimpan: asset/expense = debit, liability/equity/revenue = kredit.
+enum AccountType {
+  asset
+  liability
+  equity
+  revenue
+  expense
+
+  @@map("account_type")
+}
+
+/// Daftar akun dari SEEDER saja (F4) — kode program merujuk `account_code` lewat
+/// konstanta di finance-accounting/accounts.js. Datar, tanpa parent & is_postable:
+/// semua akun bisa diposting, pengelompokan dari awalan kode.
+model ChartOfAccount {
+  id          Int         @id @default(autoincrement())
+  accountCode String      @unique @map("account_code") @db.VarChar(20)
+  accountName String      @unique @map("account_name") @db.VarChar(150)
+  accountType AccountType @map("account_type")
+  description String?     @db.Text
+  isActive    Boolean     @default(true) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  lines JournalEntryLine[]
+
+  @@map("chart_of_accounts")
+}
+
+/// Dokumen sumber jurnal. Nilai untuk modul yang belum dibangun sengaja sudah ada
+/// (kontrak swagger beku) supaya tidak perlu ALTER TYPE per fase.
+enum JournalSourceType {
+  income_record
+  income_payment
+  equipment_income_claim
+  material_request
+  field_expense_report
+  labor_payment_proof
+  payroll
+  manual_expense
+  journal_adjustment
+  opening_balance
+
+  @@map("journal_source_type")
+}
+
+/// Satu jurnal = satu kejadian sumber. Immutable: tanpa updated_at, tanpa status.
+/// - "jurnal balik" = `reversal_of_journal_entry_id` terisi (unique: dibalik sekali);
+///   "sudah dibalik" = ada jurnal yang menunjuknya. entry_type/posting_status ERD dibuang.
+/// - Satu jurnal NON-balik per sumber (partial unique di migrasi), kecuali
+///   `journal_adjustment` yang boleh berkali-kali per jurnal asal (sourceId = jurnal asal).
+/// - `journal_date` = tanggal bisnis sumber; bulan tertutup ditolak (F3b).
+/// - Konteks project disalin dari sumber (F24) — keduanya tidak pernah berubah, jadi
+///   salinan ini tidak bisa menyimpang. Tahapan wajib bersama project-nya (composite FK).
+model JournalEntry {
+  id                       Int               @id @default(autoincrement())
+  journalCode              String            @unique @map("journal_code") @db.VarChar(50)
+  journalDate              DateTime          @map("journal_date") @db.Date
+  sourceType               JournalSourceType @map("source_type")
+  sourceId                 Int               @map("source_id")
+  description              String            @db.Text
+  reversalOfJournalEntryId Int?              @unique @map("reversal_of_journal_entry_id")
+
+  constructionProjectId   Int? @map("construction_project_id")
+  subProjectId            Int? @map("sub_project_id")
+  externalRentalProjectId Int? @map("external_rental_project_id")
+  externalSupplyProjectId Int? @map("external_supply_project_id")
+
+  createdBy Int      @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  reversalOf            JournalEntry?          @relation("JournalReversal", fields: [reversalOfJournalEntryId], references: [id], onDelete: Restrict)
+  reversedBy            JournalEntry?          @relation("JournalReversal")
+  constructionProject   ConstructionProject?   @relation(fields: [constructionProjectId], references: [id], onDelete: Restrict)
+  subProject            SubProject?            @relation(fields: [subProjectId, constructionProjectId], references: [id, constructionProjectId], onDelete: Restrict)
+  externalRentalProject ExternalRentalProject? @relation(fields: [externalRentalProjectId], references: [id], onDelete: Restrict)
+  externalSupplyProject ExternalSupplyProject? @relation(fields: [externalSupplyProjectId], references: [id], onDelete: Restrict)
+  createdByUser         User                   @relation("JournalCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  lines                 JournalEntryLine[]
+
+  @@index([journalDate])
+  @@index([sourceType, sourceId])
+  @@index([constructionProjectId])
+  @@index([subProjectId])
+  @@index([externalRentalProjectId])
+  @@index([externalSupplyProjectId])
+  @@map("journal_entries")
+}
+
+/// Tepat satu sisi > 0 per baris (CHECK). Σ debit = Σ kredit per jurnal dijaga
+/// postJournal — satu-satunya penulis tabel ini.
+model JournalEntryLine {
+  id             Int     @id @default(autoincrement())
+  journalEntryId Int     @map("journal_entry_id")
+  accountId      Int     @map("account_id")
+  debit          Decimal @default(0) @db.Decimal(18, 2)
+  credit         Decimal @default(0) @db.Decimal(18, 2)
+  description    String? @db.Text
+
+  journalEntry JournalEntry   @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  account      ChartOfAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@map("journal_entry_lines")
+}
+
+/// Tutup buku bulanan (F3b). Status bulan DITURUNKAN: tertutup = ada baris yang
+/// belum dibuka kembali (partial unique per bulan di migrasi). Buka kembali tidak
+/// menghapus baris — riwayatnya tetap.
+model AccountingPeriodClosing {
+  id           Int       @id @default(autoincrement())
+  periodYear   Int       @map("period_year")
+  periodMonth  Int       @map("period_month")
+  notes        String?   @db.Text
+  closedBy     Int       @map("closed_by")
+  closedAt     DateTime  @default(now()) @map("closed_at")
+  reopenedBy   Int?      @map("reopened_by")
+  reopenedAt   DateTime? @map("reopened_at")
+  reopenReason String?   @map("reopen_reason") @db.Text
+
+  closedByUser   User  @relation("PeriodClosedBy", fields: [closedBy], references: [id], onDelete: Restrict)
+  reopenedByUser User? @relation("PeriodReopenedBy", fields: [reopenedBy], references: [id], onDelete: Restrict)
+
+  @@index([periodYear, periodMonth])
+  @@map("accounting_period_closings")
 }

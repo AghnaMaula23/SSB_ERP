@@ -14,7 +14,7 @@ const controller = require('./field-expense-report.controller.js');
 const router = Router();
 router.use(authenticate);
 
-const STATUSES = ['submitted', 'validated', 'rejected', 'cancelled'];
+const STATUSES = ['submitted', 'validated', 'rejected', 'cancelled', 'voided'];
 const MAX_ITEMS = 100;
 const MAX_RECEIPTS = 10;
 const idParam = param('id').isInt({ min: 1 }).withMessage('ID tidak valid').toInt();
@@ -43,6 +43,7 @@ const parseJson = (value) => {
 const managedFields = [
   'reportCode', 'status', 'submittedBy', 'totalAmount', 'isUrgent',
   'validatedBy', 'validatedAt', 'financeNotes', 'cancelledBy', 'cancelledAt', 'cancelReason',
+  'voidedBy', 'voidedAt', 'voidReason',
   'items.*.totalPrice',
 ].map((f) => body(f).not().exists().withMessage(`${f} dikelola sistem dan tidak bisa dikirim lewat request`));
 
@@ -92,5 +93,9 @@ router.put('/:id/validate', authorize('field-cash:approve'), validate([idParam, 
 router.put('/:id/reject', authorize('field-cash:approve'),
   validate([idParam, body('notes').isString().trim().notEmpty().withMessage('Alasan penolakan wajib diisi')]),
   controller.reject);
+// Koreksi setelah sah (plan Finance F6) — jurnal dibalik
+router.put('/:id/void', authorize('field-cash:approve'),
+  validate([idParam, body('reason').isString().trim().notEmpty().withMessage('Alasan pembatalan wajib diisi')]),
+  controller.voidReport);
 
 module.exports = router;

@@ -47,4 +47,10 @@ const reject = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, detail, create, cancel, validate, reject };
+const voidProof = async (req, res, next) => {
+  try {
+    return success(res, await service.voidProof(req.params.id, req.body, req.user.id), 'Bukti bayar upah dibatalkan (jurnal dibalik)');
+  } catch (err) { next(err); }
+};
+
+module.exports = { list, detail, create, cancel, validate, reject, voidProof };

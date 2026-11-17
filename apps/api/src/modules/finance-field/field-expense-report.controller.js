@@ -56,4 +56,10 @@ const reject = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, detail, create, update, cancel, validate, reject };
+const voidReport = async (req, res, next) => {
+  try {
+    return success(res, await service.voidReport(req.params.id, req.body, req.user.id), 'Laporan realisasi dibatalkan (jurnal dibalik)');
+  } catch (err) { next(err); }
+};
+
+module.exports = { list, detail, create, update, cancel, validate, reject, voidReport };

@@ -7,15 +7,20 @@ const { assertContextOpen } = require('../project/context-lock.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 const fileService = require('../file/file.service.js');
 const { claimTotalsOf } = require('./labor-wage-claim.service.js');
+const { postJournal, reverseJournal } = require('../finance-accounting/journal.service.js');
+const { assertPeriodOpen } = require('../finance-accounting/accounting-period.service.js');
+const { ACCOUNTS } = require('../finance-accounting/accounts.js');
 
 // ============================================================
 // BUKTI BAYAR UPAH (docs/claude_knowledge/plan-divisi-lapangan.md L8).
 //
 // Alur status: submitted --Finance--> validated | rejected
 //              submitted --pengunggah--> cancelled
+//              validated --Finance--> voided (koreksi: jurnal dibalik, plan Finance F6)
 // Lapangan membayar pekerja di luar sistem untuk klaim `approved`, lalu
 // mengunggah bukti. `validated` = klaim LUNAS dan sumber jurnal Beban Upah
-// Harian Project (GL, belum dibangun). `paidAmount` boleh beda dari total klaim —
+// Harian Project — jurnalnya lahir di transaksi validasi, bertanggal payment_date
+// (plan Finance F2, F3). `paidAmount` boleh beda dari total klaim —
 // selisih hanya ditampilkan. Ditolak/batal = final; unggah bukti baru.
 //
 // Satu bukti AKTIF (submitted/validated) per klaim: dicek di bawah kunci baris
@@ -40,6 +45,7 @@ const DETAIL_INCLUDE = {
   submittedByUser: { select: ACTOR_SELECT },
   validatedByUser: { select: ACTOR_SELECT },
   cancelledByUser: { select: ACTOR_SELECT },
+  voidedByUser: { select: ACTOR_SELECT },
   files: { include: { file: true }, orderBy: { id: 'asc' } },
 };
 
@@ -91,6 +97,9 @@ const shapeDetail = async (row) => {
     cancelledBy: shapeActor(row.cancelledByUser),
     cancelledAt: row.cancelledAt,
     cancelReason: row.cancelReason,
+    voidedBy: shapeActor(row.voidedByUser),
+    voidedAt: row.voidedAt,
+    voidReason: row.voidReason,
     files: row.files.map(({ file }) => {
       const { id, ...rest } = fileService.shapeFile(file);
       return { fileId: id, ...rest };
@@ -145,6 +154,7 @@ const create = async (payload, uploads, userId) => {
 
   const row = await fileService.withUploadedFiles(uploads, { prefix: FILE_PREFIX, userId }, async (tx, files) => {
     await assertContextOpen(tx, { subProjectId: claim.subProjectId });
+    await assertPeriodOpen(tx, paymentDate, 'Tanggal bayar');
     // Kunci klaim: dua unggahan bersamaan antre di sini, yang kedua melihat bukti pertama
     await tx.$queryRaw`SELECT id FROM field_labor_wage_claims WHERE id = ${claimId} FOR UPDATE`;
     const active = await tx.fieldLaborWagePaymentProof.findFirst({
@@ -172,13 +182,39 @@ const create = async (payload, uploads, userId) => {
 };
 
 /** Satu transisi dari `submitted`: kunci tahapan, klaim status, kembalikan detail. */
-const transition = async (row, data) => {
+const transition = async (row, data, { from = 'submitted', after } = {}) => {
   const updated = await prisma.$transaction(async (tx) => {
     await assertContextOpen(tx, { subProjectId: row.claim.subProjectId });
-    await claimTransition(tx.fieldLaborWagePaymentProof, { id: row.id, status: 'submitted' }, data);
+    await claimTransition(tx.fieldLaborWagePaymentProof, { id: row.id, status: from }, data);
+    if (after) await after(tx);
     return findOrFail(row.id, tx);
   });
   return shapeDetail(updated);
+};
+
+/**
+ * Jurnal Beban Upah Harian Project (plan Finance 1c): Dr Beban Upah Harian Project /
+ * Cr Kas/Bank sebesar paid_amount (uang yang benar-benar keluar, L8), bertanggal
+ * payment_date. Dipakai juga skrip backfill (gl-backfill.js).
+ */
+const postProofJournal = async (tx, proofId, userId) => {
+  const proof = await tx.fieldLaborWagePaymentProof.findUnique({
+    where: { id: proofId },
+    select: { proofCode: true, paymentDate: true, paidAmount: true,
+      claim: { select: { claimCode: true, subProjectId: true, subProject: { select: { constructionProjectId: true } } } } },
+  });
+  const amount = toNumber(proof.paidAmount);
+  return postJournal(tx, {
+    sourceType: 'labor_payment_proof', sourceId: proofId,
+    journalDate: proof.paymentDate,
+    description: `Bayar upah ${proof.claim.claimCode} (bukti ${proof.proofCode})`,
+    lines: [
+      { account: ACCOUNTS.EXPENSE_DAILY_WAGES, debit: amount },
+      { account: ACCOUNTS.CASH, credit: amount },
+    ],
+    context: { constructionProjectId: proof.claim.subProject.constructionProjectId, subProjectId: proof.claim.subProjectId },
+    userId,
+  });
 };
 
 /** Pengunggah membatalkan selama belum diputuskan Finance; alasan wajib. */
@@ -202,7 +238,8 @@ const assertFinanceQueue = (row, userId, action) => {
 const validate = async (id, { notes }, userId) => {
   const row = await findOrFail(id);
   assertFinanceQueue(row, userId, 'memvalidasinya');
-  return transition(row, { status: 'validated', validatedBy: userId, validatedAt: new Date(), financeNotes: notes?.trim() || null });
+  return transition(row, { status: 'validated', validatedBy: userId, validatedAt: new Date(), financeNotes: notes?.trim() || null },
+    { after: (tx) => postProofJournal(tx, row.id, userId) });
 };
 
 const reject = async (id, { notes }, userId) => {
@@ -212,4 +249,20 @@ const reject = async (id, { notes }, userId) => {
   return transition(row, { status: 'rejected', validatedBy: userId, validatedAt: new Date(), financeNotes: notes.trim() });
 };
 
-module.exports = { list, getById, create, cancel, validate, reject };
+/**
+ * Koreksi setelah sah (plan Finance F6): validated → voided + jurnal balik hari ini. Klaimnya
+ * kembali "approved tanpa bukti sah" (partial unique hanya submitted/validated), Lapangan
+ * mengunggah bukti baru. Tahapan yang sudah ditutup menolak.
+ */
+const voidProof = async (id, { reason }, userId) => {
+  const row = await findOrFail(id);
+  if (row.status !== 'validated') throw httpError(`Bukti bayar berstatus "${row.status}" — hanya bukti tervalidasi yang bisa dibatalkan sebagai koreksi`, 409);
+  if (row.submittedBy === userId) throw httpError('Anda mengunggah bukti ini, jadi tidak boleh membatalkannya sendiri', 403);
+  if (!reason?.trim()) throw httpError('Alasan pembatalan wajib diisi', 400);
+  return transition(row, { status: 'voided', voidedBy: userId, voidedAt: new Date(), voidReason: reason.trim() }, {
+    from: 'validated',
+    after: (tx) => reverseJournal(tx, { sourceType: 'labor_payment_proof', sourceId: row.id, reason: reason.trim(), userId }),
+  });
+};
+
+module.exports = { list, getById, create, cancel, validate, reject, voidProof, postProofJournal };

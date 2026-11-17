@@ -13,7 +13,7 @@ const controller = require('./labor-payment-proof.controller.js');
 const router = Router();
 router.use(authenticate);
 
-const STATUSES = ['submitted', 'validated', 'rejected', 'cancelled'];
+const STATUSES = ['submitted', 'validated', 'rejected', 'cancelled', 'voided'];
 const MAX_FILES = 10;
 const idParam = param('id').isInt({ min: 1 }).withMessage('ID tidak valid').toInt();
 
@@ -30,6 +30,7 @@ const listRules = [
 const managedFields = [
   'proofCode', 'status', 'submittedBy', 'difference',
   'validatedBy', 'validatedAt', 'financeNotes', 'cancelledBy', 'cancelledAt', 'cancelReason',
+  'voidedBy', 'voidedAt', 'voidReason',
 ].map((f) => body(f).not().exists().withMessage(`${f} dikelola sistem dan tidak bisa dikirim lewat request`));
 
 const createRules = [
@@ -55,5 +56,9 @@ router.put('/:id/validate', authorize('labor-claim:approve'), validate([idParam,
 router.put('/:id/reject', authorize('labor-claim:approve'),
   validate([idParam, body('notes').isString().trim().notEmpty().withMessage('Alasan penolakan wajib diisi')]),
   controller.reject);
+// Koreksi setelah sah (plan Finance F6) — jurnal dibalik
+router.put('/:id/void', authorize('labor-claim:approve'),
+  validate([idParam, body('reason').isString().trim().notEmpty().withMessage('Alasan pembatalan wajib diisi')]),
+  controller.voidProof);
 
 module.exports = router;

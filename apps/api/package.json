@@ -9,7 +9,9 @@
     "db:seed": "npx prisma db seed",
     "db:studio": "npx prisma studio",
     "db:generate": "npx prisma generate",
-    "files:cleanup": "node src/database/files-cleanup.js"
+    "files:cleanup": "node src/database/files-cleanup.js",
+    "gl:backfill": "node src/database/gl-backfill.js",
+    "gl:opening-balance": "node src/database/gl-opening-balance.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",

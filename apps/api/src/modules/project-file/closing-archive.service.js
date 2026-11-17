@@ -266,7 +266,7 @@ const WORKER_TYPE_LABEL = { contract: 'Kontrak', daily: 'Harian' };
 const WAGE_CLAIM_STATUS_LABEL = {
   submitted: 'Menunggu Admin', waiting_finance_approval: 'Menunggu Finance', approved: 'Disetujui', rejected: 'Ditolak',
 };
-const PAYMENT_PROOF_STATUS_LABEL = { submitted: 'Menunggu Finance', validated: 'Divalidasi', rejected: 'Ditolak' };
+const PAYMENT_PROOF_STATUS_LABEL = { submitted: 'Menunggu Finance', validated: 'Divalidasi', rejected: 'Ditolak', voided: 'Dibatalkan setelah sah' };
 
 /**
  * Pekerja tahapan (docs/skema-tenaga-kerja-harian.md): log per baris (satu baris =
@@ -399,7 +399,7 @@ const stageLaborBook = async (tx, sp, ctx, subject) => {
 const FIELD_REQUEST_STATUS_LABEL = {
   submitted: 'Menunggu Admin', waiting_finance_approval: 'Menunggu Finance', approved: 'Disetujui', rejected: 'Ditolak',
 };
-const FIELD_REPORT_STATUS_LABEL = { submitted: 'Menunggu Finance', validated: 'Divalidasi', rejected: 'Ditolak' };
+const FIELD_REPORT_STATUS_LABEL = { submitted: 'Menunggu Finance', validated: 'Divalidasi', rejected: 'Ditolak', voided: 'Dibatalkan setelah sah' };
 
 /**
  * Kas lapangan tahapan (docs/plan-divisi-lapangan.md L1–L2, L7): pengajuan dana
