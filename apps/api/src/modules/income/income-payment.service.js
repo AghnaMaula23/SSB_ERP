@@ -21,7 +21,9 @@ const { assertRecordNotClaimed } = require('./billing-lock.js');
 // PPh/potongan klien belum ditangani (F16): lunas = Σ amount = tagihan.
 // ============================================================
 
-const PAYMENT_DOC_TYPE = 'RCV';
+// PAY, bukan RCV: RCV milik penerimaan material (RM-5) — berbagi counter membuat nomor dua
+// dokumen berbeda saling menyela dan ambigu (plan Finance bagian 8, perubahan 17 Nov 2026).
+const PAYMENT_DOC_TYPE = 'PAY';
 const PAYMENT_DOC_PAD = 6;
 const FILE_PREFIX = 'income-payment-proofs';
 

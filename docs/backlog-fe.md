@@ -919,3 +919,11 @@ fasenya ter-deploy; tanpa mock (aturan E21).
 **Mock yang akan diganti** (bagian 7 rencana): `admin/income/services/incomeService.js`,
 `incomeSourceService.js` (form tidak lagi menebak tarif & volume — pakai `GET /income-records/billable`),
 `alat/services/incomeClaimService.js`. Form income konstruksi hanya berisi progress (tanpa baris alat/material, F19).
+
+## E33. Kode pembayaran klien `PAY-` (17 November 2026)
+
+**MEMUTUS FE (kecil):** kode pembayaran klien (`/api/income-payments`, field `paymentCode`) berubah dari
+`RCV-NNNNNN` menjadi **`PAY-NNNNNN`**. `RCV-` tetap milik penerimaan material (`/api/material-receipts`).
+Alasan: keduanya berbagi satu counter sehingga nomornya ambigu (plan Finance bagian 8a). Yang perlu dicek di FE:
+placeholder/contoh kode, filter atau pencarian yang mengandalkan awalan `RCV`, dan label jenis dokumen yang
+ditebak dari awalan kode (pakai `source.type` dari jurnal, bukan awalan).

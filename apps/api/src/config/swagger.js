@@ -2422,7 +2422,7 @@ const swaggerSpec = {
       },
       post: {
         tags: ['Income Payments'], summary: 'Catat pembayaran klien (Finance)',
-        description: 'Permission: income-payment:create (Finance). Dicatat = sah, tanpa verifikasi kedua (F15). Record harus `verified`; Σ pembayaran tidak di-void ≤ tagihan (409). PPh/potongan klien belum ditangani (F16) — lunas = Σ `amount` = tagihan. `paymentDate` = tanggal uang masuk rekening: tidak di masa depan, tidak di bulan tertutup (409). Jurnal bertanggal `paymentDate`: Dr Kas/Bank Induk Finance / Cr Piutang Usaha. Bukti opsional 0–10 file di `proofs` (PDF/JPG/PNG/WebP, maks 10 MB), tampil di folder sistem "Bukti Bayar Klien". Kode RCV-NNNNNN.',
+        description: 'Permission: income-payment:create (Finance). Dicatat = sah, tanpa verifikasi kedua (F15). Record harus `verified`; Σ pembayaran tidak di-void ≤ tagihan (409). PPh/potongan klien belum ditangani (F16) — lunas = Σ `amount` = tagihan. `paymentDate` = tanggal uang masuk rekening: tidak di masa depan, tidak di bulan tertutup (409). Jurnal bertanggal `paymentDate`: Dr Kas/Bank Induk Finance / Cr Piutang Usaha. Bukti opsional 0–10 file di `proofs` (PDF/JPG/PNG/WebP, maks 10 MB), tampil di folder sistem "Bukti Bayar Klien". Kode PAY-NNNNNN (diubah dari RCV- 17 Nov 2026: RCV- milik penerimaan material).',
         requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['incomeRecordId', 'paymentDate', 'amount'], properties: {
           incomeRecordId: { type: 'integer' }, paymentDate: { type: 'string', format: 'date' },
           amount: { type: 'number', exclusiveMinimum: 0 }, payerName: { type: 'string' },
