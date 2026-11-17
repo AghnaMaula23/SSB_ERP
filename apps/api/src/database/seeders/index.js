@@ -6,6 +6,7 @@ const { seedProjectDemo } = require('./project.seed.js');
 const { seedMaterialDemo } = require('./material.seed.js');
 const { seedWorkflowDemo } = require('./workflow.seed.js');
 const { seedIncomeDemo } = require('./income.seed.js');
+const { seedPayrollDemo } = require('./payroll.seed.js');
 // divisi-alat.seed.js jalan lewat service module, yang memakai singleton
 // Prisma di src/config/database.js — koneksi terpisah dari `prisma` di atas,
 // jadi ikut ditutup manual saat proses seed selesai (lihat main().finally di bawah).
@@ -145,6 +146,16 @@ const PERMISSIONS = [
   { module: 'equipment-claim', action: 'read',    label: 'Lihat klaim pendapatan alat' },
   { module: 'equipment-claim', action: 'create',  label: 'Ajukan dan batalkan klaim pendapatan alat (Divisi Alat)' },
   { module: 'equipment-claim', action: 'approve', label: 'Setujui/tolak klaim pendapatan alat (Finance) — Kas Alat masuk + jurnal' },
+  // Payroll karyawan tetap (plan Finance G6). Admin mengelola master karyawan; nominal gaji
+  // hanya Finance + super_admin (F29 — super_admin lewat kebijakan :read)
+  { module: 'employee',     action: 'read',   label: 'Lihat master karyawan tetap (tanpa nominal gaji)' },
+  { module: 'employee',     action: 'create', label: 'Tambah karyawan tetap (Admin)' },
+  { module: 'employee',     action: 'update', label: 'Ubah data karyawan & catat karyawan keluar (Admin)' },
+  { module: 'compensation', action: 'read',   label: 'Lihat riwayat gaji pokok karyawan' },
+  { module: 'compensation', action: 'create', label: 'Tetapkan gaji pokok baru karyawan (Finance)' },
+  { module: 'payroll',      action: 'read',   label: 'Lihat payroll bulanan karyawan tetap' },
+  { module: 'payroll',      action: 'create', label: 'Buat, susun komponen, finalisasi, dan batalkan payroll (Finance)' },
+  { module: 'payroll',      action: 'pay',    label: 'Tandai payroll dibayar & void (Finance) — menjurnal beban gaji' },
 ];
 
 // Kategori kas Divisi Alat. Data master, bukan data demo — sistem tidak bisa
@@ -228,6 +239,8 @@ const ROLE_PERMISSIONS = {
     'labor-claim:read', 'labor-claim:validate',
     // Admin pemilik project & kontrak membuat tagihan klien — tanpa verify (milik Finance)
     'income:read', 'income:create',
+    // Admin pemilik master karyawan tetap (F26) — TANPA compensation/payroll: nominal gaji milik Finance (F29)
+    'employee:read', 'employee:create', 'employee:update',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
@@ -253,7 +266,9 @@ const ROLE_PERMISSIONS = {
     // Finance memverifikasi tagihan klien dan mencatat pembayarannya — tidak membuat tagihan
     'income:read', 'income:verify', 'income-payment:create',
     // Finance memutuskan klaim pendapatan alat — cash-in Kas Alat + jurnal alokasi
-    'equipment-claim:read', 'equipment-claim:approve'],
+    'equipment-claim:read', 'equipment-claim:approve',
+    // Finance menggaji karyawan tetap: baca master (dikelola Admin), tetapkan gaji, payroll + jurnal
+    'employee:read', 'compensation:read', 'compensation:create', 'payroll:read', 'payroll:create', 'payroll:pay'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
@@ -441,6 +456,7 @@ async function main() {
   await seedWorkflowDemo();
   // Setelah alur kerja: tagihan dibaca dari progress tervalidasi & jam kerja rental
   await seedIncomeDemo();
+  await seedPayrollDemo();
 
   console.log('Seed complete.');
 }

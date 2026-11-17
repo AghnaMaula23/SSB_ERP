@@ -20,6 +20,17 @@ router.get('/',
 
 router.get('/:id', authorize('user:read'), validate([idParam]), controller.detail);
 
+// --- Tautan akun ke karyawan tetap (plan Finance F26) ---
+router.put('/:id/employee',
+  authorize('user:update'),
+  validate([
+    idParam,
+    // Wajib dikirim; null = lepas tautan. Tanpa .optional() — itu akan meloloskan field yang tidak dikirim
+    body('employeeId').custom((v) => v === null || (Number.isInteger(v) && v > 0))
+      .withMessage('employeeId wajib dikirim: ID karyawan (angka), atau null untuk melepas tautan'),
+  ]),
+  controller.setEmployee);
+
 // --- Assign role ke user ---
 router.put('/:id/roles',
   authorize('user:update'),

@@ -65,6 +65,10 @@ app.use('/api/income-records',     require('./modules/income/income-record.route
 app.use('/api/income-payments',    require('./modules/income/income-payment.routes.js'));
 // G4: Klaim pendapatan alat — Divisi Alat → Finance → Kas Alat
 app.use('/api/equipment-income-claims', require('./modules/income/equipment-income-claim.routes.js'));
+// G6: Payroll karyawan tetap
+app.use('/api/employees',              require('./modules/payroll/employee.routes.js'));
+app.use('/api/employee-compensations', require('./modules/payroll/employee-compensation.routes.js'));
+app.use('/api/payrolls',               require('./modules/payroll/payroll.routes.js'));
 
 // Error Handling
 app.use(notFound);

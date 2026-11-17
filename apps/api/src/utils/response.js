@@ -1,7 +1,8 @@
-const success = (res, data, message = 'Success', statusCode = 200) => {
-  return res.status(statusCode).json({ success: true, message, data });
+// `meta` opsional untuk keterangan di luar data, mis. `skipped` pada pembuatan payroll.
+const success = (res, data, message = 'Success', statusCode = 200, meta) => {
+  return res.status(statusCode).json({ success: true, message, data, ...(meta !== undefined && { meta }) });
 };
-const created = (res, data, message = 'Created') => success(res, data, message, 201);
+const created = (res, data, message = 'Created', meta) => success(res, data, message, 201, meta);
 // `summary` opsional: ringkasan atas SELURUH baris yang cocok filter (bukan hanya
 // halaman ini), dikirim di meta.summary. Sebelumnya field ini dibuang diam-diam.
 const paginated = (res, { data, total, page, limit, summary }) => {

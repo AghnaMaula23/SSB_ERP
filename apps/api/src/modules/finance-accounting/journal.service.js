@@ -32,6 +32,7 @@ const SOURCE_REFS = {
   income_record: { model: 'incomeRecord', code: 'incomeCode', path: (id) => `/api/income-records/${id}` },
   income_payment: { model: 'incomePayment', code: 'paymentCode', path: (id) => `/api/income-payments/${id}` },
   equipment_income_claim: { model: 'equipmentIncomeClaim', code: 'claimCode', path: (id) => `/api/equipment-income-claims/${id}` },
+  payroll: { model: 'payroll', code: 'payrollCode', path: (id) => `/api/payrolls/${id}` },
   opening_balance: null,
 };
 

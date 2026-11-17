@@ -20,6 +20,8 @@ model User {
   createdAt  DateTime   @default(now()) @map("created_at")
   updatedAt  DateTime   @updatedAt @map("updated_at")
   userRoles  UserRole[]
+  /// "Akun ini milik karyawan itu" (F26) — diisi lewat PUT /users/:id/employee.
+  employee   Employee?  @relation("UserEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
 
   equipmentStatusLogs   EquipmentStatusLog[]
   equipmentWorkhourLogs EquipmentWorkhourLog[] @relation("WorkhourCreatedBy")
@@ -99,6 +101,13 @@ model User {
   equipmentClaimsSubmitted        EquipmentIncomeClaim[]       @relation("EquipmentClaimSubmittedBy")
   equipmentClaimsReviewed         EquipmentIncomeClaim[]       @relation("EquipmentClaimReviewedBy")
   equipmentClaimsCancelled        EquipmentIncomeClaim[]       @relation("EquipmentClaimCancelledBy")
+  employeesCreated                Employee[]                   @relation("EmployeeCreatedBy")
+  compensationsCreated            EmployeeCompensation[]       @relation("CompensationCreatedBy")
+  payrollsCreated                 Payroll[]                    @relation("PayrollCreatedBy")
+  payrollsFinalized               Payroll[]                    @relation("PayrollFinalizedBy")
+  payrollsPaid                    Payroll[]                    @relation("PayrollPaidBy")
+  payrollsCancelled               Payroll[]                    @relation("PayrollCancelledBy")
+  payrollsVoided                  Payroll[]                    @relation("PayrollVoidedBy")
 
   @@map("users")
 }
@@ -1643,6 +1652,7 @@ model File {
   fieldReceiptOf  FieldExpenseReceipt?
   laborProofOf    FieldLaborWagePaymentProofFile?
   incomePaymentOf IncomePaymentFile?
+  payrollProofOf  PayrollPaymentFile?
 
   @@index([status, trashedAt])
   @@map("files")
@@ -2705,4 +2715,176 @@ model EquipmentIncomeClaimItem {
   @@index([equipmentWorkhourLogId])
   @@index([incomeRecordItemId])
   @@map("equipment_income_claim_items")
+}
+
+// ============================================================
+// PAYROLL KARYAWAN TETAP (G6) — docs/claude_knowledge/plan-divisi-finance.md F26–F29, 3c.
+// Pekerja harian/kontrak tahapan BUKAN di sini (project_workers).
+// ============================================================
+
+/// Master karyawan tetap, dikelola Admin. Aktif DITURUNKAN dari `end_date` (null atau ≥ hari
+/// ini) — tanpa kolom status (3c). `department` = konstanta validator (kantor, finance,
+/// divisi_alat, lapangan), belum enum database (F26). Rekening = acuan transfer di luar sistem.
+/// Nominal gaji TIDAK di sini (compensation:read, F29).
+model Employee {
+  id            Int       @id @default(autoincrement())
+  employeeCode  String    @unique @map("employee_code") @db.VarChar(20)
+  fullName      String    @map("full_name") @db.VarChar(150)
+  department    String    @db.VarChar(30)
+  positionName  String?   @map("position_name") @db.VarChar(100)
+  joinDate      DateTime  @map("join_date") @db.Date
+  endDate       DateTime? @map("end_date") @db.Date
+  endReason     String?   @map("end_reason") @db.Text
+  bankName      String?   @map("bank_name") @db.VarChar(100)
+  accountNumber String?   @map("account_number") @db.VarChar(50)
+  accountName   String?   @map("account_name") @db.VarChar(150)
+  notes         String?   @db.Text
+  createdBy     Int       @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  createdByUser User                   @relation("EmployeeCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  user          User?                  @relation("UserEmployee")
+  compensations EmployeeCompensation[]
+  payrollItems  PayrollItem[]
+
+  @@index([fullName])
+  @@map("employees")
+}
+
+/// Riwayat gaji pokok. Tanpa tanggal akhir & tanpa status (3c): gaji berlaku pada suatu
+/// tanggal = baris dengan `effective_start_date` terbaru ≤ tanggal itu. Immutable — kenaikan
+/// gaji = baris baru; tidak ada endpoint ubah/hapus.
+model EmployeeCompensation {
+  id                 Int      @id @default(autoincrement())
+  employeeId         Int      @map("employee_id")
+  baseSalary         Decimal  @map("base_salary") @db.Decimal(18, 2)
+  effectiveStartDate DateTime @map("effective_start_date") @db.Date
+  notes              String?  @db.Text
+  createdBy          Int      @map("created_by")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  employee      Employee      @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdByUser User          @relation("CompensationCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  payrollItems  PayrollItem[]
+
+  @@unique([employeeId, effectiveStartDate])
+  @@map("employee_compensations")
+}
+
+/// `corrected` ERD diganti `voided` + payroll pengganti (F6).
+enum PayrollStatus {
+  draft
+  finalized
+  paid
+  cancelled
+  voided
+
+  @@map("payroll_status")
+}
+
+enum PayrollComponentType {
+  earning
+  deduction
+
+  @@map("payroll_component_type")
+}
+
+/// Satu payroll aktif (selain cancelled/voided) per bulan — partial unique di migrasi.
+/// Tanpa tabel periode & tanpa total tersimpan (3c): total dihitung dari komponen.
+/// Jurnal Dr Beban Gaji / Cr Kas bertanggal `payment_date` saat `paid` (F3b).
+/// Pengganti payroll yang di-void menunjuk yang digantikan lewat `replaces_payroll_id`.
+model Payroll {
+  id                Int           @id @default(autoincrement())
+  payrollCode       String        @unique @map("payroll_code") @db.VarChar(50)
+  payrollYear       Int           @map("payroll_year")
+  payrollMonth      Int           @map("payroll_month")
+  status            PayrollStatus @default(draft)
+  notes             String?       @db.Text
+  replacesPayrollId Int?          @map("replaces_payroll_id")
+
+  createdBy        Int       @map("created_by")
+  finalizedBy      Int?      @map("finalized_by")
+  finalizedAt      DateTime? @map("finalized_at")
+  paidBy           Int?      @map("paid_by")
+  paidAt           DateTime? @map("paid_at")
+  paymentDate      DateTime? @map("payment_date") @db.Date
+  paymentReference String?   @map("payment_reference") @db.VarChar(100)
+  paymentNotes     String?   @map("payment_notes") @db.Text
+  cancelledBy      Int?      @map("cancelled_by")
+  cancelledAt      DateTime? @map("cancelled_at")
+  cancelReason     String?   @map("cancel_reason") @db.Text
+  voidedBy         Int?      @map("voided_by")
+  voidedAt         DateTime? @map("voided_at")
+  voidReason       String?   @map("void_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  replacesPayroll Payroll?             @relation("PayrollReplaces", fields: [replacesPayrollId], references: [id], onDelete: Restrict)
+  replacedBy      Payroll[]            @relation("PayrollReplaces")
+  createdByUser   User                 @relation("PayrollCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  finalizedByUser User?                @relation("PayrollFinalizedBy", fields: [finalizedBy], references: [id], onDelete: Restrict)
+  paidByUser      User?                @relation("PayrollPaidBy", fields: [paidBy], references: [id], onDelete: Restrict)
+  cancelledByUser User?                @relation("PayrollCancelledBy", fields: [cancelledBy], references: [id], onDelete: Restrict)
+  voidedByUser    User?                @relation("PayrollVoidedBy", fields: [voidedBy], references: [id], onDelete: Restrict)
+  items           PayrollItem[]
+  files           PayrollPaymentFile[]
+
+  @@index([payrollYear, payrollMonth])
+  @@index([status])
+  @@index([replacesPayrollId])
+  @@map("payrolls")
+}
+
+/// Satu karyawan per payroll. Gaji pokok = komponen `is_system` yang dibuat dari
+/// `compensation_id` (tanpa snapshot terpisah, 3c). Dihapus hanya oleh regenerate saat draft.
+model PayrollItem {
+  id             Int      @id @default(autoincrement())
+  payrollId      Int      @map("payroll_id")
+  employeeId     Int      @map("employee_id")
+  compensationId Int      @map("compensation_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  payroll      Payroll                @relation(fields: [payrollId], references: [id], onDelete: Restrict)
+  employee     Employee               @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  compensation EmployeeCompensation   @relation(fields: [compensationId], references: [id], onDelete: Restrict)
+  components   PayrollItemComponent[]
+
+  @@unique([payrollId, employeeId])
+  @@index([employeeId])
+  @@index([compensationId])
+  @@map("payroll_items")
+}
+
+/// Komponen gaji per karyawan (F27): satu "Gaji Pokok" `is_system` (earning, terkunci;
+/// partial unique di migrasi) + baris manual tambahan/potongan selama draft.
+model PayrollItemComponent {
+  id            Int                  @id @default(autoincrement())
+  payrollItemId Int                  @map("payroll_item_id")
+  componentType PayrollComponentType @map("component_type")
+  componentName String               @map("component_name") @db.VarChar(100)
+  amount        Decimal              @db.Decimal(18, 2)
+  isSystem      Boolean              @default(false) @map("is_system")
+  notes         String?              @db.Text
+  createdAt     DateTime             @default(now()) @map("created_at")
+
+  payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id], onDelete: Cascade)
+
+  @@index([payrollItemId])
+  @@map("payroll_item_components")
+}
+
+/// Bukti transfer gaji, 0–10 per payroll — lewat `files` + storage.service.
+model PayrollPaymentFile {
+  id        Int      @id @default(autoincrement())
+  payrollId Int      @map("payroll_id")
+  fileId    Int      @unique @map("file_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  payroll Payroll @relation(fields: [payrollId], references: [id], onDelete: Restrict)
+  file    File    @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([payrollId])
+  @@map("payroll_payment_files")
 }

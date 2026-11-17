@@ -48,6 +48,15 @@ const BLOCKERS = [
     label: 'bukti bayar upah menunggu validasi',
     count: (tx, range) => tx.fieldLaborWagePaymentProof.count({ where: { status: 'submitted', paymentDate: range } }),
   },
+  {
+    // Payroll ditahan per BULAN PAYROLL-nya (F3b-4), bukan tanggal bayar yang belum ada
+    key: 'payroll',
+    label: 'payroll bulan ini belum dibayar (draft/finalized)',
+    count: (tx, range) => {
+      const { year, month } = periodOf(range.gte);
+      return tx.payroll.count({ where: { payrollYear: year, payrollMonth: month, status: { in: ['draft', 'finalized'] } } });
+    },
+  },
 ];
 
 const blockersOf = async (client, period) => {
