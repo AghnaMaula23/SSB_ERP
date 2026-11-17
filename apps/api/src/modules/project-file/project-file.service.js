@@ -58,7 +58,9 @@ const shapeProjectHeader = (kind, row) => {
 // ------------------------------------------------------------
 // Folder sistem — lampiran modul, dibaca dari tabel sumber (L7). Pemakai baru
 // cukup menambah satu baris di sini. `where(scope)` = filter tabel `files`.
-// scope = { subProjectId } (tahapan konstruksi) atau { externalSupplyProjectId }.
+// scope = { subProjectId } (tahapan konstruksi), { externalSupplyProjectId }, atau
+// { externalRentalProjectId }. `kinds` = jenis project tempat folder muncul
+// (default konstruksi & supply; rental hanya untuk folder yang menyatakannya).
 // ------------------------------------------------------------
 
 const requestScope = (scope) => (scope.subProjectId
@@ -158,17 +160,42 @@ const SYSTEM_FOLDERS = [
       };
     },
   },
+  {
+    key: 'income-payment-proofs',
+    name: 'Bukti Bayar Klien',
+    permission: 'income:read',
+    // Tagihan ada di ketiga jenis konteks; kunci scope = nama kolom konteks income_records
+    kinds: ['construction', 'rental', 'supply'],
+    where: (scope) => ({ incomePaymentOf: { is: { payment: { incomeRecord: scope } } } }),
+    include: { incomePaymentOf: { select: { payment: { select: {
+      id: true, paymentCode: true, paymentDate: true, voidedAt: true,
+      incomeRecord: { select: { id: true, incomeCode: true } },
+    } } } } },
+    source: (file) => {
+      const p = file.incomePaymentOf.payment;
+      return {
+        cancelled: p.voidedAt !== null,
+        source: { type: 'income-payment', id: p.id, code: p.paymentCode, incomeRecordId: p.incomeRecord.id, incomeCode: p.incomeRecord.incomeCode },
+      };
+    },
+  },
 ];
 
-/** Folder sistem lampiran modul hanya untuk tahapan konstruksi dan project supply. */
+const DEFAULT_FOLDER_KINDS = ['construction', 'supply'];
+const folderKinds = (folder) => folder.kinds ?? DEFAULT_FOLDER_KINDS;
+const scopeKind = (scope) => (scope.subProjectId ? 'construction' : scope.externalRentalProjectId ? 'rental' : 'supply');
+
+/** Scope folder sistem: tahapan konstruksi, atau tingkat project untuk supply & rental. */
 const systemScopeFor = (kind, projectId, subProjectId) => {
   if (kind === 'construction') return subProjectId ? { subProjectId } : null;
   if (kind === 'supply') return subProjectId ? null : { externalSupplyProjectId: projectId };
+  if (kind === 'rental') return subProjectId ? null : { externalRentalProjectId: projectId };
   return null;
 };
 
 const systemFolderEntries = async (scope, subProjectId, user) => {
-  const visible = SYSTEM_FOLDERS.filter((f) => user.permissions.includes(f.permission) && (!f.stageOnly || scope.subProjectId));
+  const visible = SYSTEM_FOLDERS.filter((f) => user.permissions.includes(f.permission)
+    && folderKinds(f).includes(scopeKind(scope)) && (!f.stageOnly || scope.subProjectId));
   return Promise.all(visible.map(async (folder) => {
     const agg = await prisma.file.aggregate({
       where: folder.where(scope), _count: { _all: true }, _sum: { sizeBytes: true }, _max: { uploadedAt: true },
@@ -575,7 +602,7 @@ const listSystemFolder = async (kind, projectId, key, { subProjectId, page = 1, 
   }
 
   const folder = SYSTEM_FOLDERS.find((f) => f.key === key);
-  if (!folder || kind === 'rental' || (folder.stageOnly && kind !== 'construction')) {
+  if (!folder || !folderKinds(folder).includes(kind) || (folder.stageOnly && kind !== 'construction')) {
     throw httpError('Folder sistem ini tidak ada untuk jenis project tersebut', 404);
   }
 

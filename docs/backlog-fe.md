@@ -913,6 +913,9 @@ fasenya ter-deploy; tanpa mock (aturan E21).
 - Cabut validasi progress, batal jam kerja, dan batal penerimaan supply bisa 409 kalau barisnya sudah ditagih
   (income record aktif) atau diklaim alat — tampilkan pesannya.
 
+**Catatan G2 (17 Nov):** folder sistem kini bisa muncul di project **rental** (`income-payment-proofs`
+"Bukti Bayar Klien") — layar Files rental perlu menampilkan folder sistem seperti konstruksi/supply.
+
 **Mock yang akan diganti** (bagian 7 rencana): `admin/income/services/incomeService.js`,
 `incomeSourceService.js` (form tidak lagi menebak tarif & volume — pakai `GET /income-records/billable`),
 `alat/services/incomeClaimService.js`. Form income konstruksi hanya berisi progress (tanpa baris alat/material, F19).

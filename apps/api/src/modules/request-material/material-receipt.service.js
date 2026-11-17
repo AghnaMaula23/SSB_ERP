@@ -2,6 +2,7 @@ const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { nextDocumentNumber } = require('../../utils/document-number.js');
 const { claimTransition } = require('../../utils/status-transition.js');
+const { assertReceiptUnbilled } = require('../income/billing-lock.js');
 const { assertContextOpen } = require('../project/context-lock.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 const fileService = require('../file/file.service.js');
@@ -183,6 +184,8 @@ const cancel = async (id, { reason }, userId) => {
   const updated = await prisma.$transaction(async (tx) => {
     if (subProjectId) await stock.lockSubProject(tx, subProjectId);
     await assertContextOpen(tx, contextOf(row.materialDelivery.materialRequest));
+    // Penerimaan supply yang sudah ditagihkan ke klien terkunci (plan Finance 5e)
+    await assertReceiptUnbilled(tx, id);
     await claimTransition(tx.materialReceipt, { id, cancelledAt: null },
       { cancelledAt: new Date(), cancelledBy: userId, cancelReason: reason.trim() });
     if (subProjectId) await stock.assertNotNegative(tx, subProjectId, materialTypeId);

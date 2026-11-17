@@ -60,6 +60,11 @@ app.use('/api/equipment',          require('./modules/divisi-alat/divisi-alat.ro
 app.use('/api/chart-of-accounts',  require('./modules/finance-accounting/chart-of-account.routes.js'));
 app.use('/api/journal-entries',    require('./modules/finance-accounting/journal.routes.js'));
 app.use('/api/accounting-periods', require('./modules/finance-accounting/accounting-period.routes.js'));
+// G2: Income — tagihan klien & pembayaran
+app.use('/api/income-records',     require('./modules/income/income-record.routes.js'));
+app.use('/api/income-payments',    require('./modules/income/income-payment.routes.js'));
+// G4: Klaim pendapatan alat — Divisi Alat → Finance → Kas Alat
+app.use('/api/equipment-income-claims', require('./modules/income/equipment-income-claim.routes.js'));
 
 // Error Handling
 app.use(notFound);

@@ -29,6 +29,9 @@ const SOURCE_REFS = {
   labor_payment_proof: { model: 'fieldLaborWagePaymentProof', code: 'proofCode', path: (id) => `/api/labor-payment-proofs/${id}` },
   material_request: { model: 'materialRequest', code: 'requestCode', path: (id) => `/api/request-material/${id}` },
   journal_adjustment: { model: 'journalEntry', code: 'journalCode', path: (id) => `/api/journal-entries/${id}` },
+  income_record: { model: 'incomeRecord', code: 'incomeCode', path: (id) => `/api/income-records/${id}` },
+  income_payment: { model: 'incomePayment', code: 'paymentCode', path: (id) => `/api/income-payments/${id}` },
+  equipment_income_claim: { model: 'equipmentIncomeClaim', code: 'claimCode', path: (id) => `/api/equipment-income-claims/${id}` },
   opening_balance: null,
 };
 

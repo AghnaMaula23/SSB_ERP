@@ -5,6 +5,7 @@ const { seedDivisiAlatDemo } = require('./divisi-alat.seed.js');
 const { seedProjectDemo } = require('./project.seed.js');
 const { seedMaterialDemo } = require('./material.seed.js');
 const { seedWorkflowDemo } = require('./workflow.seed.js');
+const { seedIncomeDemo } = require('./income.seed.js');
 // divisi-alat.seed.js jalan lewat service module, yang memakai singleton
 // Prisma di src/config/database.js — koneksi terpisah dari `prisma` di atas,
 // jadi ikut ditutup manual saat proses seed selesai (lihat main().finally di bawah).
@@ -135,6 +136,15 @@ const PERMISSIONS = [
   { module: 'journal',           action: 'read',   label: 'Lihat jurnal, buku besar, dan status tutup buku' },
   { module: 'journal',           action: 'adjust', label: 'Catat selisih biaya aktual pada jurnal request material' },
   { module: 'accounting-period', action: 'close',  label: 'Tutup dan buka kembali buku bulanan' },
+  // Income — tagihan klien (plan Finance G2). Admin membuat, Finance memverifikasi & mencatat bayar
+  { module: 'income',         action: 'read',   label: 'Lihat tagihan klien dan pembayarannya' },
+  { module: 'income',         action: 'create', label: 'Buat, ubah, dan batalkan tagihan klien (Admin)' },
+  { module: 'income',         action: 'verify', label: 'Verifikasi/tolak/batalkan tagihan klien (Finance) — menjurnal piutang' },
+  { module: 'income-payment', action: 'create', label: 'Catat dan batalkan pembayaran klien (Finance) — menjurnal kas' },
+  // Klaim pendapatan alat (plan Finance G4): Divisi Alat mengajukan, Finance memutuskan
+  { module: 'equipment-claim', action: 'read',    label: 'Lihat klaim pendapatan alat' },
+  { module: 'equipment-claim', action: 'create',  label: 'Ajukan dan batalkan klaim pendapatan alat (Divisi Alat)' },
+  { module: 'equipment-claim', action: 'approve', label: 'Setujui/tolak klaim pendapatan alat (Finance) — Kas Alat masuk + jurnal' },
 ];
 
 // Kategori kas Divisi Alat. Data master, bukan data demo — sistem tidak bisa
@@ -216,6 +226,8 @@ const ROLE_PERMISSIONS = {
     'field-cash:read', 'field-cash:validate',
     // Admin memeriksa kehadiran & upah di klaim (P1) lalu meneruskan — tanpa approve
     'labor-claim:read', 'labor-claim:validate',
+    // Admin pemilik project & kontrak membuat tagihan klien — tanpa verify (milik Finance)
+    'income:read', 'income:create',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
@@ -237,7 +249,11 @@ const ROLE_PERMISSIONS = {
     // Finance menyetujui klaim upah dan memvalidasi bukti bayarnya (sumber jurnal GL)
     'labor-claim:read', 'labor-claim:approve',
     // Pemilik GL: membaca jurnal, mencatat selisih biaya material, menutup buku bulanan
-    'coa:read', 'journal:read', 'journal:adjust', 'accounting-period:close'],
+    'coa:read', 'journal:read', 'journal:adjust', 'accounting-period:close',
+    // Finance memverifikasi tagihan klien dan mencatat pembayarannya — tidak membuat tagihan
+    'income:read', 'income:verify', 'income-payment:create',
+    // Finance memutuskan klaim pendapatan alat — cash-in Kas Alat + jurnal alokasi
+    'equipment-claim:read', 'equipment-claim:approve'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
@@ -258,6 +274,8 @@ const ROLE_PERMISSIONS = {
     'allocation:read', 'allocation:create', 'allocation:update',
     // Divisi Alat memutuskan kuantitas; tidak mengajukan dan tidak mereview Admin
     'equipment-request:read', 'equipment-request:approve',
+    // Divisi Alat mengklaim pendapatan jam kerja alatnya setelah tagihan klien lunas
+    'equipment-claim:read', 'equipment-claim:create',
   ],
   // Lapangan boleh melihat jadwal servis alat yang mereka pakai, tapi tidak mengelolanya
   // Lapangan belum boleh mencatat kerusakan — laporan masuk lewat telepon ke
@@ -421,6 +439,8 @@ async function main() {
   await seedMaterialDemo(admin.id);
   // Terakhir: butuh project, alat, material, dan user demo per role di atas.
   await seedWorkflowDemo();
+  // Setelah alur kerja: tagihan dibaca dari progress tervalidasi & jam kerja rental
+  await seedIncomeDemo();
 
   console.log('Seed complete.');
 }

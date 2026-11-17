@@ -4,6 +4,7 @@ const { assertNotFuture } = require('../../utils/date.js');
 const maintenance = require('./maintenance.service.js');
 const { toNumber, toDateOnly, pickWritable, ACTOR_SELECT } = require('../../utils/shape.js');
 const { claimTransition } = require('../../utils/status-transition.js');
+const { assertWorkhourLogUnbilled } = require('../income/billing-lock.js');
 const { assertContextOpen } = require('../project/context-lock.js');
 
 const MAX_WORKHOUR_PER_DAY = 24;
@@ -885,6 +886,8 @@ const voidWorkhourLog = async (id, { reason }, userId) => {
   const hours = toNumber(log.totalWorkhour);
   const result = await prisma.$transaction(async (tx) => {
     await assertContextOpen(tx, lock);
+    // Jam yang sudah ditagihkan ke klien terkunci (plan Finance 5e)
+    await assertWorkhourLogUnbilled(tx, id);
     await lockEquipmentItem(tx, log.equipmentItemId);
     await claimTransition(tx.equipmentWorkhourLog, { id, isVoided: false }, {
       isVoided: true, voidReason: reason, voidedBy: userId, voidedAt: new Date(),
