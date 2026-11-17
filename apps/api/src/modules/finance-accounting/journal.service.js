@@ -33,6 +33,7 @@ const SOURCE_REFS = {
   income_payment: { model: 'incomePayment', code: 'paymentCode', path: (id) => `/api/income-payments/${id}` },
   equipment_income_claim: { model: 'equipmentIncomeClaim', code: 'claimCode', path: (id) => `/api/equipment-income-claims/${id}` },
   payroll: { model: 'payroll', code: 'payrollCode', path: (id) => `/api/payrolls/${id}` },
+  manual_expense: { model: 'financeManualExpense', code: 'expenseCode', path: (id) => `/api/manual-expenses/${id}` },
   opening_balance: null,
 };
 
@@ -275,4 +276,4 @@ const addAdjustment = async (id, { amount, adjustmentDate, reason }, userId) => 
   return getById(created.id);
 };
 
-module.exports = { postJournal, reverseJournal, list, getById, addAdjustment, SOURCE_REFS };
+module.exports = { postJournal, reverseJournal, list, getById, addAdjustment, sourceCodesOf, shapeSource, SOURCE_REFS };

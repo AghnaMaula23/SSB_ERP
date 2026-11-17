@@ -108,6 +108,8 @@ model User {
   payrollsPaid                    Payroll[]                    @relation("PayrollPaidBy")
   payrollsCancelled               Payroll[]                    @relation("PayrollCancelledBy")
   payrollsVoided                  Payroll[]                    @relation("PayrollVoidedBy")
+  manualExpensesRecorded          FinanceManualExpense[]       @relation("ManualExpenseRecordedBy")
+  manualExpensesVoided            FinanceManualExpense[]       @relation("ManualExpenseVoidedBy")
 
   @@map("users")
 }
@@ -1653,6 +1655,7 @@ model File {
   laborProofOf    FieldLaborWagePaymentProofFile?
   incomePaymentOf IncomePaymentFile?
   payrollProofOf  PayrollPaymentFile?
+  manualExpenseOf FinanceManualExpenseFile?
 
   @@index([status, trashedAt])
   @@map("files")
@@ -2887,4 +2890,51 @@ model PayrollPaymentFile {
 
   @@index([payrollId])
   @@map("payroll_payment_files")
+}
+
+// ============================================================
+// PENGELUARAN MANUAL FINANCE (G8) — docs/claude_knowledge/plan-divisi-finance.md F9, 3b.
+// ============================================================
+
+/// Pengeluaran Finance yang belum punya modul sendiri. Tanpa status & tanpa draf: dibuat = sah +
+/// jurnal Dr Beban Pengeluaran Manual / Cr Kas bertanggal `expense_date` (F3b). Pembatalan =
+/// `voided_*` + jurnal balik hari ini (F6). Metode bayar memakai enum yang sama dengan pembayaran klien.
+model FinanceManualExpense {
+  id            Int                  @id @default(autoincrement())
+  expenseCode   String               @unique @map("expense_code") @db.VarChar(50)
+  expenseDate   DateTime             @map("expense_date") @db.Date
+  amount        Decimal              @db.Decimal(18, 2)
+  payeeName     String?              @map("payee_name") @db.VarChar(150)
+  paymentMethod IncomePaymentMethod? @map("payment_method")
+  description   String               @db.Text
+  reason        String               @db.Text
+
+  recordedBy Int       @map("recorded_by")
+  voidedBy   Int?      @map("voided_by")
+  voidedAt   DateTime? @map("voided_at")
+  voidReason String?   @map("void_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  recordedByUser User                       @relation("ManualExpenseRecordedBy", fields: [recordedBy], references: [id], onDelete: Restrict)
+  voidedByUser   User?                      @relation("ManualExpenseVoidedBy", fields: [voidedBy], references: [id], onDelete: Restrict)
+  files          FinanceManualExpenseFile[]
+
+  @@index([expenseDate])
+  @@map("finance_manual_expenses")
+}
+
+/// Lampiran WAJIB 1–10 per pengeluaran (dijaga service + middleware) — lewat `files` + storage.service.
+model FinanceManualExpenseFile {
+  id                     Int      @id @default(autoincrement())
+  financeManualExpenseId Int      @map("finance_manual_expense_id")
+  fileId                 Int      @unique @map("file_id")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  expense FinanceManualExpense @relation(fields: [financeManualExpenseId], references: [id], onDelete: Restrict)
+  file    File                 @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([financeManualExpenseId])
+  @@map("finance_manual_expense_files")
 }

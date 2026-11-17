@@ -7,6 +7,7 @@ const { seedMaterialDemo } = require('./material.seed.js');
 const { seedWorkflowDemo } = require('./workflow.seed.js');
 const { seedIncomeDemo } = require('./income.seed.js');
 const { seedPayrollDemo } = require('./payroll.seed.js');
+const { seedManualExpenseDemo } = require('./manual-expense.seed.js');
 // divisi-alat.seed.js jalan lewat service module, yang memakai singleton
 // Prisma di src/config/database.js — koneksi terpisah dari `prisma` di atas,
 // jadi ikut ditutup manual saat proses seed selesai (lihat main().finally di bawah).
@@ -137,6 +138,8 @@ const PERMISSIONS = [
   { module: 'journal',           action: 'read',   label: 'Lihat jurnal, buku besar, dan status tutup buku' },
   { module: 'journal',           action: 'adjust', label: 'Catat selisih biaya aktual pada jurnal request material' },
   { module: 'accounting-period', action: 'close',  label: 'Tutup dan buka kembali buku bulanan' },
+  { module: 'manual-expense',    action: 'read',   label: 'Lihat pengeluaran manual Finance' },
+  { module: 'manual-expense',    action: 'create', label: 'Catat & batalkan pengeluaran manual Finance — menjurnal beban' },
   // Income — tagihan klien (plan Finance G2). Admin membuat, Finance memverifikasi & mencatat bayar
   { module: 'income',         action: 'read',   label: 'Lihat tagihan klien dan pembayarannya' },
   { module: 'income',         action: 'create', label: 'Buat, ubah, dan batalkan tagihan klien (Admin)' },
@@ -263,6 +266,8 @@ const ROLE_PERMISSIONS = {
     'labor-claim:read', 'labor-claim:approve',
     // Pemilik GL: membaca jurnal, mencatat selisih biaya material, menutup buku bulanan
     'coa:read', 'journal:read', 'journal:adjust', 'accounting-period:close',
+    // Pengeluaran yang belum punya modul sendiri (F9) — dibuat = sah + jurnal, koreksi lewat void
+    'manual-expense:read', 'manual-expense:create',
     // Finance memverifikasi tagihan klien dan mencatat pembayarannya — tidak membuat tagihan
     'income:read', 'income:verify', 'income-payment:create',
     // Finance memutuskan klaim pendapatan alat — cash-in Kas Alat + jurnal alokasi
@@ -457,6 +462,7 @@ async function main() {
   // Setelah alur kerja: tagihan dibaca dari progress tervalidasi & jam kerja rental
   await seedIncomeDemo();
   await seedPayrollDemo();
+  await seedManualExpenseDemo();
 
   console.log('Seed complete.');
 }

@@ -49,6 +49,11 @@ const OWNERS = [
     find: (fileId) => prisma.incomePaymentFile.findUnique({ where: { fileId }, select: { id: true } }),
   },
   {
+    prefix: 'manual-expense-attachments',
+    permission: 'manual-expense:read',
+    find: (fileId) => prisma.financeManualExpenseFile.findUnique({ where: { fileId }, select: { id: true } }),
+  },
+  {
     prefix: 'payroll-payment-proofs',
     permission: 'payroll:read',
     find: (fileId) => prisma.payrollPaymentFile.findUnique({ where: { fileId }, select: { id: true } }),

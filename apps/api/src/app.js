@@ -60,6 +60,9 @@ app.use('/api/equipment',          require('./modules/divisi-alat/divisi-alat.ro
 app.use('/api/chart-of-accounts',  require('./modules/finance-accounting/chart-of-account.routes.js'));
 app.use('/api/journal-entries',    require('./modules/finance-accounting/journal.routes.js'));
 app.use('/api/accounting-periods', require('./modules/finance-accounting/accounting-period.routes.js'));
+// G8: laporan GL & pengeluaran manual Finance
+app.use('/api/general-ledger',     require('./modules/finance-accounting/general-ledger.routes.js'));
+app.use('/api/manual-expenses',    require('./modules/finance-accounting/manual-expense.routes.js'));
 // G2: Income — tagihan klien & pembayaran
 app.use('/api/income-records',     require('./modules/income/income-record.routes.js'));
 app.use('/api/income-payments',    require('./modules/income/income-payment.routes.js'));
