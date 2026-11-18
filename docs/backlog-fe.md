@@ -927,3 +927,44 @@ fasenya ter-deploy; tanpa mock (aturan E21).
 Alasan: keduanya berbagi satu counter sehingga nomornya ambigu (plan Finance bagian 8a). Yang perlu dicek di FE:
 placeholder/contoh kode, filter atau pencarian yang mengandalkan awalan `RCV`, dan label jenis dokumen yang
 ditebak dari awalan kode (pakai `source.type` dari jurnal, bukan awalan).
+
+## E34. Finance lengkap (data contoh), Supply Lapangan, manajemen akun, keuangan project (16 November 2026)
+
+> Dinomori ulang dari E32 saat merge `ssb_webtest` → `module/finance` (18 Nov 2026): nomor E32 sudah dipakai
+> "Kontrak Divisi Finance beku". **Bertentangan dengan E32/aturan kontrak beku butir 4**: data contoh
+> `financeMockService.js` harus diganti endpoint asli (backend G1–G8 sudah ada) — lihat E35.
+
+- **Finance** — Gaji Bulanan Staf, Chart of Accounts, General Ledger (+ jurnal manual), dan Verifikasi Pendapatan kini
+  berisi **data contoh** (`modules/finance/services/financeMockService.js`, kunci `finance_mock_*`, dibersihkan saat sign out).
+  Verifikasi Pendapatan membaca tagihan menu Income Admin (`decideIncomeRecord`) dan menulis jurnal contoh; bayar gaji
+  staf juga. Saat backend Finance Accounting/Payroll/Income ada, ganti isi fungsi di file itu — halaman tidak perlu diubah.
+- **Lapangan → Supply** — halaman Supply Admin dipakai Lapangan (pola `divisionPrefix` sama dengan Project/Rental), plus
+  tombol ke Request Material untuk mencatat request & surat jalan supply.
+- **Manajemen Akun** (`#/akun`, kartu untuk pemegang `user:create`) — buat akun (`POST /auth/register` lalu
+  `PUT /users/:id/roles`), ubah nama/email/reset password/nonaktifkan lewat endpoint baru `PUT /api/users/:id`.
+  Tidak ada hapus akun: dokumen merujuk pembuatnya.
+- **Files → Keuangan Project** (`admin/files/:type/:id/keuangan`) — pengeluaran nyata per project (request material
+  approved, laporan kas lapangan tervalidasi, klaim upah approved) dan pemasukan dari Income (data contoh). Rental belum
+  punya pengeluaran per kontrak di backend.
+
+## E35. Layar Finance wajib pindah dari data contoh ke API asli (18 November 2026)
+
+Backend Divisi Finance G1–G8 sudah ada di `module/finance` (kontrak swagger E32/E33). Layar dari E34 masih
+memakai `modules/finance/services/financeMockService.js` dan `admin/income/services/incomeService.js`
+(localStorage) — melanggar aturan kontrak beku butir 4 (tanpa mock). Selain itu ada **ketidaksesuaian
+model** yang tidak bisa diselesaikan hanya dengan mengganti isi fungsi:
+
+| Layar / fungsi mock | Kontrak backend | Yang harus berubah di FE |
+|---|---|---|
+| `JournalFormPage` + `postJournal` (jurnal manual) | **Tidak ada input jurnal bebas** (F2): jurnal lahir dari aksi sumber | Hapus form jurnal manual. Pengeluaran di luar modul = `POST /api/manual-expenses` (multipart, lampiran wajib 1–10); selisih request material = `POST /api/journal-entries/:id/adjustments` |
+| `ChartOfAccountsPage` + `saveAccount` | COA **baca saja** dari seeder (F4), `GET /api/chart-of-accounts` | Hapus form tambah/ubah akun |
+| Kode akun `4-1001/4-1002/4-1003` (`REVENUE_ACCOUNT`) | `4-1100` konstruksi, `4-1200` rental, `4-1300` supply | Jangan tebak akun di FE — jurnal & akun dibaca dari API |
+| `GeneralLedgerPage` + `listJournals` | `GET /api/journal-entries`, `GET /api/general-ledger/accounts/:id?startDate&endDate`, `GET /api/general-ledger/trial-balance?date=` | Ganti sumber data; saldo sudah dihitung backend |
+| `StaffPayrollTab` (`baseSalary + allowance − deduction`, bayar per karyawan) | `/api/employees` (Admin), `/api/employee-compensations` (Finance), `/api/payrolls` per BULAN: draft → komponen manual → finalize → pay (multipart `proofs`) → void | Tunjangan/potongan = komponen manual per karyawan di payroll draft; bayar sekali per payroll bulanan, bukan per karyawan. Kolom gaji tampil menurut permission `compensation:read`/`payroll:read` |
+| `RevenueVerificationPage` + `journalIncome` + `incomeService.js` (`REV-…`) | `/api/income-records` (verify/reject/void menjurnal sendiri), `/api/income-payments` (`PAY-`), form Admin pakai `GET /income-records/billable` | Hapus `journalIncome`; Verifikasi Pendapatan = aksi `PUT /income-records/:id/verify|reject` |
+| `listAlatIncome`/`decideAlatIncome` | `/api/equipment-income-claims` (approve/reject Finance) | Ganti sumber data |
+| Files → Keuangan Project, pemasukan "data contoh" | `GET /api/income-records?subProjectId|externalRentalProjectId|externalSupplyProjectId` | Ganti sumber pemasukan |
+
+Setelah semua layar pindah: hapus `financeMockService.js`, kunci `finance_mock_*`, dan `admin_mock_income_records`
+(termasuk pembersihnya di `services/auth.js`). Endpoint baru `PUT /api/users/:id` (manajemen akun, E34) diterima
+dan sudah tercatat di swagger.

@@ -9,6 +9,7 @@ import SystemFolderPage from './SystemFolderPage.jsx';
 import TrashPage from './TrashPage.jsx';
 import UploadPage from './UploadPage.jsx';
 import FilePage from './FilePage.jsx';
+import ProjectFinancePage from './ProjectFinancePage.jsx';
 import { getDirectory } from '../services/projectFiles.js';
 import { filesHref, parseFilesRoute } from '../utils/filesRoute.js';
 
@@ -56,6 +57,9 @@ export default function FilesWorkspacePage({ route, onNavigate, onBackToModules,
         break;
       case 'system':
         content = <SystemFolderPage key={route} {...shared} systemKey={selection.systemKey} subProjectId={selection.subProjectId} />;
+        break;
+      case 'finance':
+        content = <ProjectFinancePage key={route} {...shared} />;
         break;
       case 'trash':
         content = <TrashPage key={route} {...shared} onChanged={reloadDirectory} />;

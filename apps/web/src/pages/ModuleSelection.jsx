@@ -2,6 +2,7 @@ const modules = [
   { id: 'admin/projects', title: 'Admin Division', description: 'Manage construction projects, sub-project contracts, and progress validation.', icon: '▦', tone: 'brand' },
   { id: 'alat/items', title: 'Divisi Alat', description: 'Manage equipment inventory, active issues, and maintenance.', icon: '⚒', tone: 'leaf' },
   { id: 'lapangan/projects', title: 'Divisi Lapangan', description: 'Daily progress, labor logs, material and equipment requests, field cash, and wage claims.', icon: '⌖', tone: 'amber' },
+  { id: 'akun', title: 'Manajemen Akun', description: 'Create user accounts, assign roles, and deactivate accounts that are no longer used.', icon: '👤', tone: 'slate' },
   { id: 'finance/approvals', title: 'Divisi Finance', description: 'Approve spending, field cash and wage claims, and review the equipment cash book.', icon: '▤', tone: 'violet' },
 ];
 
@@ -11,6 +12,7 @@ const moduleTone = {
   leaf: 'bg-leaf-50 text-leaf-700 border-leaf-200',
   amber: 'bg-amber-50 text-amber-700 border-amber-200',
   violet: 'bg-violet-50 text-violet-700 border-violet-200',
+  slate: 'bg-slate-100 text-slate-700 border-slate-200',
 };
 
 export default function ModuleSelection({ user = {}, onSelectModule, onSignOut }) {
@@ -26,7 +28,7 @@ export default function ModuleSelection({ user = {}, onSelectModule, onSignOut }
   const canAccessField = permissions.includes('progress:create') || permissions.includes('user:create');
   const canAccessFinance = ['purchase-request:approve', 'material-request:approve', 'field-cash:approve', 'labor-claim:approve', 'user:create']
     .some((permission) => permissions.includes(permission));
-  const moduleAccess = { 'alat/items': canAccessEquipment, 'admin/projects': canAccessAdmin, 'lapangan/projects': canAccessField, 'finance/approvals': canAccessFinance };
+  const moduleAccess = { 'alat/items': canAccessEquipment, 'admin/projects': canAccessAdmin, 'lapangan/projects': canAccessField, 'finance/approvals': canAccessFinance, akun: permissions.includes('user:create') };
 
   return (
     <main className="page-enter min-h-screen bg-slate-50 px-4 py-8 text-slate-800 sm:px-8 sm:py-12">

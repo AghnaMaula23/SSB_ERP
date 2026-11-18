@@ -37,7 +37,12 @@ export default function ProjectDirectoryPage({ type, projectId, directory, initi
         directory={directory}
         title={directory.project.name}
         subtitle={`${userFolders.length} folder · ${totalFiles} berkas · ${formatBytes(totalSize)} diunggah user`}
-        actions={<a href={filesHref.trash(type, projectId)} className="btn btn-secondary text-xs">🗑 Sampah</a>}
+        actions={(
+          <>
+            <a href={filesHref.finance(type, projectId)} className="btn btn-primary text-xs">💰 Keuangan Project</a>
+            <a href={filesHref.trash(type, projectId)} className="btn btn-secondary text-xs">🗑 Sampah</a>
+          </>
+        )}
       />
       <Notice tone="success" onDismiss={() => setNotice('')}>{notice}</Notice>
 

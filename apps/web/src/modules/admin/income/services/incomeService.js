@@ -152,3 +152,18 @@ export async function withdrawIncomeRecord(id) {
   if (row.status !== 'submitted') throw new Error(`Record berstatus "${row.status}" sudah diproses Finance dan tidak bisa ditarik.`);
   write(rows.filter((record) => record.id !== row.id));
 }
+
+// ---------------- Keputusan Finance (Verifikasi Pendapatan) ----------------
+
+/** submitted → verified | rejected (alasan wajib); verified → paid. Kontrak sama dengan endpoint Finance nanti. */
+export async function decideIncomeRecord(id, status, financeNotes) {
+  const rows = read();
+  const row = rows.find((record) => record.id === Number(id));
+  if (!row) throw new Error('Income record tidak ditemukan.');
+  const allowed = { verified: 'submitted', rejected: 'submitted', paid: 'verified' };
+  if (row.status !== allowed[status]) throw new Error(`Record berstatus "${row.status}" tidak bisa diubah menjadi "${status}".`);
+  if (status === 'rejected' && !financeNotes?.trim()) throw new Error('Alasan penolakan wajib diisi.');
+  const updated = { ...row, status, financeNotes: financeNotes?.trim() || row.financeNotes || null, [`${status}At`]: new Date().toISOString() };
+  write(rows.map((record) => (record.id === row.id ? updated : record)));
+  return updated;
+}

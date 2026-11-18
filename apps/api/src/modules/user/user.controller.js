@@ -28,6 +28,13 @@ const setRoles = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const update = async (req, res, next) => {
+  try {
+    const user = await service.update(Number(req.params.id), req.body, req.user.id);
+    return success(res, user, 'Akun berhasil diperbarui');
+  } catch (err) { next(err); }
+};
+
 const addRole = async (req, res, next) => {
   try {
     const user = await service.addRole(Number(req.params.id), Number(req.body.roleId), req.user.id);
@@ -49,4 +56,4 @@ const setEmployee = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, detail, setRoles, addRole, removeRole, setEmployee };
+module.exports = { list, detail, update, setRoles, addRole, removeRole, setEmployee };

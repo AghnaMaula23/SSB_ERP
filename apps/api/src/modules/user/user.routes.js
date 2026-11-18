@@ -32,6 +32,20 @@ router.put('/:id/employee',
   controller.setEmployee);
 
 // --- Assign role ke user ---
+// Username tidak bisa diubah: ia identitas login dan jejak audit
+router.put('/:id',
+  authorize('user:update'),
+  validate([
+    idParam,
+    body('username').not().exists().withMessage('Username tidak bisa diubah'),
+    body('fullName').optional().isString().trim().notEmpty().withMessage('Nama lengkap wajib diisi')
+      .isLength({ max: 150 }).withMessage('Nama lengkap maksimal 150 karakter'),
+    body('email').optional().isEmail().withMessage('Format email tidak valid').isLength({ max: 150 }).withMessage('Email maksimal 150 karakter'),
+    body('isActive').optional().isBoolean().withMessage('isActive harus boolean').toBoolean(),
+    body('password').optional({ values: 'falsy' }).isLength({ min: 8 }).withMessage('Password minimal 8 karakter'),
+  ]),
+  controller.update);
+
 router.put('/:id/roles',
   authorize('user:update'),
   validate([

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import FormPage, { Field, FormError, InfoCard, SectionDivider } from '../../project/components/FormPage.jsx';
 import { MockBanner } from '../../project/components/ProjectUi.jsx';
+import { divisionPrefix } from '../../utils/divisionRoute.js';
 import { fieldErrorsFrom } from '../../project/utils/projectFormat.js';
 
 const toForm = (project) => ({
@@ -59,8 +60,8 @@ export default function SupplyProjectFormPage({ project, onSubmitForm, onCancel,
   return (
     <FormPage
       breadcrumb={isEdit
-        ? [{ label: 'Supply', href: '#/admin/supply' }, { label: project.projectName, href: `#/admin/supply/${project.id}` }, { label: 'Ubah' }]
-        : [{ label: 'Supply', href: '#/admin/supply' }, { label: 'Transaksi Baru' }]}
+        ? [{ label: 'Supply', href: `#/${divisionPrefix()}/supply` }, { label: project.projectName, href: `#/${divisionPrefix()}/supply/${project.id}` }, { label: 'Ubah' }]
+        : [{ label: 'Supply', href: `#/${divisionPrefix()}/supply` }, { label: 'Transaksi Baru' }]}
       icon="🚚"
       title={isEdit ? 'Ubah Kontrak Supply' : 'Buat Transaksi Baru'}
       subtitle={isEdit ? project.projectCode : 'Kontrak supply material ke client eksternal'}
