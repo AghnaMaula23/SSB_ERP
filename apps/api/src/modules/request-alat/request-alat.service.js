@@ -35,7 +35,10 @@ const CONTEXT_BY_TYPE = {
 };
 
 const DETAIL_INCLUDE = {
-  subProject: { select: { id: true, subProjectType: true, status: true, constructionProjectId: true } },
+  // constructionProject ikut supaya label tahapan bisa menyebut project-nya (stageLabel di FE);
+  // tanpa ini dua tahapan "Galian" dari project berbeda tidak bisa dibedakan.
+  subProject: { select: { id: true, subProjectType: true, status: true, constructionProjectId: true,
+    constructionProject: { select: { id: true, projectCode: true, projectName: true } } } },
   externalRentalProject: { select: { id: true, rentalProjectCode: true, rentalProjectName: true, status: true } },
   requestedByUser: { select: ACTOR_SELECT },
   adminReviewedByUser: { select: ACTOR_SELECT },

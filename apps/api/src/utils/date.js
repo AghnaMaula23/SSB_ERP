@@ -15,4 +15,17 @@ const assertNotFuture = (value, label) => {
   return date;
 };
 
-module.exports = { assertNotFuture };
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/**
+ * Tanggal kalender WIB dari sebuah waktu, sebagai Date tengah malam UTC — bentuk
+ * yang sama dengan kolom @db.Date yang dikirim klien ("2026-11-16" → 2026-11-16T00:00Z).
+ * Dipakai jurnal yang bertanggal hari aksi (plan Finance F3b): server boleh berjalan
+ * di zona mana pun, buku tetap mengikuti hari kerja di Indonesia.
+ */
+const wibDateOf = (moment = new Date()) =>
+  new Date(new Date(new Date(moment).getTime() + WIB_OFFSET_MS).toISOString().slice(0, 10));
+
+const todayDate = () => wibDateOf(new Date());
+
+module.exports = { assertNotFuture, wibDateOf, todayDate };

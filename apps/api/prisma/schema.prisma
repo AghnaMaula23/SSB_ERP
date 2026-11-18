@@ -20,6 +20,8 @@ model User {
   createdAt  DateTime   @default(now()) @map("created_at")
   updatedAt  DateTime   @updatedAt @map("updated_at")
   userRoles  UserRole[]
+  /// "Akun ini milik karyawan itu" (F26) — diisi lewat PUT /users/:id/employee.
+  employee   Employee?  @relation("UserEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
 
   equipmentStatusLogs   EquipmentStatusLog[]
   equipmentWorkhourLogs EquipmentWorkhourLog[] @relation("WorkhourCreatedBy")
@@ -85,6 +87,29 @@ model User {
   wageProofsSubmitted             FieldLaborWagePaymentProof[] @relation("WageProofSubmittedBy")
   wageProofsValidated             FieldLaborWagePaymentProof[] @relation("WageProofValidatedBy")
   wageProofsCancelled             FieldLaborWagePaymentProof[] @relation("WageProofCancelledBy")
+  fieldReportsVoided              FieldExpenseReport[]         @relation("FieldReportVoidedBy")
+  wageProofsVoided                FieldLaborWagePaymentProof[] @relation("WageProofVoidedBy")
+  journalEntriesCreated           JournalEntry[]               @relation("JournalCreatedBy")
+  periodClosingsClosed            AccountingPeriodClosing[]    @relation("PeriodClosedBy")
+  periodClosingsReopened          AccountingPeriodClosing[]    @relation("PeriodReopenedBy")
+  incomeRecordsCreated            IncomeRecord[]               @relation("IncomeCreatedBy")
+  incomeRecordsVerified           IncomeRecord[]               @relation("IncomeVerifiedBy")
+  incomeRecordsCancelled          IncomeRecord[]               @relation("IncomeCancelledBy")
+  incomeRecordsVoided             IncomeRecord[]               @relation("IncomeVoidedBy")
+  incomePaymentsRecorded          IncomePayment[]              @relation("IncomePaymentRecordedBy")
+  incomePaymentsVoided            IncomePayment[]              @relation("IncomePaymentVoidedBy")
+  equipmentClaimsSubmitted        EquipmentIncomeClaim[]       @relation("EquipmentClaimSubmittedBy")
+  equipmentClaimsReviewed         EquipmentIncomeClaim[]       @relation("EquipmentClaimReviewedBy")
+  equipmentClaimsCancelled        EquipmentIncomeClaim[]       @relation("EquipmentClaimCancelledBy")
+  employeesCreated                Employee[]                   @relation("EmployeeCreatedBy")
+  compensationsCreated            EmployeeCompensation[]       @relation("CompensationCreatedBy")
+  payrollsCreated                 Payroll[]                    @relation("PayrollCreatedBy")
+  payrollsFinalized               Payroll[]                    @relation("PayrollFinalizedBy")
+  payrollsPaid                    Payroll[]                    @relation("PayrollPaidBy")
+  payrollsCancelled               Payroll[]                    @relation("PayrollCancelledBy")
+  payrollsVoided                  Payroll[]                    @relation("PayrollVoidedBy")
+  manualExpensesRecorded          FinanceManualExpense[]       @relation("ManualExpenseRecordedBy")
+  manualExpensesVoided            FinanceManualExpense[]       @relation("ManualExpenseVoidedBy")
 
   @@map("users")
 }
@@ -301,6 +326,8 @@ model EquipmentWorkhourLog {
 
   subProjectEquipmentAllocation SubProjectEquipmentAllocation? @relation(fields: [subProjectEquipmentAllocationId], references: [id], onDelete: Restrict)
   equipmentPoolItem             EquipmentPoolItem?             @relation(fields: [equipmentPoolItemId], references: [id], onDelete: Restrict)
+  incomeItems                   IncomeRecordItem[]
+  claimItems                    EquipmentIncomeClaimItem[]
 
   @@index([equipmentItemId, workDate])
   @@index([workDate])
@@ -943,6 +970,7 @@ model ConstructionProject {
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
+  journalEntries  JournalEntry[]
 
   @@index([status])
   @@map("construction_projects")
@@ -974,6 +1002,8 @@ model ExternalRentalProject {
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
+  journalEntries  JournalEntry[]
+  incomeRecords   IncomeRecord[]
 
   @@index([status])
   @@map("external_rental_projects")
@@ -1002,6 +1032,8 @@ model ExternalSupplyProject {
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
+  journalEntries  JournalEntry[]
+  incomeRecords   IncomeRecord[]
 
   @@index([status])
   @@map("external_supply_projects")
@@ -1051,6 +1083,8 @@ model SubProject {
 
   fileFolders     ProjectFileFolder[]
   closingArchives ProjectClosingArchive[]
+  journalEntries  JournalEntry[]
+  incomeRecords   IncomeRecord[]
 
   // Satu construction project hanya boleh punya satu tahapan per tipe
   @@unique([constructionProjectId, subProjectType])
@@ -1609,16 +1643,19 @@ model File {
   trashedBy    Int?       @map("trashed_by")
   trashedAt    DateTime?  @map("trashed_at")
 
-  replacedBy     File?                           @relation("FileReplacedBy", fields: [replacedById], references: [id], onDelete: Restrict)
-  replaces       File?                           @relation("FileReplacedBy")
-  uploadedByUser User                            @relation("FileUploadedBy", fields: [uploadedBy], references: [id])
-  trashedByUser  User?                           @relation("FileTrashedBy", fields: [trashedBy], references: [id])
-  deliveryNoteOf MaterialDelivery?
-  receiptProofOf MaterialReceiptAttachment?
-  projectFile    ProjectFile?
-  closingArchive ProjectClosingArchive?
-  fieldReceiptOf FieldExpenseReceipt?
-  laborProofOf   FieldLaborWagePaymentProofFile?
+  replacedBy      File?                           @relation("FileReplacedBy", fields: [replacedById], references: [id], onDelete: Restrict)
+  replaces        File?                           @relation("FileReplacedBy")
+  uploadedByUser  User                            @relation("FileUploadedBy", fields: [uploadedBy], references: [id])
+  trashedByUser   User?                           @relation("FileTrashedBy", fields: [trashedBy], references: [id])
+  deliveryNoteOf  MaterialDelivery?
+  receiptProofOf  MaterialReceiptAttachment?
+  projectFile     ProjectFile?
+  closingArchive  ProjectClosingArchive?
+  fieldReceiptOf  FieldExpenseReceipt?
+  laborProofOf    FieldLaborWagePaymentProofFile?
+  incomePaymentOf IncomePaymentFile?
+  payrollProofOf  PayrollPaymentFile?
+  manualExpenseOf FinanceManualExpenseFile?
 
   @@index([status, trashedAt])
   @@map("files")
@@ -1799,6 +1836,7 @@ model MaterialReceipt {
   createdByUser    User                        @relation("MatReceiptCreatedBy", fields: [createdBy], references: [id])
   cancelledByUser  User?                       @relation("MatReceiptCancelledBy", fields: [cancelledBy], references: [id])
   attachments      MaterialReceiptAttachment[]
+  incomeItems      IncomeRecordItem[]
 
   @@unique([materialDeliveryId, cancelledAt])
   @@map("material_receipts")
@@ -2072,11 +2110,14 @@ model FieldOperationalRequestItem {
 
 /// Laporan realisasi: `validated` = sumber jurnal Beban Operasional Lapangan (GL,
 /// belum dibangun). Ditolak/dibatalkan = final; koreksi = lapor ulang.
+/// `voided` = dibatalkan SETELAH divalidasi (koreksi Finance, plan Finance F6): jurnalnya
+/// dibalik, jejak validasi tetap. Beda dengan `cancelled` (dibatalkan pelapor sebelum diputuskan).
 enum FieldExpenseReportStatus {
   submitted
   validated
   rejected
   cancelled
+  voided
 
   @@map("field_expense_report_status")
 }
@@ -2104,10 +2145,14 @@ model FieldExpenseReport {
   cancelledBy  Int?      @map("cancelled_by")
   cancelledAt  DateTime? @map("cancelled_at")
   cancelReason String?   @map("cancel_reason") @db.Text
+  voidedBy     Int?      @map("voided_by")
+  voidedAt     DateTime? @map("voided_at")
+  voidReason   String?   @map("void_reason") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  voidedByUser    User?                    @relation("FieldReportVoidedBy", fields: [voidedBy], references: [id], onDelete: Restrict)
   request         FieldOperationalRequest? @relation(fields: [fieldOperationalRequestId], references: [id], onDelete: Restrict)
   subProject      SubProject               @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
   submittedByUser User                     @relation("FieldReportSubmittedBy", fields: [submittedBy], references: [id])
@@ -2254,11 +2299,14 @@ model FieldLaborWageClaimItem {
 
 /// `validated` = klaim LUNAS dan sumber jurnal Beban Upah Harian Project (GL,
 /// belum dibangun). Ditolak/dibatalkan = final; unggah bukti baru.
+/// `voided` = dibatalkan setelah divalidasi (plan Finance F6); klaimnya kembali "approved
+/// tanpa bukti sah" dan Lapangan mengunggah bukti baru.
 enum LaborPaymentProofStatus {
   submitted
   validated
   rejected
   cancelled
+  voided
 
   @@map("labor_payment_proof_status")
 }
@@ -2283,10 +2331,14 @@ model FieldLaborWagePaymentProof {
   cancelledBy  Int?      @map("cancelled_by")
   cancelledAt  DateTime? @map("cancelled_at")
   cancelReason String?   @map("cancel_reason") @db.Text
+  voidedBy     Int?      @map("voided_by")
+  voidedAt     DateTime? @map("voided_at")
+  voidReason   String?   @map("void_reason") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  voidedByUser    User?                            @relation("WageProofVoidedBy", fields: [voidedBy], references: [id], onDelete: Restrict)
   claim           FieldLaborWageClaim              @relation(fields: [fieldLaborWageClaimId], references: [id], onDelete: Restrict)
   submittedByUser User                             @relation("WageProofSubmittedBy", fields: [submittedBy], references: [id])
   validatedByUser User?                            @relation("WageProofValidatedBy", fields: [validatedBy], references: [id], onDelete: Restrict)
@@ -2310,4 +2362,579 @@ model FieldLaborWagePaymentProofFile {
 
   @@index([fieldLaborWagePaymentProofId])
   @@map("field_labor_wage_payment_proof_files")
+}
+
+// ============================================================
+// FINANCE ACCOUNTING / GL — docs/claude_knowledge/plan-divisi-finance.md (G1)
+// Jurnal HANYA lahir dari aksi sumber lewat finance-accounting/journal.service.js
+// (postJournal / reverseJournal). Tidak ada input debit-kredit bebas (ERD, F2).
+// ============================================================
+
+/// Saldo normal TIDAK disimpan: asset/expense = debit, liability/equity/revenue = kredit.
+enum AccountType {
+  asset
+  liability
+  equity
+  revenue
+  expense
+
+  @@map("account_type")
+}
+
+/// Daftar akun dari SEEDER saja (F4) — kode program merujuk `account_code` lewat
+/// konstanta di finance-accounting/accounts.js. Datar, tanpa parent & is_postable:
+/// semua akun bisa diposting, pengelompokan dari awalan kode.
+model ChartOfAccount {
+  id          Int         @id @default(autoincrement())
+  accountCode String      @unique @map("account_code") @db.VarChar(20)
+  accountName String      @unique @map("account_name") @db.VarChar(150)
+  accountType AccountType @map("account_type")
+  description String?     @db.Text
+  isActive    Boolean     @default(true) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  lines JournalEntryLine[]
+
+  @@map("chart_of_accounts")
+}
+
+/// Dokumen sumber jurnal. Nilai untuk modul yang belum dibangun sengaja sudah ada
+/// (kontrak swagger beku) supaya tidak perlu ALTER TYPE per fase.
+enum JournalSourceType {
+  income_record
+  income_payment
+  equipment_income_claim
+  material_request
+  field_expense_report
+  labor_payment_proof
+  payroll
+  manual_expense
+  journal_adjustment
+  opening_balance
+
+  @@map("journal_source_type")
+}
+
+/// Satu jurnal = satu kejadian sumber. Immutable: tanpa updated_at, tanpa status.
+/// - "jurnal balik" = `reversal_of_journal_entry_id` terisi (unique: dibalik sekali);
+///   "sudah dibalik" = ada jurnal yang menunjuknya. entry_type/posting_status ERD dibuang.
+/// - Satu jurnal NON-balik per sumber (partial unique di migrasi), kecuali
+///   `journal_adjustment` yang boleh berkali-kali per jurnal asal (sourceId = jurnal asal).
+/// - `journal_date` = tanggal bisnis sumber; bulan tertutup ditolak (F3b).
+/// - Konteks project disalin dari sumber (F24) — keduanya tidak pernah berubah, jadi
+///   salinan ini tidak bisa menyimpang. Tahapan wajib bersama project-nya (composite FK).
+model JournalEntry {
+  id                       Int               @id @default(autoincrement())
+  journalCode              String            @unique @map("journal_code") @db.VarChar(50)
+  journalDate              DateTime          @map("journal_date") @db.Date
+  sourceType               JournalSourceType @map("source_type")
+  sourceId                 Int               @map("source_id")
+  description              String            @db.Text
+  reversalOfJournalEntryId Int?              @unique @map("reversal_of_journal_entry_id")
+
+  constructionProjectId   Int? @map("construction_project_id")
+  subProjectId            Int? @map("sub_project_id")
+  externalRentalProjectId Int? @map("external_rental_project_id")
+  externalSupplyProjectId Int? @map("external_supply_project_id")
+
+  createdBy Int      @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  reversalOf            JournalEntry?          @relation("JournalReversal", fields: [reversalOfJournalEntryId], references: [id], onDelete: Restrict)
+  reversedBy            JournalEntry?          @relation("JournalReversal")
+  constructionProject   ConstructionProject?   @relation(fields: [constructionProjectId], references: [id], onDelete: Restrict)
+  subProject            SubProject?            @relation(fields: [subProjectId, constructionProjectId], references: [id, constructionProjectId], onDelete: Restrict)
+  externalRentalProject ExternalRentalProject? @relation(fields: [externalRentalProjectId], references: [id], onDelete: Restrict)
+  externalSupplyProject ExternalSupplyProject? @relation(fields: [externalSupplyProjectId], references: [id], onDelete: Restrict)
+  createdByUser         User                   @relation("JournalCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  lines                 JournalEntryLine[]
+
+  @@index([journalDate])
+  @@index([sourceType, sourceId])
+  @@index([constructionProjectId])
+  @@index([subProjectId])
+  @@index([externalRentalProjectId])
+  @@index([externalSupplyProjectId])
+  @@map("journal_entries")
+}
+
+/// Tepat satu sisi > 0 per baris (CHECK). Σ debit = Σ kredit per jurnal dijaga
+/// postJournal — satu-satunya penulis tabel ini.
+model JournalEntryLine {
+  id             Int     @id @default(autoincrement())
+  journalEntryId Int     @map("journal_entry_id")
+  accountId      Int     @map("account_id")
+  debit          Decimal @default(0) @db.Decimal(18, 2)
+  credit         Decimal @default(0) @db.Decimal(18, 2)
+  description    String? @db.Text
+
+  journalEntry JournalEntry   @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  account      ChartOfAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@map("journal_entry_lines")
+}
+
+/// Tutup buku bulanan (F3b). Status bulan DITURUNKAN: tertutup = ada baris yang
+/// belum dibuka kembali (partial unique per bulan di migrasi). Buka kembali tidak
+/// menghapus baris — riwayatnya tetap.
+model AccountingPeriodClosing {
+  id           Int       @id @default(autoincrement())
+  periodYear   Int       @map("period_year")
+  periodMonth  Int       @map("period_month")
+  notes        String?   @db.Text
+  closedBy     Int       @map("closed_by")
+  closedAt     DateTime  @default(now()) @map("closed_at")
+  reopenedBy   Int?      @map("reopened_by")
+  reopenedAt   DateTime? @map("reopened_at")
+  reopenReason String?   @map("reopen_reason") @db.Text
+
+  closedByUser   User  @relation("PeriodClosedBy", fields: [closedBy], references: [id], onDelete: Restrict)
+  reopenedByUser User? @relation("PeriodReopenedBy", fields: [reopenedBy], references: [id], onDelete: Restrict)
+
+  @@index([periodYear, periodMonth])
+  @@map("accounting_period_closings")
+}
+
+// ============================================================
+// INCOME — tagihan klien + pembayaran (docs/claude_knowledge/plan-divisi-finance.md G2, F10–F18)
+// ============================================================
+
+/// `submitted` = langsung antre Finance (tanpa draf, ERD). `voided` = dibatalkan setelah
+/// diverifikasi, jurnal piutang dibalik (F6). Ditolak/dibatal = final, buat record baru.
+/// Status bayar TIDAK disimpan — unpaid/partially_paid/paid dihitung dari pembayaran.
+enum IncomeRecordStatus {
+  submitted
+  verified
+  rejected
+  cancelled
+  voided
+
+  @@map("income_record_status")
+}
+
+/// Satu tagihan = SATU konteks (tahapan konstruksi XOR kontrak rental XOR kontrak supply,
+/// CHECK) × satu periode (F10). Jenis terbaca dari FK yang terisi — tanpa diskriminator.
+///
+/// Konstruksi (F11): tanpa item; snapshot volume kumulatif awal/akhir + target & nilai
+/// kontrak saat ditagih (CHECK: terisi tepat untuk konstruksi). Nominal =
+/// (to − from) / target × nilai kontrak, dihitung SQL saat dibaca.
+/// Rental/supply: item per log jam kerja / penerimaan dengan tarif snapshot.
+/// Total & terbayar TIDAK disimpan. Income sengaja TIDAK memanggil assertContextOpen (F18):
+/// tagihan termin akhir dibuat setelah tahapan/kontrak selesai, dan income hanya membaca
+/// fakta yang sudah beku.
+model IncomeRecord {
+  id                      Int                @id @default(autoincrement())
+  incomeCode              String             @unique @map("income_code") @db.VarChar(50)
+  subProjectId            Int?               @map("sub_project_id")
+  externalRentalProjectId Int?               @map("external_rental_project_id")
+  externalSupplyProjectId Int?               @map("external_supply_project_id")
+  periodStart             DateTime           @map("period_start") @db.Date
+  periodEnd               DateTime           @map("period_end") @db.Date
+  notes                   String?            @db.Text
+  status                  IncomeRecordStatus @default(submitted)
+
+  progressVolumeFrom    Decimal? @map("progress_volume_from") @db.Decimal(18, 2)
+  progressVolumeTo      Decimal? @map("progress_volume_to") @db.Decimal(18, 2)
+  targetVolumeSnapshot  Decimal? @map("target_volume_snapshot") @db.Decimal(18, 2)
+  contractValueSnapshot Decimal? @map("contract_value_snapshot") @db.Decimal(18, 2)
+
+  createdBy    Int       @map("created_by")
+  verifiedBy   Int?      @map("verified_by")
+  verifiedAt   DateTime? @map("verified_at")
+  financeNotes String?   @map("finance_notes") @db.Text
+  cancelledBy  Int?      @map("cancelled_by")
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?   @map("cancel_reason") @db.Text
+  voidedBy     Int?      @map("voided_by")
+  voidedAt     DateTime? @map("voided_at")
+  voidReason   String?   @map("void_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subProject            SubProject?            @relation(fields: [subProjectId], references: [id], onDelete: Restrict)
+  externalRentalProject ExternalRentalProject? @relation(fields: [externalRentalProjectId], references: [id], onDelete: Restrict)
+  externalSupplyProject ExternalSupplyProject? @relation(fields: [externalSupplyProjectId], references: [id], onDelete: Restrict)
+  createdByUser         User                   @relation("IncomeCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  verifiedByUser        User?                  @relation("IncomeVerifiedBy", fields: [verifiedBy], references: [id], onDelete: Restrict)
+  cancelledByUser       User?                  @relation("IncomeCancelledBy", fields: [cancelledBy], references: [id], onDelete: Restrict)
+  voidedByUser          User?                  @relation("IncomeVoidedBy", fields: [voidedBy], references: [id], onDelete: Restrict)
+  items                 IncomeRecordItem[]
+  payments              IncomePayment[]
+
+  @@index([subProjectId, status])
+  @@index([externalRentalProjectId, status])
+  @@index([externalSupplyProjectId, status])
+  @@index([status])
+  @@map("income_records")
+}
+
+/// Satu baris sumber yang ditagih: log jam kerja rental XOR penerimaan supply (CHECK).
+/// Jam/kuantitas dibaca dari sumbernya (sumber dikunci selama record aktif, jadi stabil);
+/// tarif disnapshot. `rate_notes` wajib bila tarif ≠ tarif default unit (validator).
+/// Satu sumber hanya di satu record AKTIF (submitted/verified) — dijaga service di bawah
+/// kunci FOR UPDATE baris sumber, pola klaim upah.
+model IncomeRecordItem {
+  id                     Int      @id @default(autoincrement())
+  incomeRecordId         Int      @map("income_record_id")
+  equipmentWorkhourLogId Int?     @map("equipment_workhour_log_id")
+  materialReceiptId      Int?     @map("material_receipt_id")
+  unitRate               Decimal  @map("unit_rate") @db.Decimal(18, 2)
+  rateNotes              String?  @map("rate_notes") @db.Text
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  incomeRecord         IncomeRecord               @relation(fields: [incomeRecordId], references: [id], onDelete: Cascade)
+  claimItems           EquipmentIncomeClaimItem[]
+  equipmentWorkhourLog EquipmentWorkhourLog?      @relation(fields: [equipmentWorkhourLogId], references: [id], onDelete: Restrict)
+  materialReceipt      MaterialReceipt?           @relation(fields: [materialReceiptId], references: [id], onDelete: Restrict)
+
+  @@unique([incomeRecordId, equipmentWorkhourLogId])
+  @@unique([incomeRecordId, materialReceiptId])
+  @@index([equipmentWorkhourLogId])
+  @@index([materialReceiptId])
+  @@map("income_record_items")
+}
+
+enum IncomePaymentMethod {
+  transfer
+  cash
+  giro
+  other
+
+  @@map("income_payment_method")
+}
+
+/// Pembayaran klien dicatat Finance = langsung sah + jurnal (F15). Tanpa kolom status:
+/// pembatalan = voided_* (pola Kas Alat). PPh/potongan klien belum ditangani (F16).
+model IncomePayment {
+  id              Int                  @id @default(autoincrement())
+  paymentCode     String               @unique @map("payment_code") @db.VarChar(50)
+  incomeRecordId  Int                  @map("income_record_id")
+  paymentDate     DateTime             @map("payment_date") @db.Date
+  amount          Decimal              @db.Decimal(18, 2)
+  payerName       String?              @map("payer_name") @db.VarChar(150)
+  paymentMethod   IncomePaymentMethod? @map("payment_method")
+  referenceNumber String?              @map("reference_number") @db.VarChar(100)
+  notes           String?              @db.Text
+
+  recordedBy Int       @map("recorded_by")
+  voidedBy   Int?      @map("voided_by")
+  voidedAt   DateTime? @map("voided_at")
+  voidReason String?   @map("void_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  incomeRecord   IncomeRecord        @relation(fields: [incomeRecordId], references: [id], onDelete: Restrict)
+  recordedByUser User                @relation("IncomePaymentRecordedBy", fields: [recordedBy], references: [id], onDelete: Restrict)
+  voidedByUser   User?               @relation("IncomePaymentVoidedBy", fields: [voidedBy], references: [id], onDelete: Restrict)
+  files          IncomePaymentFile[]
+
+  @@index([incomeRecordId])
+  @@index([paymentDate])
+  @@map("income_payments")
+}
+
+/// Bukti bayar klien, 0–10 per pembayaran — lewat `files` + storage.service.
+model IncomePaymentFile {
+  id              Int      @id @default(autoincrement())
+  incomePaymentId Int      @map("income_payment_id")
+  fileId          Int      @unique @map("file_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  payment IncomePayment @relation(fields: [incomePaymentId], references: [id], onDelete: Restrict)
+  file    File          @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([incomePaymentId])
+  @@map("income_payment_files")
+}
+
+// ============================================================
+// KLAIM PENDAPATAN ALAT — Divisi Alat → Finance (plan-divisi-finance.md G4, F19–F23)
+// ============================================================
+
+/// Tanpa tahap Admin (ERD). `approved` = cash-in Kas Alat + jurnal alokasi, final (F23:
+/// tidak bisa diubah/dibatalkan). Ditolak = final, log terbuka lagi untuk klaim berikutnya.
+enum EquipmentIncomeClaimStatus {
+  submitted
+  approved
+  rejected
+  cancelled
+
+  @@map("equipment_income_claim_status")
+}
+
+/// Klaim = rentang tanggal; SEMUA jam kerja layak dalam rentang ikut utuh (F22). Total &
+/// jam tidak disimpan. claim_type / total_* / status_logs ERD tidak dibuat.
+model EquipmentIncomeClaim {
+  id          Int                        @id @default(autoincrement())
+  claimCode   String                     @unique @map("claim_code") @db.VarChar(50)
+  periodStart DateTime                   @map("period_start") @db.Date
+  periodEnd   DateTime                   @map("period_end") @db.Date
+  notes       String?                    @db.Text
+  status      EquipmentIncomeClaimStatus @default(submitted)
+
+  submittedBy       Int       @map("submitted_by")
+  financeReviewedBy Int?      @map("finance_reviewed_by")
+  financeReviewedAt DateTime? @map("finance_reviewed_at")
+  financeNotes      String?   @map("finance_notes") @db.Text
+  cancelledBy       Int?      @map("cancelled_by")
+  cancelledAt       DateTime? @map("cancelled_at")
+  cancelReason      String?   @map("cancel_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  submittedByUser       User                       @relation("EquipmentClaimSubmittedBy", fields: [submittedBy], references: [id], onDelete: Restrict)
+  financeReviewedByUser User?                      @relation("EquipmentClaimReviewedBy", fields: [financeReviewedBy], references: [id], onDelete: Restrict)
+  cancelledByUser       User?                      @relation("EquipmentClaimCancelledBy", fields: [cancelledBy], references: [id], onDelete: Restrict)
+  items                 EquipmentIncomeClaimItem[]
+
+  @@index([status])
+  @@index([submittedBy])
+  @@map("equipment_income_claims")
+}
+
+/// Satu log jam kerja per baris. Jam dibaca dari log (log terkunci selama klaim aktif);
+/// tarif disnapshot: rental = tarif item tagihan (100%, F21), konstruksi = tarif default
+/// unit saat klaim (F19). `income_record_item_id` hanya untuk rental (CHECK di service).
+/// Satu log hanya di satu klaim submitted/approved — dijaga service di bawah kunci FOR UPDATE log.
+model EquipmentIncomeClaimItem {
+  id                     Int      @id @default(autoincrement())
+  equipmentIncomeClaimId Int      @map("equipment_income_claim_id")
+  equipmentWorkhourLogId Int      @map("equipment_workhour_log_id")
+  incomeRecordItemId     Int?     @map("income_record_item_id")
+  hourlyRate             Decimal  @map("hourly_rate") @db.Decimal(18, 2)
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  claim                EquipmentIncomeClaim @relation(fields: [equipmentIncomeClaimId], references: [id], onDelete: Restrict)
+  equipmentWorkhourLog EquipmentWorkhourLog @relation(fields: [equipmentWorkhourLogId], references: [id], onDelete: Restrict)
+  incomeRecordItem     IncomeRecordItem?    @relation(fields: [incomeRecordItemId], references: [id], onDelete: Restrict)
+
+  @@unique([equipmentIncomeClaimId, equipmentWorkhourLogId])
+  @@index([equipmentWorkhourLogId])
+  @@index([incomeRecordItemId])
+  @@map("equipment_income_claim_items")
+}
+
+// ============================================================
+// PAYROLL KARYAWAN TETAP (G6) — docs/claude_knowledge/plan-divisi-finance.md F26–F29, 3c.
+// Pekerja harian/kontrak tahapan BUKAN di sini (project_workers).
+// ============================================================
+
+/// Master karyawan tetap, dikelola Admin. Aktif DITURUNKAN dari `end_date` (null atau ≥ hari
+/// ini) — tanpa kolom status (3c). `department` = konstanta validator (kantor, finance,
+/// divisi_alat, lapangan), belum enum database (F26). Rekening = acuan transfer di luar sistem.
+/// Nominal gaji TIDAK di sini (compensation:read, F29).
+model Employee {
+  id            Int       @id @default(autoincrement())
+  employeeCode  String    @unique @map("employee_code") @db.VarChar(20)
+  fullName      String    @map("full_name") @db.VarChar(150)
+  department    String    @db.VarChar(30)
+  positionName  String?   @map("position_name") @db.VarChar(100)
+  joinDate      DateTime  @map("join_date") @db.Date
+  endDate       DateTime? @map("end_date") @db.Date
+  endReason     String?   @map("end_reason") @db.Text
+  bankName      String?   @map("bank_name") @db.VarChar(100)
+  accountNumber String?   @map("account_number") @db.VarChar(50)
+  accountName   String?   @map("account_name") @db.VarChar(150)
+  notes         String?   @db.Text
+  createdBy     Int       @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  createdByUser User                   @relation("EmployeeCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  user          User?                  @relation("UserEmployee")
+  compensations EmployeeCompensation[]
+  payrollItems  PayrollItem[]
+
+  @@index([fullName])
+  @@map("employees")
+}
+
+/// Riwayat gaji pokok. Tanpa tanggal akhir & tanpa status (3c): gaji berlaku pada suatu
+/// tanggal = baris dengan `effective_start_date` terbaru ≤ tanggal itu. Immutable — kenaikan
+/// gaji = baris baru; tidak ada endpoint ubah/hapus.
+model EmployeeCompensation {
+  id                 Int      @id @default(autoincrement())
+  employeeId         Int      @map("employee_id")
+  baseSalary         Decimal  @map("base_salary") @db.Decimal(18, 2)
+  effectiveStartDate DateTime @map("effective_start_date") @db.Date
+  notes              String?  @db.Text
+  createdBy          Int      @map("created_by")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  employee      Employee      @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdByUser User          @relation("CompensationCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  payrollItems  PayrollItem[]
+
+  @@unique([employeeId, effectiveStartDate])
+  @@map("employee_compensations")
+}
+
+/// `corrected` ERD diganti `voided` + payroll pengganti (F6).
+enum PayrollStatus {
+  draft
+  finalized
+  paid
+  cancelled
+  voided
+
+  @@map("payroll_status")
+}
+
+enum PayrollComponentType {
+  earning
+  deduction
+
+  @@map("payroll_component_type")
+}
+
+/// Satu payroll aktif (selain cancelled/voided) per bulan — partial unique di migrasi.
+/// Tanpa tabel periode & tanpa total tersimpan (3c): total dihitung dari komponen.
+/// Jurnal Dr Beban Gaji / Cr Kas bertanggal `payment_date` saat `paid` (F3b).
+/// Pengganti payroll yang di-void menunjuk yang digantikan lewat `replaces_payroll_id`.
+model Payroll {
+  id                Int           @id @default(autoincrement())
+  payrollCode       String        @unique @map("payroll_code") @db.VarChar(50)
+  payrollYear       Int           @map("payroll_year")
+  payrollMonth      Int           @map("payroll_month")
+  status            PayrollStatus @default(draft)
+  notes             String?       @db.Text
+  replacesPayrollId Int?          @map("replaces_payroll_id")
+
+  createdBy        Int       @map("created_by")
+  finalizedBy      Int?      @map("finalized_by")
+  finalizedAt      DateTime? @map("finalized_at")
+  paidBy           Int?      @map("paid_by")
+  paidAt           DateTime? @map("paid_at")
+  paymentDate      DateTime? @map("payment_date") @db.Date
+  paymentReference String?   @map("payment_reference") @db.VarChar(100)
+  paymentNotes     String?   @map("payment_notes") @db.Text
+  cancelledBy      Int?      @map("cancelled_by")
+  cancelledAt      DateTime? @map("cancelled_at")
+  cancelReason     String?   @map("cancel_reason") @db.Text
+  voidedBy         Int?      @map("voided_by")
+  voidedAt         DateTime? @map("voided_at")
+  voidReason       String?   @map("void_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  replacesPayroll Payroll?             @relation("PayrollReplaces", fields: [replacesPayrollId], references: [id], onDelete: Restrict)
+  replacedBy      Payroll[]            @relation("PayrollReplaces")
+  createdByUser   User                 @relation("PayrollCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  finalizedByUser User?                @relation("PayrollFinalizedBy", fields: [finalizedBy], references: [id], onDelete: Restrict)
+  paidByUser      User?                @relation("PayrollPaidBy", fields: [paidBy], references: [id], onDelete: Restrict)
+  cancelledByUser User?                @relation("PayrollCancelledBy", fields: [cancelledBy], references: [id], onDelete: Restrict)
+  voidedByUser    User?                @relation("PayrollVoidedBy", fields: [voidedBy], references: [id], onDelete: Restrict)
+  items           PayrollItem[]
+  files           PayrollPaymentFile[]
+
+  @@index([payrollYear, payrollMonth])
+  @@index([status])
+  @@index([replacesPayrollId])
+  @@map("payrolls")
+}
+
+/// Satu karyawan per payroll. Gaji pokok = komponen `is_system` yang dibuat dari
+/// `compensation_id` (tanpa snapshot terpisah, 3c). Dihapus hanya oleh regenerate saat draft.
+model PayrollItem {
+  id             Int      @id @default(autoincrement())
+  payrollId      Int      @map("payroll_id")
+  employeeId     Int      @map("employee_id")
+  compensationId Int      @map("compensation_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  payroll      Payroll                @relation(fields: [payrollId], references: [id], onDelete: Restrict)
+  employee     Employee               @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  compensation EmployeeCompensation   @relation(fields: [compensationId], references: [id], onDelete: Restrict)
+  components   PayrollItemComponent[]
+
+  @@unique([payrollId, employeeId])
+  @@index([employeeId])
+  @@index([compensationId])
+  @@map("payroll_items")
+}
+
+/// Komponen gaji per karyawan (F27): satu "Gaji Pokok" `is_system` (earning, terkunci;
+/// partial unique di migrasi) + baris manual tambahan/potongan selama draft.
+model PayrollItemComponent {
+  id            Int                  @id @default(autoincrement())
+  payrollItemId Int                  @map("payroll_item_id")
+  componentType PayrollComponentType @map("component_type")
+  componentName String               @map("component_name") @db.VarChar(100)
+  amount        Decimal              @db.Decimal(18, 2)
+  isSystem      Boolean              @default(false) @map("is_system")
+  notes         String?              @db.Text
+  createdAt     DateTime             @default(now()) @map("created_at")
+
+  payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id], onDelete: Cascade)
+
+  @@index([payrollItemId])
+  @@map("payroll_item_components")
+}
+
+/// Bukti transfer gaji, 0–10 per payroll — lewat `files` + storage.service.
+model PayrollPaymentFile {
+  id        Int      @id @default(autoincrement())
+  payrollId Int      @map("payroll_id")
+  fileId    Int      @unique @map("file_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  payroll Payroll @relation(fields: [payrollId], references: [id], onDelete: Restrict)
+  file    File    @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([payrollId])
+  @@map("payroll_payment_files")
+}
+
+// ============================================================
+// PENGELUARAN MANUAL FINANCE (G8) — docs/claude_knowledge/plan-divisi-finance.md F9, 3b.
+// ============================================================
+
+/// Pengeluaran Finance yang belum punya modul sendiri. Tanpa status & tanpa draf: dibuat = sah +
+/// jurnal Dr Beban Pengeluaran Manual / Cr Kas bertanggal `expense_date` (F3b). Pembatalan =
+/// `voided_*` + jurnal balik hari ini (F6). Metode bayar memakai enum yang sama dengan pembayaran klien.
+model FinanceManualExpense {
+  id            Int                  @id @default(autoincrement())
+  expenseCode   String               @unique @map("expense_code") @db.VarChar(50)
+  expenseDate   DateTime             @map("expense_date") @db.Date
+  amount        Decimal              @db.Decimal(18, 2)
+  payeeName     String?              @map("payee_name") @db.VarChar(150)
+  paymentMethod IncomePaymentMethod? @map("payment_method")
+  description   String               @db.Text
+  reason        String               @db.Text
+
+  recordedBy Int       @map("recorded_by")
+  voidedBy   Int?      @map("voided_by")
+  voidedAt   DateTime? @map("voided_at")
+  voidReason String?   @map("void_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  recordedByUser User                       @relation("ManualExpenseRecordedBy", fields: [recordedBy], references: [id], onDelete: Restrict)
+  voidedByUser   User?                      @relation("ManualExpenseVoidedBy", fields: [voidedBy], references: [id], onDelete: Restrict)
+  files          FinanceManualExpenseFile[]
+
+  @@index([expenseDate])
+  @@map("finance_manual_expenses")
+}
+
+/// Lampiran WAJIB 1–10 per pengeluaran (dijaga service + middleware) — lewat `files` + storage.service.
+model FinanceManualExpenseFile {
+  id                     Int      @id @default(autoincrement())
+  financeManualExpenseId Int      @map("finance_manual_expense_id")
+  fileId                 Int      @unique @map("file_id")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  expense FinanceManualExpense @relation(fields: [financeManualExpenseId], references: [id], onDelete: Restrict)
+  file    File                 @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([financeManualExpenseId])
+  @@map("finance_manual_expense_files")
 }

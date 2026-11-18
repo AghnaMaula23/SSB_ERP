@@ -898,7 +898,41 @@ Rute `#/finance/*`, kartu Divisi Finance aktif untuk pemegang `*:approve` Financ
 - **Chart of Accounts, General Ledger, Verifikasi Pendapatan** — "Soon": `/api/finance-accounting` dan `/api/income`
   belum dibangun. Sepakati kontraknya dulu sebelum layar dibuat (aturan E21).
 
-## E32. Finance lengkap (data contoh), Supply Lapangan, manajemen akun, keuangan project (16 November 2026)
+## E32. Kontrak Divisi Finance beku (16 November 2026)
+
+Rencana: `docs/claude_knowledge/plan-divisi-finance.md` (keputusan F1–F29, Q1–Q3). Kontrak di Swagger: tag
+*Income Records*, *Income Payments*, *Equipment Income Claims*, *Chart of Accounts*, *Journal Entries*,
+*Accounting Periods*, *Manual Expenses*, *Employees*, *Payroll*. Path lama `/api/income/*`,
+`/api/finance-accounting/*`, `/api/payroll/*` **dihapus** — jangan dipakai. Layar dibangun setelah backend
+fasenya ter-deploy; tanpa mock (aturan E21).
+
+**MEMUTUS FE (kecil, aditif):**
+- Status baru `voided` ("Dibatalkan setelah sah") pada laporan realisasi (`/field-expense-reports`) dan bukti bayar
+  upah (`/labor-payment-proofs`), plus `PUT /:id/void { reason }` (Finance). Daftar & badge status perlu label ini.
+- Laporan realisasi & bukti bayar upah bertanggal di bulan buku yang sudah ditutup → 409; tampilkan pesannya.
+- Cabut validasi progress, batal jam kerja, dan batal penerimaan supply bisa 409 kalau barisnya sudah ditagih
+  (income record aktif) atau diklaim alat — tampilkan pesannya.
+
+**Catatan G2 (17 Nov):** folder sistem kini bisa muncul di project **rental** (`income-payment-proofs`
+"Bukti Bayar Klien") — layar Files rental perlu menampilkan folder sistem seperti konstruksi/supply.
+
+**Mock yang akan diganti** (bagian 7 rencana): `admin/income/services/incomeService.js`,
+`incomeSourceService.js` (form tidak lagi menebak tarif & volume — pakai `GET /income-records/billable`),
+`alat/services/incomeClaimService.js`. Form income konstruksi hanya berisi progress (tanpa baris alat/material, F19).
+
+## E33. Kode pembayaran klien `PAY-` (17 November 2026)
+
+**MEMUTUS FE (kecil):** kode pembayaran klien (`/api/income-payments`, field `paymentCode`) berubah dari
+`RCV-NNNNNN` menjadi **`PAY-NNNNNN`**. `RCV-` tetap milik penerimaan material (`/api/material-receipts`).
+Alasan: keduanya berbagi satu counter sehingga nomornya ambigu (plan Finance bagian 8a). Yang perlu dicek di FE:
+placeholder/contoh kode, filter atau pencarian yang mengandalkan awalan `RCV`, dan label jenis dokumen yang
+ditebak dari awalan kode (pakai `source.type` dari jurnal, bukan awalan).
+
+## E34. Finance lengkap (data contoh), Supply Lapangan, manajemen akun, keuangan project (16 November 2026)
+
+> Dinomori ulang dari E32 saat merge `ssb_webtest` → `module/finance` (18 Nov 2026): nomor E32 sudah dipakai
+> "Kontrak Divisi Finance beku". **Bertentangan dengan E32/aturan kontrak beku butir 4**: data contoh
+> `financeMockService.js` harus diganti endpoint asli (backend G1–G8 sudah ada) — lihat E35.
 
 - **Finance** — Gaji Bulanan Staf, Chart of Accounts, General Ledger (+ jurnal manual), dan Verifikasi Pendapatan kini
   berisi **data contoh** (`modules/finance/services/financeMockService.js`, kunci `finance_mock_*`, dibersihkan saat sign out).
@@ -912,3 +946,35 @@ Rute `#/finance/*`, kartu Divisi Finance aktif untuk pemegang `*:approve` Financ
 - **Files → Keuangan Project** (`admin/files/:type/:id/keuangan`) — pengeluaran nyata per project (request material
   approved, laporan kas lapangan tervalidasi, klaim upah approved) dan pemasukan dari Income (data contoh). Rental belum
   punya pengeluaran per kontrak di backend.
+
+## E35. Layar Finance wajib pindah dari data contoh ke API asli (18 November 2026)
+
+> **SELESAI 18 Nov 2026** (module/finance): semua baris tabel di bawah sudah dikerjakan — mock Finance, Income Admin, dan klaim
+> Divisi Alat dihapus; layar baru: Pengeluaran Manual, Tutup Buku, Buku Besar & Neraca Saldo, Master Karyawan (Admin),
+> tautan karyawan di form akun. Jurnal manual diganti Pengeluaran Manual (F2); COA bisa dikelola (E36).
+
+Backend Divisi Finance G1–G8 sudah ada di `module/finance` (kontrak swagger E32/E33). Layar dari E34 masih
+memakai `modules/finance/services/financeMockService.js` dan `admin/income/services/incomeService.js`
+(localStorage) — melanggar aturan kontrak beku butir 4 (tanpa mock). Selain itu ada **ketidaksesuaian
+model** yang tidak bisa diselesaikan hanya dengan mengganti isi fungsi:
+
+| Layar / fungsi mock | Kontrak backend | Yang harus berubah di FE |
+|---|---|---|
+| `JournalFormPage` + `postJournal` (jurnal manual) | **Tidak ada input jurnal bebas** (F2): jurnal lahir dari aksi sumber | Hapus form jurnal manual. Pengeluaran di luar modul = `POST /api/manual-expenses` (multipart, lampiran wajib 1–10); selisih request material = `POST /api/journal-entries/:id/adjustments` |
+| `ChartOfAccountsPage` + `saveAccount` | COA **baca saja** dari seeder (F4), `GET /api/chart-of-accounts` | Hapus form tambah/ubah akun |
+| Kode akun `4-1001/4-1002/4-1003` (`REVENUE_ACCOUNT`) | `4-1100` konstruksi, `4-1200` rental, `4-1300` supply | Jangan tebak akun di FE — jurnal & akun dibaca dari API |
+| `GeneralLedgerPage` + `listJournals` | `GET /api/journal-entries`, `GET /api/general-ledger/accounts/:id?startDate&endDate`, `GET /api/general-ledger/trial-balance?date=` | Ganti sumber data; saldo sudah dihitung backend |
+| `StaffPayrollTab` (`baseSalary + allowance − deduction`, bayar per karyawan) | `/api/employees` (Admin), `/api/employee-compensations` (Finance), `/api/payrolls` per BULAN: draft → komponen manual → finalize → pay (multipart `proofs`) → void | Tunjangan/potongan = komponen manual per karyawan di payroll draft; bayar sekali per payroll bulanan, bukan per karyawan. Kolom gaji tampil menurut permission `compensation:read`/`payroll:read` |
+| `RevenueVerificationPage` + `journalIncome` + `incomeService.js` (`REV-…`) | `/api/income-records` (verify/reject/void menjurnal sendiri), `/api/income-payments` (`PAY-`), form Admin pakai `GET /income-records/billable` | Hapus `journalIncome`; Verifikasi Pendapatan = aksi `PUT /income-records/:id/verify|reject` |
+| `listAlatIncome`/`decideAlatIncome` | `/api/equipment-income-claims` (approve/reject Finance) | Ganti sumber data |
+| Files → Keuangan Project, pemasukan "data contoh" | `GET /api/income-records?subProjectId|externalRentalProjectId|externalSupplyProjectId` | Ganti sumber pemasukan |
+
+Setelah semua layar pindah: hapus `financeMockService.js`, kunci `finance_mock_*`, dan `admin_mock_income_records`
+(termasuk pembersihnya di `services/auth.js`). Endpoint baru `PUT /api/users/:id` (manajemen akun, E34) diterima
+dan sudah tercatat di swagger.
+
+## E36. COA bisa dikelola Finance (18 November 2026)
+
+Aditif: `POST /api/chart-of-accounts` (`coa:create`) dan `PUT /api/chart-of-accounts/:id` (`coa:update`), plus field
+`isSystem` di daftar akun. Akun sistem (dipakai jurnal otomatis) tidak bisa diubah — tampilkan terkunci. Kode & jenis
+akun terkunci begitu akun dipakai jurnal (409); tidak ada hapus, hanya nonaktifkan. Plan Finance 8a.

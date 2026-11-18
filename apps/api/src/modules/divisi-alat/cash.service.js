@@ -570,10 +570,35 @@ const recordPurchaseRequestCashOut = async (tx, purchaseRequest, userId) => {
   });
 };
 
+/**
+ * Cash-in saat Finance menyetujui klaim pendapatan alat (plan Finance F22). Kategori tetap
+ * "Alokasi Dana dari Klaim Pendapatan" (seeder), nominal = total klaim yang disetujui.
+ * Unique (sourceType, sourceId) menjamin satu klaim satu baris kas.
+ */
+const INCOME_CLAIM_CATEGORY = 'Alokasi Dana dari Klaim Pendapatan';
+
+const recordIncomeClaimCashIn = async (tx, claim, amount, userId) => {
+  const category = assertCategoryUsable(
+    await tx.equipmentCashCategory.findUnique({
+      where: { categoryName_transactionType: { categoryName: INCOME_CLAIM_CATEGORY, transactionType: 'cash_in' } },
+    }),
+    'klaim pendapatan alat'
+  );
+  return createSystemTransaction(tx, {
+    category,
+    transactionType: 'cash_in',
+    amount,
+    sourceType: 'equipment_income_claim',
+    sourceId: claim.id,
+    description: `Alokasi dana klaim pendapatan ${claim.claimCode}`,
+    createdBy: userId,
+  });
+};
+
 module.exports = {
   getBalance, getSummary,
   listCategories, createCategory, updateCategory, removeCategory,
   listTransactions, getTransactionById, createTransaction, updateTransaction, voidTransaction,
-  recordPurchaseRequestCashOut,
+  recordPurchaseRequestCashOut, recordIncomeClaimCashIn,
   shapeTransaction,
 };

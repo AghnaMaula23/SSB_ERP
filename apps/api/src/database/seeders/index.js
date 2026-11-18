@@ -5,10 +5,14 @@ const { seedDivisiAlatDemo } = require('./divisi-alat.seed.js');
 const { seedProjectDemo } = require('./project.seed.js');
 const { seedMaterialDemo } = require('./material.seed.js');
 const { seedWorkflowDemo } = require('./workflow.seed.js');
+const { seedIncomeDemo } = require('./income.seed.js');
+const { seedPayrollDemo } = require('./payroll.seed.js');
+const { seedManualExpenseDemo } = require('./manual-expense.seed.js');
 // divisi-alat.seed.js jalan lewat service module, yang memakai singleton
 // Prisma di src/config/database.js — koneksi terpisah dari `prisma` di atas,
 // jadi ikut ditutup manual saat proses seed selesai (lihat main().finally di bawah).
 const appPrisma = require('../../config/database.js');
+const { CHART_OF_ACCOUNTS } = require('../../modules/finance-accounting/accounts.js');
 
 const ROLES = [
   { code: 'super_admin',  name: 'Super Admin' },
@@ -128,6 +132,35 @@ const PERMISSIONS = [
   { module: 'labor-claim', action: 'create',   label: 'Ajukan klaim upah & unggah bukti bayar, batalkan milik sendiri' },
   { module: 'labor-claim', action: 'validate', label: 'Validasi Admin: periksa kehadiran & upah, teruskan atau tolak klaim' },
   { module: 'labor-claim', action: 'approve',  label: 'Finance: setujui/tolak klaim upah, validasi/tolak bukti bayar' },
+  // Finance Accounting / GL (docs/claude_knowledge/plan-divisi-finance.md G1). Jurnal
+  // lahir dari aksi sumber — tidak ada permission "buat jurnal".
+  { module: 'coa',               action: 'read',   label: 'Lihat daftar akun (COA)' },
+  { module: 'coa',               action: 'create', label: 'Tambah akun COA (akun sistem tidak bisa dibuat dari layar)' },
+  { module: 'coa',               action: 'update', label: 'Ubah & nonaktifkan akun COA non-sistem' },
+  { module: 'journal',           action: 'read',   label: 'Lihat jurnal, buku besar, dan status tutup buku' },
+  { module: 'journal',           action: 'adjust', label: 'Catat selisih biaya aktual pada jurnal request material' },
+  { module: 'accounting-period', action: 'close',  label: 'Tutup dan buka kembali buku bulanan' },
+  { module: 'manual-expense',    action: 'read',   label: 'Lihat pengeluaran manual Finance' },
+  { module: 'manual-expense',    action: 'create', label: 'Catat & batalkan pengeluaran manual Finance — menjurnal beban' },
+  // Income — tagihan klien (plan Finance G2). Admin membuat, Finance memverifikasi & mencatat bayar
+  { module: 'income',         action: 'read',   label: 'Lihat tagihan klien dan pembayarannya' },
+  { module: 'income',         action: 'create', label: 'Buat, ubah, dan batalkan tagihan klien (Admin)' },
+  { module: 'income',         action: 'verify', label: 'Verifikasi/tolak/batalkan tagihan klien (Finance) — menjurnal piutang' },
+  { module: 'income-payment', action: 'create', label: 'Catat dan batalkan pembayaran klien (Finance) — menjurnal kas' },
+  // Klaim pendapatan alat (plan Finance G4): Divisi Alat mengajukan, Finance memutuskan
+  { module: 'equipment-claim', action: 'read',    label: 'Lihat klaim pendapatan alat' },
+  { module: 'equipment-claim', action: 'create',  label: 'Ajukan dan batalkan klaim pendapatan alat (Divisi Alat)' },
+  { module: 'equipment-claim', action: 'approve', label: 'Setujui/tolak klaim pendapatan alat (Finance) — Kas Alat masuk + jurnal' },
+  // Payroll karyawan tetap (plan Finance G6). Admin mengelola master karyawan; nominal gaji
+  // hanya Finance + super_admin (F29 — super_admin lewat kebijakan :read)
+  { module: 'employee',     action: 'read',   label: 'Lihat master karyawan tetap (tanpa nominal gaji)' },
+  { module: 'employee',     action: 'create', label: 'Tambah karyawan tetap (Admin)' },
+  { module: 'employee',     action: 'update', label: 'Ubah data karyawan & catat karyawan keluar (Admin)' },
+  { module: 'compensation', action: 'read',   label: 'Lihat riwayat gaji pokok karyawan' },
+  { module: 'compensation', action: 'create', label: 'Tetapkan gaji pokok baru karyawan (Finance)' },
+  { module: 'payroll',      action: 'read',   label: 'Lihat payroll bulanan karyawan tetap' },
+  { module: 'payroll',      action: 'create', label: 'Buat, susun komponen, finalisasi, dan batalkan payroll (Finance)' },
+  { module: 'payroll',      action: 'pay',    label: 'Tandai payroll dibayar & void (Finance) — menjurnal beban gaji' },
 ];
 
 // Kategori kas Divisi Alat. Data master, bukan data demo — sistem tidak bisa
@@ -209,6 +242,10 @@ const ROLE_PERMISSIONS = {
     'field-cash:read', 'field-cash:validate',
     // Admin memeriksa kehadiran & upah di klaim (P1) lalu meneruskan — tanpa approve
     'labor-claim:read', 'labor-claim:validate',
+    // Admin pemilik project & kontrak membuat tagihan klien — tanpa verify (milik Finance)
+    'income:read', 'income:create',
+    // Admin pemilik master karyawan tetap (F26) — TANPA compensation/payroll: nominal gaji milik Finance (F29)
+    'employee:read', 'employee:create', 'employee:update',
   ],
   // Finance hanya menyentuh sisi persetujuan dana, bukan operasional alat
   // `cash:read` dipakai layar approval untuk menampilkan proyeksi saldo setelah
@@ -228,7 +265,19 @@ const ROLE_PERMISSIONS = {
     // Finance memutuskan izin belanja lapangan (dan kelak memvalidasi laporannya)
     'field-cash:read', 'field-cash:approve',
     // Finance menyetujui klaim upah dan memvalidasi bukti bayarnya (sumber jurnal GL)
-    'labor-claim:read', 'labor-claim:approve'],
+    'labor-claim:read', 'labor-claim:approve',
+    // Pemilik GL: membaca jurnal, mencatat selisih biaya material, menutup buku bulanan
+    'coa:read', 'journal:read', 'journal:adjust', 'accounting-period:close',
+    // Finance mengelola akun tambahan; akun sistem (dipakai jurnal otomatis) terkunci di service
+    'coa:create', 'coa:update',
+    // Pengeluaran yang belum punya modul sendiri (F9) — dibuat = sah + jurnal, koreksi lewat void
+    'manual-expense:read', 'manual-expense:create',
+    // Finance memverifikasi tagihan klien dan mencatat pembayarannya — tidak membuat tagihan
+    'income:read', 'income:verify', 'income-payment:create',
+    // Finance memutuskan klaim pendapatan alat — cash-in Kas Alat + jurnal alokasi
+    'equipment-claim:read', 'equipment-claim:approve',
+    // Finance menggaji karyawan tetap: baca master (dikelola Admin), tetapkan gaji, payroll + jurnal
+    'employee:read', 'compensation:read', 'compensation:create', 'payroll:read', 'payroll:create', 'payroll:pay'],
   // Divisi Alat pemilik master alat; workhour hariannya diinput Lapangan
   divisi_alat: [
     'equipment:read', 'equipment:create', 'equipment:update', 'equipment:delete',
@@ -249,6 +298,8 @@ const ROLE_PERMISSIONS = {
     'allocation:read', 'allocation:create', 'allocation:update',
     // Divisi Alat memutuskan kuantitas; tidak mengajukan dan tidak mereview Admin
     'equipment-request:read', 'equipment-request:approve',
+    // Divisi Alat mengklaim pendapatan jam kerja alatnya setelah tagihan klien lunas
+    'equipment-claim:read', 'equipment-claim:create',
   ],
   // Lapangan boleh melihat jadwal servis alat yang mereka pakai, tapi tidak mengelolanya
   // Lapangan belum boleh mencatat kerusakan — laporan masuk lewat telepon ke
@@ -396,6 +447,13 @@ async function main() {
     await prisma.fieldExpenseCategory.upsert({ where: { categoryCode }, update: fields, create: category });
   }
 
+  // Sebelum seeder alur kerja: validasi/approve demo di bawah langsung menjurnal
+  console.log('Seeding chart of accounts...');
+  for (const account of CHART_OF_ACCOUNTS) {
+    const { accountCode, ...fields } = account;
+    await prisma.chartOfAccount.upsert({ where: { accountCode }, update: fields, create: account });
+  }
+
   console.log('Seeding demo data Divisi Alat...');
   await seedDivisiAlatDemo(admin.id);
 
@@ -405,6 +463,10 @@ async function main() {
   await seedMaterialDemo(admin.id);
   // Terakhir: butuh project, alat, material, dan user demo per role di atas.
   await seedWorkflowDemo();
+  // Setelah alur kerja: tagihan dibaca dari progress tervalidasi & jam kerja rental
+  await seedIncomeDemo();
+  await seedPayrollDemo();
+  await seedManualExpenseDemo();
 
   console.log('Seed complete.');
 }

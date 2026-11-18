@@ -26,3 +26,17 @@ export const updateUser = (id, changes) => apiRequest(`/api/users/${id}`, { meth
 
 /** Mengganti SELURUH role. Role akun sendiri tidak bisa diubah (403); super_admin tidak bisa digabung (409). */
 export const setUserRoles = (id, roleIds) => apiRequest(`/api/users/${id}/roles`, { method: 'PUT', body: JSON.stringify({ roleIds: roleIds.map(Number) }) });
+
+/** Tautkan akun ke karyawan tetap (F26); `null` melepas. Karyawan milik akun lain → 409. */
+export const setUserEmployee = (id, employeeId) => apiRequest(`/api/users/${id}/employee`, { method: 'PUT', body: JSON.stringify({ employeeId: employeeId ? Number(employeeId) : null }) });
+
+/** Semua karyawan (aktif & keluar) untuk pilihan tautan; `user` = akun yang sudah tertaut. */
+export async function listEmployeeOptions() {
+  const rows = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const result = await apiRequest(`/api/employees${query({ page, limit: 100 })}`);
+    rows.push(...(result.data || []));
+    if (page >= (result.totalPages || 1)) break;
+  }
+  return rows;
+}

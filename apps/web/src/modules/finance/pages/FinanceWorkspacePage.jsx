@@ -12,7 +12,8 @@ import WagePayrollPage from './WagePayrollPage.jsx';
 import EquipmentCashLedgerPage from './EquipmentCashLedgerPage.jsx';
 import ChartOfAccountsPage from './ChartOfAccountsPage.jsx';
 import GeneralLedgerPage from './GeneralLedgerPage.jsx';
-import JournalFormPage from './JournalFormPage.jsx';
+import ManualExpensePage from './ManualExpensePage.jsx';
+import ClosingPage from './ClosingPage.jsx';
 import RevenueVerificationPage from './RevenueVerificationPage.jsx';
 
 // Layar periksa per antrean. Kas lapangan & klaim upah memakai layar Admin dengan stage finance.
@@ -37,8 +38,9 @@ export default function FinanceWorkspacePage({ route, onNavigate, onBackToModule
   else if (selection.section === 'kas-alat') content = <EquipmentCashLedgerPage key={route} />;
   else if (selection.section === 'coa') content = <ChartOfAccountsPage key={route} />;
   else if (selection.section === 'pendapatan') content = <RevenueVerificationPage key={route} />;
-  else if (selection.section === 'gl' && selection.tab === 'new') content = <JournalFormPage key={route} onCancel={() => onNavigate('finance/gl')} onSaved={(text) => { setFlash({ route: 'finance/gl', text }); onNavigate('finance/gl'); }} />;
-  else if (selection.section === 'gl') content = <GeneralLedgerPage key={route} initialNotice={flash.route === route ? flash.text : ''} />;
+  else if (selection.section === 'gl') content = <GeneralLedgerPage key={route} />;
+  else if (selection.section === 'pengeluaran') content = <ManualExpensePage key={route} />;
+  else if (selection.section === 'tutup-buku') content = <ClosingPage key={route} />;
   else if (selection.recordId) {
     const Detail = DETAIL[selection.tab];
     content = <Detail key={route} recordId={selection.recordId} onDone={backWithNotice} />;

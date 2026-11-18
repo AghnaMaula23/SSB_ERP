@@ -56,9 +56,22 @@ app.use('/api/labor-payment-proofs',       require('./modules/labor/labor-paymen
 app.use('/api/equipment/purchase-requests', require('./modules/divisi-alat/purchase-request.routes.js'));
 app.use('/api/equipment/cash',      require('./modules/divisi-alat/cash.routes.js'));
 app.use('/api/equipment',          require('./modules/divisi-alat/divisi-alat.routes.js'));
-// app.use('/api/income',             require('./modules/income/income.routes.js'));
-// app.use('/api/finance-accounting', require('./modules/finance-accounting/finance-accounting.routes.js'));
-// app.use('/api/payroll',            require('./modules/payroll/payroll.routes.js'));
+// Divisi Finance — docs/claude_knowledge/plan-divisi-finance.md (G1: inti GL)
+app.use('/api/chart-of-accounts',  require('./modules/finance-accounting/chart-of-account.routes.js'));
+app.use('/api/journal-entries',    require('./modules/finance-accounting/journal.routes.js'));
+app.use('/api/accounting-periods', require('./modules/finance-accounting/accounting-period.routes.js'));
+// G8: laporan GL & pengeluaran manual Finance
+app.use('/api/general-ledger',     require('./modules/finance-accounting/general-ledger.routes.js'));
+app.use('/api/manual-expenses',    require('./modules/finance-accounting/manual-expense.routes.js'));
+// G2: Income — tagihan klien & pembayaran
+app.use('/api/income-records',     require('./modules/income/income-record.routes.js'));
+app.use('/api/income-payments',    require('./modules/income/income-payment.routes.js'));
+// G4: Klaim pendapatan alat — Divisi Alat → Finance → Kas Alat
+app.use('/api/equipment-income-claims', require('./modules/income/equipment-income-claim.routes.js'));
+// G6: Payroll karyawan tetap
+app.use('/api/employees',              require('./modules/payroll/employee.routes.js'));
+app.use('/api/employee-compensations', require('./modules/payroll/employee-compensation.routes.js'));
+app.use('/api/payrolls',               require('./modules/payroll/payroll.routes.js'));
 
 // Error Handling
 app.use(notFound);

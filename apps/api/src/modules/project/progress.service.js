@@ -1,6 +1,7 @@
 const prisma = require('../../config/database.js');
 const { httpError } = require('../../utils/error.js');
 const { claimTransition } = require('../../utils/status-transition.js');
+const { assertProgressUnbilled } = require('../income/billing-lock.js');
 const { assertContextOpen } = require('./context-lock.js');
 const { assertNotFuture } = require('../../utils/date.js');
 const { toNumber, toDateOnly, pickWritable, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
@@ -245,6 +246,8 @@ const setValidationStatus = async (subProjectId, id, status, userId, notes) => {
   const updated = await prisma.$transaction(async (tx) => {
     // Validasi (atau mencabutnya) mengubah dasar tagihan — terkunci setelah tahapan ditutup
     await assertContextOpen(tx, { subProjectId });
+    // Mencabut validasi mengubah volume yang mungkin sudah ditagihkan (plan Finance F11)
+    if (row.status === 'validated') await assertProgressUnbilled(tx, subProjectId, row.progressDate);
     // Atomik: dua Admin yang bertindak bersamaan pada log yang sama — satu 409.
     await claimTransition(tx.dailyProgressLog, { id, status: row.status }, {
       status,

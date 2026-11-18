@@ -7,6 +7,9 @@ const { assertContextOpen } = require('../project/context-lock.js');
 const { toNumber, toDateOnly, shapeActor, ACTOR_SELECT } = require('../../utils/shape.js');
 const materialPoolService = require('../project/material-pool.service.js');
 const deliveryService = require('./material-delivery.service.js');
+const { postJournal } = require('../finance-accounting/journal.service.js');
+const { ACCOUNTS } = require('../finance-accounting/accounts.js');
+const { wibDateOf } = require('../../utils/date.js');
 
 // ============================================================
 // REQUEST MATERIAL — RM-2 (pengajuan & meja Admin) + RM-3 (biaya & Finance).
@@ -39,7 +42,10 @@ const CONTEXT_BY_TYPE = {
 const MATERIAL_TYPE_SELECT = { id: true, materialCode: true, materialName: true, unit: true };
 
 const DETAIL_INCLUDE = {
-  subProject: { select: { id: true, subProjectType: true, status: true, constructionProjectId: true } },
+  // constructionProject ikut supaya label tahapan bisa menyebut project-nya (stageLabel di FE);
+  // tanpa ini dua tahapan "Galian" dari project berbeda tidak bisa dibedakan.
+  subProject: { select: { id: true, subProjectType: true, status: true, constructionProjectId: true,
+    constructionProject: { select: { id: true, projectCode: true, projectName: true } } } },
   externalSupplyProject: { select: { id: true, supplyProjectCode: true, supplyProjectName: true, status: true } },
   requestedByUser: { select: ACTOR_SELECT },
   adminReviewedByUser: { select: ACTOR_SELECT },
@@ -511,6 +517,38 @@ const resolvePool = async (tx, row, materialPoolId, userId) => {
  * dipakai ulang). Nominal tidak diisi ulang — yang disetujui = yang diajukan;
  * selisih realisasi dikoreksi lewat financial_correction_requests (GL).
  */
+/**
+ * Jurnal dana material (plan Finance F7): dana keluar dari rekening perusahaan saat Finance
+ * approve (RM-3). Konstruksi = Beban Material Proyek, supply = HPP Material Supply —
+ * dipilih dari request_type. Nominal = Σ rincian biaya (estimasi Admin); selisih aktual
+ * dicatat Finance lewat POST /journal-entries/:id/adjustments. Bertanggal hari approve
+ * (WIB) — sama di jalur hidup dan backfill. Dipakai juga gl-backfill.js.
+ */
+const postRequestJournal = async (tx, requestId, userId) => {
+  const request = await tx.materialRequest.findUnique({
+    where: { id: requestId },
+    select: { requestCode: true, requestType: true, financeReviewedAt: true, subProjectId: true, externalSupplyProjectId: true,
+      subProject: { select: { constructionProjectId: true } } },
+  });
+  const { _sum } = await tx.materialRequestCost.aggregate({ where: { materialRequestId: requestId }, _sum: { amount: true } });
+  const total = toNumber(_sum.amount) ?? 0;
+  if (total <= 0) return null;
+  const internal = request.requestType === 'internal_project';
+  return postJournal(tx, {
+    sourceType: 'material_request', sourceId: requestId,
+    journalDate: wibDateOf(request.financeReviewedAt),
+    description: `Dana material ${request.requestCode}`,
+    lines: [
+      { account: internal ? ACCOUNTS.EXPENSE_PROJECT_MATERIAL : ACCOUNTS.COGS_SUPPLY_MATERIAL, debit: total },
+      { account: ACCOUNTS.CASH, credit: total },
+    ],
+    context: internal
+      ? { constructionProjectId: request.subProject.constructionProjectId, subProjectId: request.subProjectId }
+      : { externalSupplyProjectId: request.externalSupplyProjectId },
+    userId,
+  });
+};
+
 const approve = async (id, { notes, materialPoolId }, userId) => {
   const row = await findOrFail(id);
   if (row.status !== 'waiting_finance_approval') throw httpError(`Request berstatus "${row.status}", bukan antrean Finance`, 409);
@@ -539,6 +577,7 @@ const approve = async (id, { notes, materialPoolId }, userId) => {
       });
       await tx.materialRequestItem.update({ where: { id: item.id }, data: { materialPoolItemId: poolItem.id } });
     }
+    await postRequestJournal(tx, id, userId);
     return findOrFail(id, tx);
   });
   return shapeDetail(updated);
@@ -580,4 +619,4 @@ const reject = async (id, { notes }, user) => {
 };
 
 module.exports = {
-  list, getById, create, update, cancel, adminValidate, replaceCosts, submitToFinance, approve, reject };
+  list, getById, create, update, cancel, adminValidate, replaceCosts, submitToFinance, approve, reject, postRequestJournal };

@@ -1,5 +1,4 @@
 import { apiRequest } from './api.js';
-import { FINANCE_MOCK_KEYS } from '../modules/finance/services/financeMockService.js';
 
 export function saveSession(token, user) {
   localStorage.setItem('token', token);
@@ -10,9 +9,9 @@ export function clearSession() {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
   // Sisa store lokal yang masih dipakai karena endpoint-nya belum ada:
-  // - income_claims : modul income belum di-mount, klaim pendapatan masih lokal
   // - maintenance_* : threshold per tipe & reset reference belum punya endpoint
-  // - admin_mock_*  : supply, rental & income Admin, backend belum ada (sisanya kunci lama yang dibersihkan)
+  // - admin_mock_*  : supply & rental Admin, backend belum ada
+  // Sisanya kunci lama (income, klaim alat, Finance — kini lewat API) yang tetap disapu.
   localStorage.removeItem('po_data');
   localStorage.removeItem('po_seq');
   localStorage.removeItem('kas_data');
@@ -33,8 +32,8 @@ export function clearSession() {
   localStorage.removeItem('admin_mock_income_records');
   localStorage.removeItem('admin_mock_field_cash');
   localStorage.removeItem('admin_mock_files');
-  // Data contoh Finance (COA, GL, payroll staf, pendapatan alat)
-  FINANCE_MOCK_KEYS.forEach((key) => localStorage.removeItem(key));
+  ['finance_mock_accounts', 'finance_mock_journals', 'finance_mock_employees', 'finance_mock_payroll', 'finance_mock_alat_income']
+    .forEach((key) => localStorage.removeItem(key));
   // Sisa penyimpanan lokal modul Files lama (sebelum /api/project-files).
   if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase('constructerp-files');
 }

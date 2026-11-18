@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Breadcrumb, MetricCard, MockBanner, Notice, StatusBadge } from '../../project/components/ProjectUi.jsx';
+import { Breadcrumb, MetricCard, Notice, StatusBadge } from '../../project/components/ProjectUi.jsx';
 import { FilterChips } from '../../approvals/components/ApprovalUi.jsx';
 import { formatCurrency, formatDate } from '../../project/utils/projectFormat.js';
 import { downloadCsv } from '../../../../utils/csv.js';
-import { listIncomeRecords } from '../../income/services/incomeService.js';
-import { INCOME_STATUS } from '../../income/utils/incomeFormat.js';
+import { PAYMENT_STATUS } from '../../income/utils/incomeFormat.js';
 import { fetchAllPages } from '../../../finance/services/financeService.js';
 import { useRecord } from '../../../lapangan/hooks/useFieldData.js';
 import { ProjectTitle } from '../components/FilesUi.jsx';
@@ -12,9 +11,8 @@ import { filesHref } from '../utils/filesRoute.js';
 import { projectCrumbs, stageLabel } from '../utils/filesFormat.js';
 
 // Hanya yang sudah diputuskan yang dihitung sebagai uang: pengeluaran = disetujui
-// Finance, pemasukan = tagihan yang diverifikasi/lunas. Sisanya tampil sebagai "menunggu".
+// Finance, pemasukan = tagihan terverifikasi (/api/income-records). Sisanya "menunggu".
 const INCOME_KEY = { construction: 'constructionProjectId', supply: 'externalSupplyProjectId', rental: 'externalRentalProjectId' };
-const INCOME_COUNTED = ['verified', 'partially_paid', 'paid'];
 
 const STATUS = {
   in: { label: 'Pemasukan', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
@@ -51,18 +49,18 @@ export default function ProjectFinancePage({ type, projectId, directory }) {
   const { data, error } = useRecord(async () => {
     const [expenses, income] = await Promise.all([
       loadExpenses(type, projectId, stages),
-      listIncomeRecords().then((rows) => rows.filter((row) => String(row[INCOME_KEY[type]]) === String(projectId))),
+      fetchAllPages('/api/income-records', { [INCOME_KEY[type]]: projectId }),
     ]);
     return { expenses, income };
   }, `${type}:${projectId}`);
 
-  const income = (data?.income || []).filter((row) => INCOME_COUNTED.includes(row.status));
+  const income = (data?.income || []).filter((row) => row.status === 'verified');
   const awaiting = (data?.income || []).filter((row) => row.status === 'submitted');
   const totalIn = income.reduce((sum, row) => sum + row.totalAmount, 0);
   const totalOut = (data?.expenses || []).reduce((sum, row) => sum + row.amount, 0);
   const net = totalIn - totalOut;
   const entries = [
-    ...income.map((row) => ({ key: `inc-${row.id}`, kind: 'in', date: row.createdAt?.slice(0, 10), code: row.referenceCode, source: `Tagihan ${row.partyName}`, stage: row.subProjectLabel || '-', amount: row.totalAmount, status: row.status })),
+    ...income.map((row) => ({ key: `inc-${row.id}`, kind: 'in', date: row.periodEnd, code: row.incomeCode, source: `Tagihan ${row.context?.clientName || 'klien'}`, stage: row.context?.subProject ? stageLabel({ subProjectType: row.context.subProject.subProjectType }) : '-', amount: row.totalAmount, paymentStatus: row.paymentStatus })),
     ...(data?.expenses || []).map((row) => ({ ...row, kind: 'out' })),
   ].filter((row) => !filter || row.kind === filter).sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
@@ -92,7 +90,6 @@ export default function ProjectFinancePage({ type, projectId, directory }) {
           </>
         )}
       />
-      <MockBanner>Pemasukan berasal dari menu Income (data contoh, backend Income belum ada). Pengeluaran dibaca langsung dari API.</MockBanner>
       {error && <Notice tone="error">{error}</Notice>}
       {type === 'rental' && <Notice tone="warning">Biaya rental (BBM, operator, servis) belum tercatat per kontrak di backend, jadi pengeluaran kontrak rental belum bisa dihitung di sini.</Notice>}
 
@@ -131,7 +128,7 @@ export default function ProjectFinancePage({ type, projectId, directory }) {
                 <tr key={row.key}>
                   <td className="whitespace-nowrap text-xs">{formatDate(row.date)}</td>
                   <td><StatusBadge status={row.kind} map={STATUS} /></td>
-                  <td className="font-mono text-xs font-bold">{row.code}{row.status && <span className="ml-2 align-middle"><StatusBadge status={row.status} map={INCOME_STATUS} /></span>}</td>
+                  <td className="font-mono text-xs font-bold">{row.code}{row.paymentStatus && <span className="ml-2 align-middle"><StatusBadge status={row.paymentStatus} map={PAYMENT_STATUS} /></span>}</td>
                   <td className="text-xs">{row.source}</td>
                   <td className="text-xs">{row.stage}</td>
                   <td className={`text-right font-mono text-sm font-semibold ${row.kind === 'in' ? 'text-leaf-700' : 'text-red-600'}`}>{row.kind === 'out' ? '−' : '+'}{formatCurrency(row.amount)}</td>

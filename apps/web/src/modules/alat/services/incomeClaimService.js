@@ -1,57 +1,19 @@
-const STORAGE_KEY = 'income_claims';
-const SEQ_KEY = 'income_claim_seq';
+import { apiRequest } from '../../../services/api.js';
 
-function readAll() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    localStorage.removeItem(STORAGE_KEY);
-    return [];
-  }
-}
+// Klaim pendapatan alat (plan Finance F19–F23): Divisi Alat mengajukan rentang tanggal,
+// SEMUA jam kerja yang tagihan kliennya sudah lunas ikut utuh; Finance menyetujui
+// (cash-in Kas Alat + jurnal) atau menolak. Nominal dihitung backend.
 
-function writeAll(rows) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
-}
+const query = (params) => {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') search.set(key, String(value));
+  });
+  const text = search.toString();
+  return text ? `?${text}` : '';
+};
 
-function nextId() {
-  const next = Number(localStorage.getItem(SEQ_KEY) || '0') + 1;
-  localStorage.setItem(SEQ_KEY, String(next));
-  return next;
-}
-
-export function getIncomeClaims({ status = 'all' } = {}) {
-  const rows = status && status !== 'all'
-    ? readAll().filter((row) => row.status === status)
-    : readAll();
-  return [...rows].sort((a, b) => b.id - a.id);
-}
-
-export function createIncomeClaim(payload) {
-  const rows = readAll();
-  const id = nextId();
-  const claim = {
-    id,
-    claimCode: `CLM-${new Date().getFullYear()}-${String(id).padStart(4, '0')}`,
-    status: 'pending',
-    detailStatus: 'awaiting_admin',
-    claimDate: payload.date,
-    project: payload.project,
-    projectId: payload.projectId || null,
-    subProject: payload.subProject,
-    subProjectId: payload.subProjectId || null,
-    clientName: payload.clientName,
-    equipment: payload.equipment || [],
-    materials: payload.materials || [],
-    totalAmount: Number(payload.totalAmount) || 0,
-    notes: payload.notes || '',
-  };
-  writeAll([...rows, claim]);
-  return claim;
-}
-
-export const INCOME_CLAIM_STORAGE_KEY = STORAGE_KEY;
-export const INCOME_CLAIM_SEQUENCE_KEY = SEQ_KEY;
+export const getEligibleClaim = (periodStart, periodEnd) => apiRequest(`/api/equipment-income-claims/eligible${query({ periodStart, periodEnd })}`);
+export const listIncomeClaims = (params = {}) => apiRequest(`/api/equipment-income-claims${query({ limit: 20, ...params })}`);
+export const createIncomeClaim = (payload) => apiRequest('/api/equipment-income-claims', { method: 'POST', body: JSON.stringify(payload) });
+export const cancelIncomeClaim = (id, reason) => apiRequest(`/api/equipment-income-claims/${id}/cancel`, { method: 'PUT', body: JSON.stringify({ reason: reason.trim() }) });

@@ -3,14 +3,15 @@ import { Notice } from '../../admin/project/components/ProjectUi.jsx';
 import { hasPermission } from '../../../services/permissions.js';
 import { FINANCE_TABS } from '../utils/financeRoute.js';
 
-// Menu Divisi Finance. Gaji staf, COA, GL, dan Pendapatan memakai data contoh
-// (financeMockService) sampai backend Payroll, Finance Accounting & Income ada.
+// Menu Divisi Finance — semua layar membaca API (plan Finance, kontrak 16 Nov 2026).
 const RAIL_ITEMS = [
   { key: 'approvals', label: 'Approvals', icon: '✅', route: 'finance/approvals' },
   { key: 'upah', label: 'Gaji & Upah', icon: '👷', route: 'finance/upah' },
   { key: 'kas-alat', label: 'Buku Kas Alat', icon: '📒', route: 'finance/kas-alat' },
   { key: 'coa', label: 'Chart of Accounts', icon: '🗂️', route: 'finance/coa' },
   { key: 'gl', label: 'General Ledger', icon: '📚', route: 'finance/gl' },
+  { key: 'pengeluaran', label: 'Pengeluaran Manual', icon: '🧾', route: 'finance/pengeluaran' },
+  { key: 'tutup-buku', label: 'Tutup Buku', icon: '🔒', route: 'finance/tutup-buku' },
   { key: 'pendapatan', label: 'Verifikasi Pendapatan', icon: '💰', route: 'finance/pendapatan' },
 ];
 

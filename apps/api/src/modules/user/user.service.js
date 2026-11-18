@@ -6,6 +6,7 @@ const SUPER_ADMIN = 'super_admin';
 
 const userInclude = {
   userRoles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
+  employee: { select: { id: true, employeeCode: true, fullName: true } },
 };
 
 // Jangan pernah kirim kolom password keluar dari service ini
@@ -16,6 +17,7 @@ const shapeUser = (user) => ({
   fullName: user.fullName,
   isActive: user.isActive,
   employeeId: user.employeeId,
+  employee: user.employee ?? null,
   createdAt: user.createdAt,
   roles: user.userRoles.map((ur) => ({
     id: ur.role.id,
@@ -160,6 +162,24 @@ const removeRole = async (userId, roleId, actorId) => {
 };
 
 /**
+ * Tautkan akun ke karyawan tetap (plan Finance F26): "akun ini milik karyawan itu".
+ * null melepas tautan. Satu karyawan satu akun — unique users.employee_id menjadi
+ * jaring terakhir kalau dua permintaan bersamaan lolos pengecekan (P2002 → 409).
+ */
+const setEmployee = async (userId, employeeId) => {
+  await findUserOrFail(userId);
+  if (employeeId !== null) {
+    const employee = await prisma.employee.findUnique({ where: { id: employeeId }, include: { user: { select: { id: true, username: true } } } });
+    if (!employee) throw httpError(`Karyawan dengan ID ${employeeId} tidak ditemukan`, 404);
+    if (employee.user && employee.user.id !== userId) {
+      throw httpError(`Karyawan ${employee.employeeCode} ${employee.fullName} sudah tertaut ke akun ${employee.user.username}`, 409);
+    }
+  }
+  await prisma.user.update({ where: { id: userId }, data: { employeeId } });
+  return shapeUser(await findUserOrFail(userId));
+};
+
+/**
  * Ubah data akun: nama, email, aktif/nonaktif, dan reset password. Akun tidak
  * dihapus — terlalu banyak dokumen merujuk pembuatnya — jadi "hapus" = nonaktif.
  * Akun sendiri tidak bisa dinonaktifkan, dan super_admin aktif terakhir tidak
@@ -189,4 +209,4 @@ const update = async (userId, { fullName, email, isActive, password }, actorId) 
   return shapeUser(await findUserOrFail(userId));
 };
 
-module.exports = { list, getById, update, setRoles, addRole, removeRole };
+module.exports = { list, getById, update, setRoles, addRole, removeRole, setEmployee };

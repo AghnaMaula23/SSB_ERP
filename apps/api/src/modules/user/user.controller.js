@@ -49,4 +49,11 @@ const removeRole = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, detail, update, setRoles, addRole, removeRole };
+const setEmployee = async (req, res, next) => {
+  try {
+    const user = await service.setEmployee(Number(req.params.id), req.body.employeeId);
+    return success(res, user, req.body.employeeId === null ? 'Tautan karyawan dilepas' : 'Akun ditautkan ke karyawan');
+  } catch (err) { next(err); }
+};
+
+module.exports = { list, detail, update, setRoles, addRole, removeRole, setEmployee };

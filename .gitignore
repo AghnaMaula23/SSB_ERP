@@ -10,3 +10,6 @@ CLAUDE.md
 graphify-out/
 sandbox/
 scripts/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+.claude
