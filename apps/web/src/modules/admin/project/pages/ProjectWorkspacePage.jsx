@@ -111,15 +111,25 @@ export default function ProjectWorkspacePage({ route, onNavigate, onBackToModule
   const listedProject = projects.find((project) => project.id === selection.projectId);
 
   // Fallback: project tidak ada di daftar (lebih dari 100 project, atau tautan langsung).
+  // "Sudah diminta" disimpan di ref, BUKAN dibaca dari extraProject: kalau state yang
+  // diisi effect ini ikut jadi dependensinya, effect jalan ulang, cleanup membatalkan
+  // fetch pertama, dan run kedua berhenti di guard — layar macet di "Memuat project...".
+  const requestedProjectRef = useRef(null);
   useEffect(() => {
-    if (!selection.projectId || loading || listedProject || extraProject.id === selection.projectId) return;
+    const projectId = selection.projectId;
+    if (!projectId || loading || listedProject || requestedProjectRef.current === projectId) return undefined;
+    requestedProjectRef.current = projectId;
     let cancelled = false;
-    setExtraProject({ id: selection.projectId, project: null, missing: false });
-    getProject(selection.projectId)
-      .then((project) => { if (!cancelled) setExtraProject({ id: selection.projectId, project, missing: false }); })
-      .catch(() => { if (!cancelled) setExtraProject({ id: selection.projectId, project: null, missing: true }); });
-    return () => { cancelled = true; };
-  }, [extraProject.id, listedProject, loading, selection.projectId]);
+    setExtraProject({ id: projectId, project: null, missing: false });
+    getProject(projectId)
+      .then((project) => { if (!cancelled) setExtraProject({ id: projectId, project, missing: false }); })
+      .catch(() => { if (!cancelled) setExtraProject({ id: projectId, project: null, missing: true }); });
+    // Permintaan yang dibatalkan boleh diulang (mis. StrictMode menjalankan effect dua kali)
+    return () => {
+      cancelled = true;
+      if (requestedProjectRef.current === projectId) requestedProjectRef.current = null;
+    };
+  }, [listedProject, loading, selection.projectId]);
 
   const project = listedProject || (extraProject.id === selection.projectId ? extraProject.project : null);
   const stagesEntry = selection.projectId ? stagesByProject[selection.projectId] : null;
