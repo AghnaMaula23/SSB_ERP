@@ -949,6 +949,10 @@ ditebak dari awalan kode (pakai `source.type` dari jurnal, bukan awalan).
 
 ## E35. Layar Finance wajib pindah dari data contoh ke API asli (18 November 2026)
 
+> **SELESAI 18 Nov 2026** (module/finance): semua baris tabel di bawah sudah dikerjakan — mock Finance, Income Admin, dan klaim
+> Divisi Alat dihapus; layar baru: Pengeluaran Manual, Tutup Buku, Buku Besar & Neraca Saldo, Master Karyawan (Admin),
+> tautan karyawan di form akun. Jurnal manual diganti Pengeluaran Manual (F2); COA bisa dikelola (E36).
+
 Backend Divisi Finance G1–G8 sudah ada di `module/finance` (kontrak swagger E32/E33). Layar dari E34 masih
 memakai `modules/finance/services/financeMockService.js` dan `admin/income/services/incomeService.js`
 (localStorage) — melanggar aturan kontrak beku butir 4 (tanpa mock). Selain itu ada **ketidaksesuaian
@@ -968,3 +972,9 @@ model** yang tidak bisa diselesaikan hanya dengan mengganti isi fungsi:
 Setelah semua layar pindah: hapus `financeMockService.js`, kunci `finance_mock_*`, dan `admin_mock_income_records`
 (termasuk pembersihnya di `services/auth.js`). Endpoint baru `PUT /api/users/:id` (manajemen akun, E34) diterima
 dan sudah tercatat di swagger.
+
+## E36. COA bisa dikelola Finance (18 November 2026)
+
+Aditif: `POST /api/chart-of-accounts` (`coa:create`) dan `PUT /api/chart-of-accounts/:id` (`coa:update`), plus field
+`isSystem` di daftar akun. Akun sistem (dipakai jurnal otomatis) tidak bisa diubah — tampilkan terkunci. Kode & jenis
+akun terkunci begitu akun dipakai jurnal (409); tidak ada hapus, hanya nonaktifkan. Plan Finance 8a.

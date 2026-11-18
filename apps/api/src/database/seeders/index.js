@@ -135,6 +135,8 @@ const PERMISSIONS = [
   // Finance Accounting / GL (docs/claude_knowledge/plan-divisi-finance.md G1). Jurnal
   // lahir dari aksi sumber — tidak ada permission "buat jurnal".
   { module: 'coa',               action: 'read',   label: 'Lihat daftar akun (COA)' },
+  { module: 'coa',               action: 'create', label: 'Tambah akun COA (akun sistem tidak bisa dibuat dari layar)' },
+  { module: 'coa',               action: 'update', label: 'Ubah & nonaktifkan akun COA non-sistem' },
   { module: 'journal',           action: 'read',   label: 'Lihat jurnal, buku besar, dan status tutup buku' },
   { module: 'journal',           action: 'adjust', label: 'Catat selisih biaya aktual pada jurnal request material' },
   { module: 'accounting-period', action: 'close',  label: 'Tutup dan buka kembali buku bulanan' },
@@ -266,6 +268,8 @@ const ROLE_PERMISSIONS = {
     'labor-claim:read', 'labor-claim:approve',
     // Pemilik GL: membaca jurnal, mencatat selisih biaya material, menutup buku bulanan
     'coa:read', 'journal:read', 'journal:adjust', 'accounting-period:close',
+    // Finance mengelola akun tambahan; akun sistem (dipakai jurnal otomatis) terkunci di service
+    'coa:create', 'coa:update',
     // Pengeluaran yang belum punya modul sendiri (F9) — dibuat = sah + jurnal, koreksi lewat void
     'manual-expense:read', 'manual-expense:create',
     // Finance memverifikasi tagihan klien dan mencatat pembayarannya — tidak membuat tagihan

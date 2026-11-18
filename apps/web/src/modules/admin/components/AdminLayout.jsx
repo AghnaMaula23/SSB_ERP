@@ -7,6 +7,7 @@ const RAIL_ITEMS = [
   { key: 'supply', label: 'Supply', icon: '🚚', route: 'admin/supply' },
   { key: 'rental', label: 'Rental', icon: '🛠️', route: 'admin/rental' },
   { key: 'income', label: 'Income', icon: '📊', route: 'admin/income' },
+  { key: 'employees', label: 'Karyawan', icon: '🪪', route: 'admin/employees' },
   { key: 'approvals', label: 'Approvals', icon: '✅', route: 'admin/approvals' },
   { key: 'files', label: 'Files', icon: '📁', route: 'admin/files' },
 ];

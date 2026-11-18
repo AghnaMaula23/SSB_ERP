@@ -14,8 +14,8 @@ const PAGE_SIZE = 10;
 const PENDING = ['submitted', 'waiting_finance_approval'];
 
 /**
- * Gaji & Upah. Upah harian pekerja/mandor dari klaim upah Lapangan (API ada);
- * gaji bulanan staf memakai data contoh sampai modul Payroll Karyawan ada.
+ * Gaji & Upah. Upah harian pekerja/mandor dari klaim upah Lapangan; gaji bulanan
+ * staf dari payroll karyawan tetap (/api/payrolls).
  */
 export default function WagePayrollPage() {
   const [tab, setTab] = useState('harian');

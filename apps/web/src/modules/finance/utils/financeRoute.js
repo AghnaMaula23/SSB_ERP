@@ -16,11 +16,13 @@ const TAB_KEYS = FINANCE_TABS.map((tab) => tab.key);
  * Rute Divisi Finance:
  *   finance/approvals[/:tab]       antrean keputusan Finance (default tab pr)
  *   finance/approvals/:tab/:id     periksa & putuskan satu dokumen
- *   finance/upah                   rekap upah harian pekerja / mandor (+ gaji staf: belum ada backend)
+ *   finance/upah                   upah harian pekerja / mandor + payroll bulanan staf
  *   finance/kas-alat               buku kas Divisi Alat (baca saja)
- *   finance/coa                    chart of accounts (data contoh)
- *   finance/gl[/new]               general ledger + jurnal manual (data contoh)
- *   finance/pendapatan             verifikasi pendapatan (data contoh dari Income)
+ *   finance/coa                    chart of accounts (akun sistem terkunci)
+ *   finance/gl                     jurnal, buku besar per akun, neraca saldo
+ *   finance/pengeluaran            pengeluaran manual Finance
+ *   finance/tutup-buku             tutup buku bulanan
+ *   finance/pendapatan             verifikasi tagihan klien, pembayaran, klaim alat
  * Balikan `{ section, tab, recordId }` atau null.
  */
 export function parseFinanceRoute(route) {
@@ -28,8 +30,7 @@ export function parseFinanceRoute(route) {
   if (parts[0] !== 'finance') return null;
   const [, section, tab, id, ...extra] = parts;
   if (extra.length) return null;
-  if (['upah', 'kas-alat', 'coa', 'gl', 'pendapatan'].includes(section) && parts.length === 2) return { section, tab: null, recordId: null };
-  if (section === 'gl' && tab === 'new' && parts.length === 3) return { section, tab: 'new', recordId: null };
+  if (['upah', 'kas-alat', 'coa', 'gl', 'pengeluaran', 'tutup-buku', 'pendapatan'].includes(section) && parts.length === 2) return { section, tab: null, recordId: null };
   if (section !== 'approvals') return null;
   if (!tab) return { section, tab: 'pr', recordId: null };
   if (!TAB_KEYS.includes(tab)) return null;

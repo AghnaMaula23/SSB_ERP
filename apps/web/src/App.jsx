@@ -5,6 +5,7 @@ import { parseProjectRoute } from './modules/admin/project/utils/projectRoute.js
 import { parseSupplyRoute } from './modules/admin/supply/utils/supplyRoute.js';
 import { parseRentalRoute } from './modules/admin/rental/utils/rentalRoute.js';
 import { parseIncomeRoute } from './modules/admin/income/utils/incomeRoute.js';
+import { parseEmployeeRoute } from './modules/admin/employees/utils/employeeRoute.js';
 import { parseApprovalRoute } from './modules/admin/approvals/utils/approvalRoute.js';
 import { parseFilesRoute } from './modules/admin/files/utils/filesRoute.js';
 import FieldLayout from './modules/lapangan/components/FieldLayout.jsx';
@@ -32,6 +33,7 @@ const ProjectWorkspacePage = lazy(() => import('./modules/admin/project/pages/Pr
 const SupplyWorkspacePage = lazy(() => import('./modules/admin/supply/pages/SupplyWorkspacePage.jsx'));
 const RentalWorkspacePage = lazy(() => import('./modules/admin/rental/pages/RentalWorkspacePage.jsx'));
 const IncomeWorkspacePage = lazy(() => import('./modules/admin/income/pages/IncomeWorkspacePage.jsx'));
+const EmployeeWorkspacePage = lazy(() => import('./modules/admin/employees/pages/EmployeeWorkspacePage.jsx'));
 const ApprovalWorkspacePage = lazy(() => import('./modules/admin/approvals/pages/ApprovalWorkspacePage.jsx'));
 const FilesWorkspacePage = lazy(() => import('./modules/admin/files/pages/FilesWorkspacePage.jsx'));
 const FieldWorkspacePage = lazy(() => import('./modules/lapangan/pages/FieldWorkspacePage.jsx'));
@@ -74,6 +76,7 @@ function isKnownRoute(route) {
     parseSupplyRoute(route) !== null ||
     parseRentalRoute(route) !== null ||
     parseIncomeRoute(route) !== null ||
+    parseEmployeeRoute(route) !== null ||
     parseApprovalRoute(route) !== null ||
     parseFilesRoute(route) !== null ||
     parseFieldRoute(route) !== null ||
@@ -234,6 +237,8 @@ export default function App() {
     return <RentalWorkspacePage {...layoutProps} route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseIncomeRoute(route))
     return <IncomeWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
+  if (parseEmployeeRoute(route))
+    return <EmployeeWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseApprovalRoute(route))
     return <ApprovalWorkspacePage route={route} onNavigate={navigate} onBackToModules={() => navigate('modules')} onSignOut={signOut} />;
   if (parseAccountRoute(route))

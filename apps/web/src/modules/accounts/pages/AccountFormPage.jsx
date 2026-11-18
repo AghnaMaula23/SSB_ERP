@@ -4,11 +4,12 @@ import { EmptyPanel, LoadingPanel } from '../../admin/project/components/Project
 import { fieldErrorsFrom } from '../../admin/project/utils/projectFormat.js';
 import { useRecord } from '../../lapangan/hooks/useFieldData.js';
 import { currentUserId } from '../../lapangan/utils/fieldFormat.js';
-import { getUser, listRoles, registerUser, setUserRoles, updateUser } from '../services/accountService.js';
+import { hasPermission } from '../../../services/permissions.js';
+import { getUser, listEmployeeOptions, listRoles, registerUser, setUserEmployee, setUserRoles, updateUser } from '../services/accountService.js';
 
 const SUPER_ADMIN = 'super_admin';
 
-function AccountForm({ initial, roles, onCancel, onSaved }) {
+function AccountForm({ initial, roles, employees, onCancel, onSaved }) {
   const isEdit = Boolean(initial);
   const isSelf = initial?.id === currentUserId();
   const [form, setForm] = useState({
@@ -19,6 +20,10 @@ function AccountForm({ initial, roles, onCancel, onSaved }) {
     isActive: initial?.isActive ?? true,
   });
   const [roleIds, setRoleIds] = useState(() => (initial?.roles || []).map((role) => role.id));
+  const [employeeId, setEmployeeId] = useState(initial?.employeeId ? String(initial.employeeId) : '');
+  // Karyawan yang belum tertaut ke akun lain (satu karyawan satu akun)
+  const employeeOptions = (employees || []).filter((employee) => !employee.user || employee.user.id === initial?.id);
+  const employeeChanged = String(initial?.employeeId || '') !== employeeId;
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -60,15 +65,17 @@ function AccountForm({ initial, roles, onCancel, onSaved }) {
         });
         const before = initial.roles.map((role) => role.id).sort().join(',');
         if (!isSelf && before !== [...roleIds].sort().join(',')) saved = await setUserRoles(initial.id, roleIds);
+        if (employees && employeeChanged) saved = await setUserEmployee(initial.id, employeeId || null);
         onSaved(saved, `Akun ${saved.username} diperbarui.`);
       } else {
         const created = await registerUser(form);
         try {
           saved = roleIds.length ? await setUserRoles(created.id, roleIds) : created;
+          if (employees && employeeId) saved = await setUserEmployee(created.id, employeeId);
           onSaved(saved, `Akun ${created.username} dibuat.`);
         } catch (roleError) {
           // Akunnya sudah tersimpan — jangan sembunyikan, arahkan ke halaman ubah.
-          onSaved(created, `Akun ${created.username} dibuat, tetapi role gagal dipasang: ${roleError.message}`);
+          onSaved(created, `Akun ${created.username} dibuat, tetapi role/tautan karyawan gagal dipasang: ${roleError.message}`);
         }
       }
     } catch (error) {
@@ -126,6 +133,18 @@ function AccountForm({ initial, roles, onCancel, onSaved }) {
         ))}
       </div>
 
+      {employees && (
+        <>
+          <SectionDivider>Karyawan Terkait</SectionDivider>
+          <Field label="Akun ini milik karyawan" htmlFor="employeeId" hint="Opsional. Akun sistem/demo tidak wajib karyawan; karyawan yang sudah punya akun tidak muncul.">
+            <select id="employeeId" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} className="input-control text-sm">
+              <option value="">- Tidak ditautkan -</option>
+              {employeeOptions.map((employee) => <option key={employee.id} value={employee.id}>{employee.employeeCode} · {employee.fullName}{employee.isActive ? '' : ' (keluar)'}</option>)}
+            </select>
+          </Field>
+        </>
+      )}
+
       {isEdit && !isSelf && (
         <>
           <SectionDivider>Status</SectionDivider>
@@ -142,10 +161,12 @@ function AccountForm({ initial, roles, onCancel, onSaved }) {
 /** Tanpa `userId` = akun baru; dengan `userId` = kelola akun yang ada. */
 export default function AccountFormPage({ userId, onCancel, onSaved }) {
   const { data, error } = useRecord(async () => {
-    const [roles, user] = await Promise.all([listRoles(), userId ? getUser(userId) : Promise.resolve(null)]);
-    return { roles, user };
+    // Tautan karyawan hanya untuk pemegang user:update yang bisa membaca master karyawan
+    const canLink = hasPermission('user:update') && hasPermission('employee:read');
+    const [roles, user, employees] = await Promise.all([listRoles(), userId ? getUser(userId) : Promise.resolve(null), canLink ? listEmployeeOptions() : Promise.resolve(null)]);
+    return { roles, user, employees };
   }, userId || 'new');
   if (error) return <EmptyPanel icon="🔎" title="Akun tidak bisa dimuat">{error}</EmptyPanel>;
   if (!data) return <LoadingPanel>Memuat akun...</LoadingPanel>;
-  return <AccountForm initial={data.user} roles={data.roles} onCancel={onCancel} onSaved={onSaved} />;
+  return <AccountForm initial={data.user} roles={data.roles} employees={data.employees} onCancel={onCancel} onSaved={onSaved} />;
 }

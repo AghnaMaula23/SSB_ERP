@@ -1,175 +1,265 @@
 import { Fragment, useState } from 'react';
-import { Breadcrumb, MockBanner, Notice, PageHeader, StatusBadge } from '../../admin/project/components/ProjectUi.jsx';
+import { Breadcrumb, Notice, PageHeader, StatusBadge } from '../../admin/project/components/ProjectUi.jsx';
 import { RejectReasonForm, StatTile } from '../../admin/approvals/components/ApprovalUi.jsx';
-import { formatCurrency, formatDate, formatNumber } from '../../admin/project/utils/projectFormat.js';
-import { decideIncomeRecord, listIncomeRecords } from '../../admin/income/services/incomeService.js';
-import { COMPONENTS, INCOME_STATUS } from '../../admin/income/utils/incomeFormat.js';
+import { formatCurrency, formatDate, todayIso } from '../../admin/project/utils/projectFormat.js';
+import { IncomeBreakdown } from '../../admin/income/pages/IncomeDetailPage.jsx';
+import { INCOME_STATUS, PAYMENT_METHODS, PAYMENT_STATUS, SOURCES, contextLabel } from '../../admin/income/utils/incomeFormat.js';
 import { useRecord } from '../../lapangan/hooks/useFieldData.js';
-import { decideAlatIncome, journalIncome, listAlatIncome } from '../services/financeMockService.js';
+import { hasPermission } from '../../../services/permissions.js';
+import ClaimContexts from '../components/ClaimContexts.jsx';
+import {
+  approveEquipmentClaim, fetchAllPages, getEquipmentClaim, getIncomeRecord, recordIncomePayment, rejectEquipmentClaim,
+  rejectIncomeRecord, verifyIncomeRecord, voidIncomePayment, voidIncomeRecord,
+} from '../services/financeService.js';
 
-const SECTIONS = [
-  { key: 'construction_project', title: 'Pendapatan Project', icon: '🏗️', party: 'Proyek Utama' },
-  { key: 'external_rental', title: 'Pendapatan Rental Alat', icon: '🛠️', party: 'Penyewa' },
-  { key: 'external_supply', title: 'Pendapatan Supply Material', icon: '🚚', party: 'Pembeli' },
-];
-const ALAT_STATUS = {
-  pending: { label: 'Menunggu Finance', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  approved: { label: 'Dikonfirmasi', className: 'bg-leaf-50 text-leaf-700 border-leaf-200' },
-  rejected: { label: 'Ditolak', className: 'bg-red-50 text-red-700 border-red-200' },
-};
+const MAX_PROOFS = 10;
 
-function ActionButtons({ onConfirm, onReject, confirmLabel = 'Confirm', disabled }) {
+function SmallButton({ tone = 'leaf', disabled, onClick, children }) {
+  const tones = { leaf: 'bg-leaf-700 hover:bg-leaf-800 text-white', red: 'bg-red-600 hover:bg-red-700 text-white', ghost: 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50' };
+  return <button type="button" disabled={disabled} onClick={onClick} className={`rounded-md px-3 py-1.5 text-[11px] font-bold uppercase disabled:opacity-40 ${tones[tone]}`}>{children}</button>;
+}
+
+/** Catat pembayaran klien (langsung sah + jurnal Dr Kas / Cr Piutang bertanggal tanggal bayar). */
+function PaymentForm({ record, onDone, onCancel }) {
+  const [form, setForm] = useState({ paymentDate: todayIso(), amount: String(record.outstandingAmount), paymentMethod: 'transfer', referenceNumber: '', payerName: record.context?.clientName || '', notes: '' });
+  const [proofs, setProofs] = useState([]);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+
+  const submit = async () => {
+    if (!(Number(form.amount) > 0)) { setError('Nominal harus lebih dari 0.'); return; }
+    if (proofs.length > MAX_PROOFS) { setError(`Bukti maksimal ${MAX_PROOFS} file.`); return; }
+    setBusy(true);
+    setError('');
+    try {
+      const payment = await recordIncomePayment({ incomeRecordId: record.id, ...form }, proofs);
+      onDone(`${payment.paymentCode} ${formatCurrency(payment.amount)} dicatat — ${PAYMENT_STATUS[payment.record.paymentStatus].label.toLowerCase()}.`);
+    } catch (requestError) {
+      setError(requestError.message);
+      setBusy(false);
+    }
+  };
+
+  const input = 'input-control mt-1 h-9 text-xs';
   return (
-    <div className="flex justify-end gap-1.5">
-      <button type="button" disabled={disabled} onClick={onConfirm} className="rounded-md bg-leaf-700 px-3 py-1.5 text-[11px] font-bold uppercase text-white hover:bg-leaf-800 disabled:opacity-40">{confirmLabel}</button>
-      {onReject && <button type="button" disabled={disabled} onClick={onReject} className="rounded-md bg-red-600 px-3 py-1.5 text-[11px] font-bold uppercase text-white hover:bg-red-700 disabled:opacity-40">Reject</button>}
+    <div className="grid gap-2 sm:grid-cols-3">
+      <label className="text-[11px] font-semibold text-slate-600">Tanggal uang masuk<input type="date" max={todayIso()} value={form.paymentDate} onChange={set('paymentDate')} className={input} /></label>
+      <label className="text-[11px] font-semibold text-slate-600">Nominal (sisa {formatCurrency(record.outstandingAmount)})<input type="number" min="0" step="any" value={form.amount} onChange={set('amount')} className={`${input} text-right font-mono`} /></label>
+      <label className="text-[11px] font-semibold text-slate-600">Metode
+        <select value={form.paymentMethod} onChange={set('paymentMethod')} className={input}>{Object.entries(PAYMENT_METHODS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+      </label>
+      <label className="text-[11px] font-semibold text-slate-600">No. referensi<input value={form.referenceNumber} onChange={set('referenceNumber')} maxLength={100} className={input} /></label>
+      <label className="text-[11px] font-semibold text-slate-600">Pembayar<input value={form.payerName} onChange={set('payerName')} maxLength={150} className={input} /></label>
+      <label className="text-[11px] font-semibold text-slate-600">Bukti (opsional, ≤ {MAX_PROOFS})<input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(event) => setProofs([...event.target.files])} className="mt-1 block w-full text-xs" /></label>
+      <label className="text-[11px] font-semibold text-slate-600 sm:col-span-3">Catatan<input value={form.notes} onChange={set('notes')} maxLength={5000} className={input} /></label>
+      {error && <p className="text-xs text-red-600 sm:col-span-3">{error}</p>}
+      <div className="flex justify-end gap-2 sm:col-span-3">
+        <SmallButton tone="ghost" disabled={busy} onClick={onCancel}>Batal</SmallButton>
+        <SmallButton disabled={busy} onClick={submit}>{busy ? 'Menyimpan...' : 'Catat Pembayaran'}</SmallButton>
+      </div>
+    </div>
+  );
+}
+
+/** Rincian satu tagihan (dimuat saat dibuka) + aksi pembayaran & void untuk tagihan terverifikasi. */
+function RecordPanel({ id, canPay, canVerify, onChanged }) {
+  const { data: record, error, reload } = useRecord(() => getIncomeRecord(id), id);
+  const [mode, setMode] = useState('');
+  if (error) return <p className="text-xs text-red-600">{error}</p>;
+  if (!record) return <p className="text-xs text-slate-500">Memuat rincian...</p>;
+  const done = (text) => { setMode(''); reload(); onChanged(text); };
+  const activePayments = record.payments.filter((p) => !p.isVoided);
+
+  return (
+    <div className="space-y-3">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><IncomeBreakdown record={record} /></div>
+      {record.notes && <p className="text-xs text-slate-600">Catatan Admin: {record.notes}</p>}
+      {record.payments.length > 0 && (
+        <ul className="space-y-1 text-xs">
+          {record.payments.map((payment) => (
+            <li key={payment.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 bg-white px-3 py-1.5">
+              <span className={payment.isVoided ? 'text-slate-400 line-through' : ''}>{payment.paymentCode} · {formatDate(payment.paymentDate)} · {PAYMENT_METHODS[payment.paymentMethod] || '-'}{payment.referenceNumber ? ` · ${payment.referenceNumber}` : ''}</span>
+              <span className="flex items-center gap-2">
+                <b className="font-mono">{formatCurrency(payment.amount)}</b>
+                {!payment.isVoided && canPay && <SmallButton tone="ghost" onClick={() => setMode(`void-pay-${payment.id}`)}>Void</SmallButton>}
+              </span>
+              {mode === `void-pay-${payment.id}` && (
+                <div className="w-full"><RejectReasonForm label={`Alasan void ${payment.paymentCode}`} submitLabel="Void Pembayaran" requiredMessage="Alasan wajib diisi." onSubmit={async (reason) => { await voidIncomePayment(payment.id, reason); done(`${payment.paymentCode} dibatalkan — jurnal dibalik.`); }} onCancel={() => setMode('')} /></div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {record.status === 'verified' && (
+        <div className="flex flex-wrap justify-end gap-2">
+          {canPay && record.outstandingAmount > 0 && mode !== 'pay' && <SmallButton onClick={() => setMode('pay')}>Catat Pembayaran</SmallButton>}
+          {canVerify && !activePayments.length && mode !== 'void' && <SmallButton tone="ghost" onClick={() => setMode('void')}>Void Tagihan</SmallButton>}
+        </div>
+      )}
+      {mode === 'pay' && <div className="rounded-lg border border-leaf-200 bg-leaf-50/40 p-3"><PaymentForm record={record} onDone={done} onCancel={() => setMode('')} /></div>}
+      {mode === 'void' && <RejectReasonForm label={`Alasan void ${record.incomeCode}`} submitLabel="Void Tagihan" requiredMessage="Alasan wajib diisi." onSubmit={async (reason) => { await voidIncomeRecord(record.id, reason); done(`${record.incomeCode} dibatalkan — jurnal piutang dibalik.`); }} onCancel={() => setMode('')} />}
     </div>
   );
 }
 
 /**
- * Verifikasi pendapatan dari Income Admin (project, rental, supply) dan klaim
- * Divisi Alat. Confirm = pendapatan diakui (jurnal Piutang/Pendapatan); dari
- * "Terverifikasi", Tandai Lunas = uang diterima (jurnal Bank/Piutang).
+ * Verifikasi Pendapatan Finance: tagihan klien (verify → piutang, catat bayar → kas),
+ * dan klaim pendapatan Divisi Alat (approve → Kas Alat + jurnal alokasi).
  */
 export default function RevenueVerificationPage() {
-  const [showDone, setShowDone] = useState(false);
+  const [view, setView] = useState('pending');
   const [expanded, setExpanded] = useState(null);
   const [rejecting, setRejecting] = useState(null);
   const [notice, setNotice] = useState({ tone: 'success', text: '' });
   const [busy, setBusy] = useState(false);
-  const { data, reload } = useRecord(async () => {
-    const [records, alat] = await Promise.all([listIncomeRecords(), listAlatIncome()]);
-    return { records, alat };
+  const canVerify = hasPermission('income:verify');
+  const canPay = hasPermission('income-payment:create');
+  const canApproveClaim = hasPermission('equipment-claim:approve');
+
+  const { data, error, reload } = useRecord(async () => {
+    const [submitted, verified, claims] = await Promise.all([
+      fetchAllPages('/api/income-records', { status: 'submitted' }),
+      fetchAllPages('/api/income-records', { status: 'verified' }),
+      fetchAllPages('/api/equipment-income-claims', { status: 'submitted' }),
+    ]);
+    return { submitted, verified, claims };
   }, 'revenue');
 
-  const records = data?.records || [];
-  const pending = records.filter((row) => row.status === 'submitted');
-  const alatPending = (data?.alat || []).filter((row) => row.status === 'pending');
-  const inflow = [...pending, ...alatPending].reduce((sum, row) => sum + row.totalAmount, 0);
+  const receivable = (data?.verified || []).filter((row) => row.paymentStatus !== 'paid');
+  const records = view === 'pending' ? data?.submitted || [] : view === 'receivable' ? receivable : (data?.verified || []).filter((row) => row.paymentStatus === 'paid');
 
+  const say = (text, tone = 'success') => setNotice({ tone, text });
   const run = async (action, text) => {
     setBusy(true);
-    setNotice({ tone: 'success', text: '' });
+    say('');
     try {
       await action();
-      setNotice({ tone: 'success', text });
+      say(text);
       setRejecting(null);
+      setExpanded(null);
       reload();
-    } catch (error) {
-      setNotice({ tone: 'error', text: error.message });
+    } catch (requestError) {
+      say(requestError.message, 'error');
     } finally {
       setBusy(false);
     }
   };
 
-  const decideRecord = (row, status, notes) => run(async () => {
-    const updated = await decideIncomeRecord(row.id, status, notes);
-    if (status !== 'rejected') await journalIncome(updated, status);
-  }, `${row.referenceCode} ${status === 'verified' ? 'diverifikasi — pendapatan diakui' : status === 'paid' ? 'ditandai lunas' : 'ditolak'}.`);
+  const tabs = [
+    ['pending', `Menunggu Verifikasi (${data?.submitted.length ?? '…'})`],
+    ['receivable', `Piutang Berjalan (${data ? receivable.length : '…'})`],
+    ['paid', 'Lunas'],
+  ];
 
   return (
     <>
       <Breadcrumb items={[{ label: 'Divisi Finance' }, { label: 'Verifikasi Pendapatan' }]} />
-      <PageHeader
-        title="Verifikasi & Konfirmasi Pendapatan"
-        subtitle="Tagihan yang disusun Admin (Income) dan klaim Divisi Alat menunggu konfirmasi Finance."
-        actions={<label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={showDone} onChange={(event) => setShowDone(event.target.checked)} className="accent-brand-700" /> Tampilkan yang sudah diputuskan</label>}
-      />
-      <MockBanner>Modul Income belum ada di backend — tagihan dan klaim di sini data contoh dari menu Income Admin dan Kas Divisi Alat.</MockBanner>
-      <Notice tone={notice.tone} onDismiss={() => setNotice({ tone: 'success', text: '' })}>{notice.text}</Notice>
+      <PageHeader title="Verifikasi & Penerimaan Pendapatan" subtitle="Verifikasi tagihan yang disusun Admin, catat uang yang masuk dari klien, dan putuskan klaim pendapatan Divisi Alat." />
+      <Notice tone={notice.tone} onDismiss={() => say('')}>{notice.text}</Notice>
+      {error && <Notice tone="error">{error}</Notice>}
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2">
-        <StatTile label="Total Antrean Pendapatan" value={data ? `${pending.length + alatPending.length} Transaksi` : '…'} icon="📋" tone="amber" />
-        <StatTile label="Estimasi Inflow Masuk" value={data ? formatCurrency(inflow) : '…'} icon="💰" tone="teal" />
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <StatTile label="Tagihan Menunggu" value={data ? formatCurrency(data.submitted.reduce((s, r) => s + r.totalAmount, 0)) : '…'} hint={data ? `${data.submitted.length} tagihan` : ''} icon="📋" tone="amber" />
+        <StatTile label="Piutang Berjalan" value={data ? formatCurrency(receivable.reduce((s, r) => s + r.outstandingAmount, 0)) : '…'} hint={data ? `${receivable.length} tagihan` : ''} icon="💰" tone="teal" />
+        <StatTile label="Klaim Alat Menunggu" value={data ? formatCurrency(data.claims.reduce((s, c) => s + c.totalAmount, 0)) : '…'} hint={data ? `${data.claims.length} klaim` : ''} icon="🚜" tone="slate" />
       </div>
 
-      {SECTIONS.map((section) => {
-        const rows = records.filter((row) => row.projectSourceType === section.key && (showDone || ['submitted', 'verified'].includes(row.status)));
-        return (
-          <section key={section.key} className="mb-6" aria-label={section.title}>
-            <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-leaf-800">{section.icon} Verifikasi {section.title}</h2>
-            <div className="table-container">
-              <div className="table-scroll-mobile overflow-x-auto">
-                <table className="table-modern">
-                  <thead><tr><th>Referensi</th><th>Tanggal</th><th>{section.party}</th><th>Proyek</th><th className="text-right">Pendapatan</th><th className="text-center">Status</th><th className="text-right">Aksi</th></tr></thead>
-                  <tbody>
-                    {!rows.length && <tr><td colSpan={7} className="py-8 text-center text-xs text-slate-500">Tidak ada tagihan yang menunggu.</td></tr>}
-                    {rows.map((row) => (
-                      <Fragment key={row.id}>
-                        <tr>
-                          <td><button type="button" onClick={() => setExpanded(expanded === row.id ? null : row.id)} className="font-mono text-xs font-bold text-leaf-700 hover:underline">{row.referenceCode} {expanded === row.id ? '▾' : '▸'}</button></td>
-                          <td className="whitespace-nowrap text-xs">{formatDate(row.createdAt)}</td>
-                          <td className="text-sm">{row.partyName}</td>
-                          <td className="text-xs">{row.projectName}{row.subProjectLabel ? ` · ${row.subProjectLabel}` : ''}</td>
-                          <td className="text-right font-mono text-sm font-semibold text-leaf-700">{formatCurrency(row.totalAmount)}</td>
-                          <td className="text-center"><StatusBadge status={row.status} map={INCOME_STATUS} /></td>
-                          <td>
-                            {row.status === 'submitted' && <ActionButtons disabled={busy} onConfirm={() => window.confirm(`Verifikasi ${row.referenceCode} senilai ${formatCurrency(row.totalAmount)}?`) && decideRecord(row, 'verified')} onReject={() => setRejecting(`r-${row.id}`)} />}
-                            {row.status === 'verified' && <ActionButtons disabled={busy} confirmLabel="Tandai Lunas" onConfirm={() => window.confirm(`Pembayaran ${row.referenceCode} sudah diterima?`) && decideRecord(row, 'paid')} />}
-                          </td>
-                        </tr>
-                        {expanded === row.id && (
-                          <tr><td colSpan={7} className="bg-slate-50">
-                            <ul className="space-y-1 text-xs">
-                              {row.items.map((item, index) => (
-                                <li key={index} className="flex flex-wrap justify-between gap-2">
-                                  <span>{COMPONENTS[item.incomeComponentType]?.icon} {item.description} · {formatNumber(item.quantity)} {item.unit} × {formatCurrency(item.rateSnapshot)}</span>
-                                  <span className="font-mono font-semibold">{formatCurrency(item.subtotalAmount)}</span>
-                                </li>
-                              ))}
-                            </ul>
-                            {row.financeNotes && <p className="mt-2 text-xs text-red-700">Catatan Finance: {row.financeNotes}</p>}
-                          </td></tr>
-                        )}
-                        {rejecting === `r-${row.id}` && (
-                          <tr><td colSpan={7} className="bg-red-50/60">
-                            <RejectReasonForm label={`Alasan menolak ${row.referenceCode}`} submitLabel="Tolak Tagihan" placeholder="Contoh: Tarif belum dilampiri addendum kontrak" onSubmit={(notes) => decideRecord(row, 'rejected', notes)} onCancel={() => setRejecting(null)} />
-                          </td></tr>
-                        )}
-                      </Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-        );
-      })}
+      <nav className="mb-4 flex gap-6 border-b border-slate-200" aria-label="Tampilan tagihan">
+        {tabs.map(([key, label]) => (
+          <button key={key} type="button" onClick={() => { setView(key); setExpanded(null); }} aria-current={view === key ? 'page' : undefined} className={`-mb-px border-b-2 px-1 pb-3 text-sm font-semibold transition ${view === key ? 'border-brand-600 text-brand-800' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{label}</button>
+        ))}
+      </nav>
 
-      <section className="mb-6" aria-label="Pendapatan Divisi Alat">
-        <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-leaf-800">🚜 Verifikasi Pendapatan Divisi Alat</h2>
+      <section className="mb-8" aria-label="Tagihan klien">
         <div className="table-container">
           <div className="table-scroll-mobile overflow-x-auto">
             <table className="table-modern">
-              <thead><tr><th>Klaim</th><th>Tanggal</th><th>Penyewa</th><th>Proyek</th><th className="text-right">Pendapatan</th><th className="text-right">Unit</th><th className="text-right">Total Jam</th><th className="text-center">Status</th><th className="text-right">Aksi</th></tr></thead>
+              <thead><tr><th>Kode</th><th>Jenis</th><th>Klien & Kontrak</th><th>Periode</th><th className="text-right">Tagihan</th><th className="text-center">Status</th><th className="text-right">Aksi</th></tr></thead>
               <tbody>
-                {(data?.alat || []).filter((row) => showDone || row.status === 'pending').map((row) => (
+                {!data && !error && <tr><td colSpan={7} className="py-8 text-center text-xs text-slate-500">Memuat tagihan...</td></tr>}
+                {data && !records.length && <tr><td colSpan={7} className="py-8 text-center text-xs text-slate-500">Tidak ada tagihan di tampilan ini.</td></tr>}
+                {records.map((row) => (
                   <Fragment key={row.id}>
                     <tr>
-                      <td className="font-mono text-xs font-bold text-leaf-700">{row.claimCode}</td>
-                      <td className="whitespace-nowrap text-xs">{formatDate(row.claimDate)}</td>
-                      <td className="text-sm">{row.clientName}</td>
-                      <td className="text-xs">{row.project}</td>
-                      <td className="text-right font-mono text-sm font-semibold text-leaf-700">{formatCurrency(row.totalAmount)}</td>
-                      <td className="text-right text-xs">{row.unitCount}</td>
-                      <td className="text-right text-xs">{formatNumber(row.totalHours)} jam</td>
-                      <td className="text-center"><StatusBadge status={row.status} map={ALAT_STATUS} /></td>
-                      <td>{row.status === 'pending' && <ActionButtons disabled={busy} onConfirm={() => window.confirm(`Konfirmasi ${row.claimCode} senilai ${formatCurrency(row.totalAmount)}?`) && run(() => decideAlatIncome(row.id, 'approved'), `${row.claimCode} dikonfirmasi — Kas Alat bertambah.`)} onReject={() => setRejecting(`a-${row.id}`)} />}</td>
+                      <td><button type="button" onClick={() => setExpanded(expanded === row.id ? null : row.id)} className="font-mono text-xs font-bold text-leaf-700 hover:underline">{row.incomeCode} {expanded === row.id ? '▾' : '▸'}</button></td>
+                      <td className="whitespace-nowrap text-xs">{SOURCES[row.contextType]?.icon} {SOURCES[row.contextType]?.short}</td>
+                      <td className="text-xs"><b className="block text-sm text-slate-900">{row.context?.clientName || '-'}</b>{contextLabel(row.context)}</td>
+                      <td className="whitespace-nowrap text-xs">{formatDate(row.periodStart)} – {formatDate(row.periodEnd)}</td>
+                      <td className="text-right font-mono text-sm font-semibold text-leaf-700">{formatCurrency(row.totalAmount)}{row.status === 'verified' && row.outstandingAmount > 0 && <span className="block text-[11px] font-normal text-slate-500">sisa {formatCurrency(row.outstandingAmount)}</span>}</td>
+                      <td className="text-center"><StatusBadge status={row.paymentStatus || row.status} map={row.paymentStatus ? PAYMENT_STATUS : INCOME_STATUS} /></td>
+                      <td>
+                        {row.status === 'submitted' && canVerify && (
+                          <div className="flex justify-end gap-1.5">
+                            <SmallButton disabled={busy} onClick={() => window.confirm(`Verifikasi ${row.incomeCode} senilai ${formatCurrency(row.totalAmount)}? Piutang dan pendapatan langsung dijurnal.`) && run(() => verifyIncomeRecord(row.id), `${row.incomeCode} diverifikasi — piutang dijurnal.`)}>Verifikasi</SmallButton>
+                            <SmallButton tone="red" disabled={busy} onClick={() => setRejecting(`r-${row.id}`)}>Tolak</SmallButton>
+                          </div>
+                        )}
+                      </td>
                     </tr>
-                    {rejecting === `a-${row.id}` && (
-                      <tr><td colSpan={9} className="bg-red-50/60">
-                        <RejectReasonForm label={`Alasan menolak ${row.claimCode}`} submitLabel="Tolak Klaim" placeholder="Contoh: Jam kerja tidak sesuai timesheet" onSubmit={(notes) => run(() => decideAlatIncome(row.id, 'rejected', notes), `${row.claimCode} ditolak.`)} onCancel={() => setRejecting(null)} />
-                      </td></tr>
+                    {rejecting === `r-${row.id}` && (
+                      <tr><td colSpan={7} className="bg-red-50/60"><RejectReasonForm label={`Alasan menolak ${row.incomeCode}`} submitLabel="Tolak Tagihan" placeholder="Mis. volume belum sesuai berita acara" onSubmit={(notes) => run(() => rejectIncomeRecord(row.id, notes), `${row.incomeCode} ditolak.`)} onCancel={() => setRejecting(null)} /></td></tr>
+                    )}
+                    {expanded === row.id && (
+                      <tr><td colSpan={7} className="bg-slate-50"><RecordPanel id={row.id} canPay={canPay} canVerify={canVerify} onChanged={(text) => { say(text); reload(); }} /></td></tr>
                     )}
                   </Fragment>
                 ))}
-                {data && !(data.alat || []).some((row) => showDone || row.status === 'pending') && <tr><td colSpan={9} className="py-8 text-center text-xs text-slate-500">Tidak ada klaim yang menunggu.</td></tr>}
               </tbody>
             </table>
           </div>
         </div>
       </section>
+
+      <section className="mb-6" aria-label="Klaim pendapatan Divisi Alat">
+        <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-leaf-800">🚜 Klaim Pendapatan Divisi Alat</h2>
+        <p className="mb-2 text-xs text-slate-500">Jam kerja yang tagihan kliennya sudah lunas. Disetujui = saldo Kas Alat bertambah + jurnal Beban Alokasi Dana Divisi Alat / Kas.</p>
+        <div className="table-container">
+          <div className="table-scroll-mobile overflow-x-auto">
+            <table className="table-modern">
+              <thead><tr><th>Klaim</th><th>Periode</th><th>Pengaju</th><th className="text-right">Jam</th><th className="text-right">Nominal</th><th className="text-right">Aksi</th></tr></thead>
+              <tbody>
+                {data && !data.claims.length && <tr><td colSpan={6} className="py-8 text-center text-xs text-slate-500">Tidak ada klaim yang menunggu.</td></tr>}
+                {(data?.claims || []).map((claim) => (
+                  <Fragment key={claim.id}>
+                    <tr>
+                      <td><button type="button" onClick={() => setExpanded(expanded === `c-${claim.id}` ? null : `c-${claim.id}`)} className="font-mono text-xs font-bold text-leaf-700 hover:underline">{claim.claimCode} {expanded === `c-${claim.id}` ? '▾' : '▸'}</button></td>
+                      <td className="whitespace-nowrap text-xs">{formatDate(claim.periodStart)} – {formatDate(claim.periodEnd)}</td>
+                      <td className="text-xs">{claim.submittedBy?.fullName || '-'}</td>
+                      <td className="text-right text-xs">{claim.totalHours} jam</td>
+                      <td className="text-right font-mono text-sm font-semibold text-leaf-700">{formatCurrency(claim.totalAmount)}</td>
+                      <td>
+                        {canApproveClaim && (
+                          <div className="flex justify-end gap-1.5">
+                            <SmallButton disabled={busy} onClick={() => window.confirm(`Setujui ${claim.claimCode} senilai ${formatCurrency(claim.totalAmount)}? Kas Alat bertambah dan jurnal dibuat.`) && run(() => approveEquipmentClaim(claim.id), `${claim.claimCode} disetujui — Kas Alat bertambah.`)}>Setujui</SmallButton>
+                            <SmallButton tone="red" disabled={busy} onClick={() => setRejecting(`c-${claim.id}`)}>Tolak</SmallButton>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                    {rejecting === `c-${claim.id}` && (
+                      <tr><td colSpan={6} className="bg-red-50/60"><RejectReasonForm label={`Alasan menolak ${claim.claimCode}`} submitLabel="Tolak Klaim" placeholder="Mis. jam kerja tidak sesuai timesheet" onSubmit={(notes) => run(() => rejectEquipmentClaim(claim.id, notes), `${claim.claimCode} ditolak.`)} onCancel={() => setRejecting(null)} /></td></tr>
+                    )}
+                    {expanded === `c-${claim.id}` && <tr><td colSpan={6} className="bg-slate-50"><ClaimDetail id={claim.id} /></td></tr>}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function ClaimDetail({ id }) {
+  const { data, error } = useRecord(() => getEquipmentClaim(id), id);
+  if (error) return <p className="text-xs text-red-600">{error}</p>;
+  if (!data) return <p className="text-xs text-slate-500">Memuat rincian...</p>;
+  return (
+    <>
+      {data.notes && <p className="mb-2 text-xs text-slate-600">Catatan: {data.notes}</p>}
+      <ClaimContexts contexts={data.contexts} />
     </>
   );
 }

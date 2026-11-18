@@ -2852,9 +2852,18 @@ const swaggerSpec = {
     // Jurnal HANYA dibuat sistem dari aksi sumber — tidak ada input debit-kredit bebas.
     // ========================================
     '/chart-of-accounts': {
-      get: { tags: ['Chart of Accounts'], summary: 'Daftar akun (COA)', description: 'Permission: coa:read. Isi dari seeder saja, tanpa endpoint kelola (F4). Tiap akun: `accountCode` (mis. 1-1100), `accountName`, `accountType`, `normalBalance` (diturunkan dari jenis), `isActive`.',
+      get: { tags: ['Chart of Accounts'], summary: 'Daftar akun (COA)', description: 'Permission: coa:read. Tiap akun: `accountCode` (mis. 1-1100), `accountName`, `accountType`, `normalBalance` (diturunkan dari jenis), `isActive`, `isSystem` (akun yang dipakai jurnal otomatis — terkunci).',
         parameters: [{ in: 'query', name: 'accountType', schema: { type: 'string', enum: ['asset', 'liability', 'equity', 'revenue', 'expense'] } }, { in: 'query', name: 'isActive', schema: { type: 'string', enum: ['true', 'false'] } }],
         responses: { 200: { description: 'Array akun' } } },
+      post: { tags: ['Chart of Accounts'], summary: 'Tambah akun (Finance)', description: 'Permission: coa:create. Ditambahkan 18 Nov 2026 (plan Finance 8a; semula COA baca saja, F4). Kode `N-NNNN`, digit pertama sesuai jenis (1 aset, 2 kewajiban, 3 ekuitas, 4 pendapatan, 5/6 beban). Kode akun sistem dicadangkan (409). Kode/nama kembar → 409. Akun baru belum dipakai jurnal otomatis mana pun.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['accountCode', 'accountName', 'accountType'], properties: { accountCode: { type: 'string', example: '6-2200' }, accountName: { type: 'string' }, accountType: { type: 'string', enum: ['asset', 'liability', 'equity', 'revenue', 'expense'] }, description: { type: 'string' } } } } } },
+        responses: { 201: { description: 'Akun' }, 400: { description: 'Format kode / awalan tidak sesuai jenis' }, 409: { description: 'Kode/nama kembar atau kode sistem' } } },
+    },
+    '/chart-of-accounts/{id}': {
+      put: { tags: ['Chart of Accounts'], summary: 'Ubah / nonaktifkan akun (Finance)', description: 'Permission: coa:update. Akun sistem (`isSystem`) → 409. `accountCode` & `accountType` hanya bisa diubah selama akun belum dipakai baris jurnal (409). Tidak ada hapus — `isActive: false`.',
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'integer' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { accountCode: { type: 'string' }, accountName: { type: 'string' }, accountType: { type: 'string', enum: ['asset', 'liability', 'equity', 'revenue', 'expense'] }, description: { type: 'string', nullable: true }, isActive: { type: 'boolean' } } } } } },
+        responses: { 200: { description: 'Akun' }, 404: { description: 'Tidak ditemukan' }, 409: { description: 'Akun sistem / sudah dipakai jurnal / kembar' } } },
     },
     '/journal-entries': {
       get: {

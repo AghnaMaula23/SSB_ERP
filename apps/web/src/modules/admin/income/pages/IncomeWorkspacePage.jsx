@@ -6,7 +6,7 @@ import IncomeDetailPage from './IncomeDetailPage.jsx';
 import { parseIncomeRoute } from '../utils/incomeRoute.js';
 import { formatCurrency } from '../../project/utils/projectFormat.js';
 
-/** Menu Income Divisi Admin: daftar pengajuan, form per sumber, dan detail. */
+/** Menu Income Divisi Admin: daftar tagihan klien, form per jenis, dan detail. */
 export default function IncomeWorkspacePage({ route, onNavigate, onBackToModules, onSignOut }) {
   const selection = parseIncomeRoute(route) || { view: 'list' };
   const [flash, setFlash] = useState({ route: '', text: '' });
@@ -17,17 +17,17 @@ export default function IncomeWorkspacePage({ route, onNavigate, onBackToModules
     content = (
       <IncomeFormPage
         key={route}
-        sourceType={selection.sourceType}
+        contextType={selection.contextType}
         onNavigate={onNavigate}
         onSaved={(record) => {
           const target = `admin/income/${record.id}`;
-          setFlash({ route: target, text: `Pendapatan #${record.referenceCode} senilai ${formatCurrency(record.totalAmount)} diajukan ke Finance.` });
+          setFlash({ route: target, text: `Tagihan ${record.incomeCode} senilai ${formatCurrency(record.totalAmount)} diajukan ke Finance.` });
           onNavigate(target);
         }}
       />
     );
   } else if (selection.view === 'detail') {
-    content = <IncomeDetailPage key={route} recordId={selection.recordId} initialNotice={flashFor(route)} onNavigate={onNavigate} />;
+    content = <IncomeDetailPage key={route} recordId={selection.recordId} initialNotice={flashFor(route)} />;
   } else {
     content = <IncomeListPage key={route} initialNotice={flashFor(route)} />;
   }
